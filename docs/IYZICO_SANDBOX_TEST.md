@@ -98,3 +98,23 @@ npx tsx scripts/iyzico-webhook-sim.ts --attempt <denemeId> --twice
 - 1. gönderim `200 {"received":true,"duplicate":false}`, 2. gönderim `duplicate:true` olmalı.
 - `--bad-signature` ile `401` ve admin'de imza alarmı.
 - Betik yalnız yerel adrese gönderir; `IYZICO_SECRET_KEY` `.env`'den okunur.
+
+### Tam yerel uçtan uca (sahte iyzico sunucusuyla)
+
+Sandbox anahtarı yokken tarayıcı → site → "iyzico" → dönüş/bildirim zincirinin tamamı gerçek HTTP
+üzerinden şöyle denenir (2026-10-01'de bu yolla denendi; sonuçlar `harbi/PROGRESS.md`):
+
+1. Sahte iyzico: `npx tsx scripts/dev/fake-iyzico-server.ts --port 3299`
+2. Site derlemesi, dönüş adresiyle: `NEXT_PUBLIC_APP_URL=http://127.0.0.1:3200 npx next build`
+   (`NEXT_PUBLIC_*` derleme anında gömülür; denemeden sonra normal ayarla yeniden derleyin.)
+3. Site: `PAYMENT_PROVIDER=iyzico IYZICO_API_KEY=test-api-key IYZICO_SECRET_KEY=test-secret-key
+   IYZICO_BASE_URL=http://127.0.0.1:3299 npx next start -p 3200 -H 127.0.0.1`
+4. Kartla sipariş → sahte ödeme sayfası:
+   - "Öde ve siteye dön" → tarayıcı dönüşü (POST) → sipariş sayfası "Siparişiniz alındı".
+   - "Öde, siteye dönme" → sipariş Ödeme bekleniyor kalır; sonra
+     `IYZICO_SECRET_KEY=test-secret-key npx tsx scripts/iyzico-webhook-sim.ts --attempt <id> --payment-id <sahte sayfadaki ödeme no> --url http://127.0.0.1:3200/api/payment/webhook/iyzico --twice`
+     → 1. teslim işlenir (Ödendi), 2. teslim `duplicate:true`.
+   - Hiçbir haber gelmezse admin → sipariş → "iyzico'dan sorgula".
+
+Bu düzen DB'ye gerçek sipariş yazar: denemeyi yerel/geçici bir veritabanında yapın ve sonra
+yedekten geri dönün.

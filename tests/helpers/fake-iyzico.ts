@@ -29,6 +29,8 @@ export interface FakePayment {
   fraudStatus: number;
   /** retrieve yanıtında üzerine yazılacak alanlar (uyuşmazlık taklidi) */
   overrides?: Record<string, unknown>;
+  /** initialize'da gönderilen dönüş adresi */
+  callbackUrl?: string;
 }
 
 function json(body: unknown, status = 200): Response {
@@ -53,9 +55,12 @@ export class FakeIyzico {
   private original: typeof fetch | null = null;
   private seq = 0;
 
+  /** paymentPageBase: ödeme sayfası adresi (yerel sunucu: scripts/dev/fake-iyzico-server.ts) */
+  constructor(private readonly opts: { paymentPageBase?: string } = {}) {}
+
   install(): this {
     this.original = globalThis.fetch;
-    globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => this.handle(input, init)) as typeof fetch;
+    globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => this.handleFetch(input, init)) as typeof fetch;
     return this;
   }
 
@@ -123,7 +128,7 @@ export class FakeIyzico {
     return { body: JSON.stringify(body), signature };
   }
 
-  private async handle(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  async handleFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     if (!url.startsWith(FAKE_BASE_URL)) throw new Error(`Testte beklenmeyen dış istek: ${url}`);
     if (this.networkFailures > 0) {
@@ -165,7 +170,9 @@ export class FakeIyzico {
       state: "INIT",
       installment: 1,
       fraudStatus: 1,
+      callbackUrl: typeof body.callbackUrl === "string" ? body.callbackUrl : undefined,
     });
+    const pageBase = this.opts.paymentPageBase ?? "https://sandbox-cpp.iyzipay.com";
     return {
       status: "success",
       locale: "tr",
@@ -174,7 +181,7 @@ export class FakeIyzico {
       token,
       checkoutFormContent: "<script></script>",
       tokenExpireTime: this.tokenExpireSeconds,
-      paymentPageUrl: `https://sandbox-cpp.iyzipay.com?token=${token}&lang=tr`,
+      paymentPageUrl: `${pageBase}?token=${token}&lang=tr`,
     };
   }
 
