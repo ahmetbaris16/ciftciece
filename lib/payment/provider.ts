@@ -25,10 +25,10 @@ export function getPaymentProvider(): PaymentProvider {
 
   switch (providerName) {
     case "stub":
-      // Stub her ödemeyi başarılı sayar — production'da ancak açıkça izin verilirse
-      // (yerel production testi için ALLOW_STUB_PAYMENTS=true). Aksi hâlde gerçek
-      // sipariş ücretsiz "ödenmiş" olurdu.
-      if (isProd && process.env.ALLOW_STUB_PAYMENTS !== "true") {
+      // Stub her ödemeyi başarılı sayar — production'da yalnız bu bilgisayardaki denemede (R-13):
+      // ALLOW_STUB_PAYMENTS=true + LOCAL_PRODUCTION_TEST=1 + site adresi localhost. Aksi hâlde
+      // gerçek sipariş ücretsiz "ödenmiş" olurdu. (Sunucu açılışı da bunu denetler: lib/config/runtime-check.ts)
+      if (isProd && !isLocalStubAllowed()) {
         throw new Error(
           "Production'da stub ödeme sağlayıcısı kapalı. PAYMENT_PROVIDER ile gerçek sağlayıcıyı ayarlayın."
         );
@@ -44,6 +44,16 @@ export function getPaymentProvider(): PaymentProvider {
     default:
       // Sessizce stub'a düşmek yok: bilinmeyen sağlayıcı bir kurulum hatasıdır
       throw new Error(`Bilinmeyen ödeme sağlayıcısı: "${providerName}"`);
+  }
+}
+
+function isLocalStubAllowed(): boolean {
+  if (process.env.ALLOW_STUB_PAYMENTS !== "true" || process.env.LOCAL_PRODUCTION_TEST !== "1") return false;
+  try {
+    const host = new URL(process.env.NEXT_PUBLIC_APP_URL ?? "").hostname;
+    return host === "localhost" || host === "127.0.0.1" || host === "[::1]";
+  } catch {
+    return false;
   }
 }
 
