@@ -110,7 +110,24 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "Ürün bulunamadı" }, { status: 404 });
     }
 
-    await prisma.product.delete({ where: { id } });
+    // Siparişte geçen ürün silinemez (sipariş kalemleri ürüne bağlı; finansal kayıt silinmez):
+    // veritabanı zaten reddeder, admin'e anlaşılır mesaj verilir
+    const orderedCount = await prisma.orderItem.count({ where: { variant: { productId: id } } });
+    if (orderedCount > 0) {
+      return NextResponse.json(
+        {
+          error: "Bu ürün siparişlerde geçtiği için silinemez. Satıştan kaldırmak için ürünü yayından kaldırın.",
+          code: "PRODUCT_HAS_ORDERS",
+        },
+        { status: 409 }
+      );
+    }
+
+    // Sepet satırları varyanta bağlı (silinmeyi engeller): önce onlar, sonra ürün (görsel/varyant/stok birlikte)
+    await prisma.$transaction([
+      prisma.cartItem.deleteMany({ where: { variant: { productId: id } } }),
+      prisma.product.delete({ where: { id } }),
+    ]);
 
     await createAuditLog({
       userId: user.id,
