@@ -216,7 +216,7 @@ export async function recordRefund(orderId: string, input: RefundInput, actorId:
 // ── Müşteri talepleri ────────────────────────────────────────────────────
 
 /** Müşterinin bu siparişte yapabileceği işlemler (sipariş sayfasında düğmeler) */
-export function customerOptions(status: OrderStatus, _paymentMethod?: PaymentMethod) {
+export function customerOptions(status: OrderStatus) {
   return {
     /** Ödenmemiş sipariş müşteri tarafından hemen iptal edilir (stok geri döner) */
     canCancelNow: status === "PENDING",
@@ -257,7 +257,7 @@ export async function createCustomerRequest(reference: string, input: CustomerRe
 
   return prisma.$transaction(async (tx) => {
     const order = await lockOrder(tx, found.id);
-    const opts = customerOptions(order.status, order.paymentMethod);
+    const opts = customerOptions(order.status);
     if (input.type === "CANCEL" && !opts.canRequestCancel) {
       throw new OrderTransitionError(
         order.status === "PENDING" ? "Ödenmemiş siparişi doğrudan iptal edebilirsiniz." : "Bu sipariş için iptal isteği gönderilemez."

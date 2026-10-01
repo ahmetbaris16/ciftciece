@@ -21,6 +21,22 @@ export function checkoutRequestHash(input: CheckoutInput): string {
     shipping: [input.shipping.address, input.shipping.district, input.shipping.city, input.shipping.postalCode ?? ""],
     paymentMethod: input.paymentMethod,
     termsVersion: input.termsVersion,
+    // Yalnız gönderildiyse eklenir: alanlar eklenmeden önceki isteklerin özeti değişmez
+    ...(input.billing
+      ? {
+          billing: [
+            input.billing.type,
+            input.billing.companyName ?? "",
+            input.billing.taxOffice ?? "",
+            input.billing.taxNumber ?? "",
+            input.billing.sameAsShipping,
+            input.billing.billingAddress ?? "",
+            input.billing.billingDistrict ?? "",
+            input.billing.billingCity ?? "",
+          ],
+        }
+      : {}),
+    ...(input.note ? { note: input.note } : {}),
   });
   return createHash("sha256").update(canonical).digest("hex");
 }

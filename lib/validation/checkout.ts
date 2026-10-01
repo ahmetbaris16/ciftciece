@@ -21,6 +21,13 @@ export const CHECKOUT_MESSAGES = {
   shippingUnknown:
     "Siparişinizin kargo ücreti henüz hesaplanamıyor, bu yüzden sipariş şu anda çevrimiçi tamamlanamıyor. Siparişinizi telefon ya da WhatsApp ile verebilirsiniz: 0532 682 53 72",
   paymentMethod: "Bir ödeme yöntemi seçin.",
+  companyName: "Şirket unvanını girin.",
+  taxOffice: "Vergi dairesini girin.",
+  taxNumber: "Vergi numarası 10 haneli (şahıs şirketinde T.C. kimlik no 11 haneli) olmalı.",
+  billingAddress: "Fatura adresini girin.",
+  billingDistrict: "Fatura adresinin ilçesini girin.",
+  billingCity: "Fatura adresinin şehrini girin.",
+  note: "Sipariş notu en fazla 500 karakter olabilir.",
   acceptTerms: "Siparişi tamamlamak için Ön Bilgilendirme Formu'nu ve Mesafeli Satış Sözleşmesi'ni onaylayın.",
   termsOutdated: "Sözleşme metni güncellendi. Sayfayı yenileyip metni tekrar onaylayın.",
   pageOutdated: "Ödeme sayfası güncellendi. Lütfen sayfayı yenileyip tekrar deneyin.",
@@ -47,7 +54,14 @@ export type CheckoutField =
   | "city"
   | "postalCode"
   | "paymentMethod"
-  | "acceptTerms";
+  | "acceptTerms"
+  | "companyName"
+  | "taxOffice"
+  | "taxNumber"
+  | "billingAddress"
+  | "billingDistrict"
+  | "billingCity"
+  | "note";
 
 // ── Telefon (Türkiye cep) ───────────────────────────────────
 
@@ -131,6 +145,39 @@ export const ShippingSchema = z.object({
   // Kargo firması seçilmez (yalnız Yurtiçi Kargo); ücret sunucuda lib/shipping/quote ile hesaplanır
 });
 
+/**
+ * Fatura bilgisi. Bireysel: fatura teslimattaki ad-soyada kesilir. Kurumsal: unvan, vergi dairesi, vergi no
+ * zorunlu. Fatura adresi teslimat adresinden farklıysa adres alanları zorunlu.
+ */
+export const BillingSchema = z
+  .object({
+    type: z.enum(["INDIVIDUAL", "CORPORATE"]),
+    companyName: z.string().trim().max(200).optional(),
+    taxOffice: z.string().trim().max(80).optional(),
+    taxNumber: z.string().trim().max(20).optional(),
+    sameAsShipping: z.boolean().default(true),
+    billingAddress: z.string().trim().max(500).optional(),
+    billingDistrict: z.string().trim().max(100).optional(),
+    billingCity: z.string().trim().max(100).optional(),
+  })
+  .superRefine((b, ctx) => {
+    const need = (field: CheckoutField, ok: boolean) => {
+      if (!ok) ctx.addIssue({ code: "custom", path: [field], message: CHECKOUT_MESSAGES[field] });
+    };
+    if (b.type === "CORPORATE") {
+      need("companyName", (b.companyName ?? "").length >= 2);
+      need("taxOffice", (b.taxOffice ?? "").length >= 2);
+      need("taxNumber", /^\d{10,11}$/.test((b.taxNumber ?? "").replace(/\s/g, "")));
+    }
+    if (!b.sameAsShipping) {
+      need("billingAddress", (b.billingAddress ?? "").length >= 10);
+      need("billingDistrict", (b.billingDistrict ?? "").length >= 2);
+      need("billingCity", (b.billingCity ?? "").length >= 2);
+    }
+  });
+
+export type BillingInput = z.infer<typeof BillingSchema>;
+
 export const CheckoutItemSchema = z.object({
   variantId: z.string().min(1),
   quantity: z.number().int().min(1).max(99),
@@ -140,6 +187,9 @@ export const CheckoutSchema = z.object({
   items: z.array(CheckoutItemSchema).min(1).max(50),
   contact: ContactSchema,
   shipping: ShippingSchema,
+  // Fatura bilgisi ve sipariş notu (isteğe bağlı; yoksa bireysel, teslimattaki ad-soyad)
+  billing: BillingSchema.optional(),
+  note: z.string({ error: CHECKOUT_MESSAGES.note }).trim().max(500, { error: CHECKOUT_MESSAGES.note }).optional(),
   // Kullanılabilirlik (ayar, tutar sınırı) sunucuda lib/payment/methods ile ayrıca kontrol edilir
   paymentMethod: z.enum(["CARD", "BANK_TRANSFER", "CASH_ON_DELIVERY"], { error: CHECKOUT_MESSAGES.paymentMethod }),
   // Ön Bilgilendirme Formu + Mesafeli Satış Sözleşmesi onayı ve müşteriye gösterilen sürüm
@@ -176,7 +226,7 @@ export function toFieldErrors(error: z.ZodError): {
 
 /** Frontend adım doğrulaması — sadece ilgili şemanın alanlarını döner. */
 export function validateStep(
-  schema: typeof ContactSchema | typeof ShippingSchema,
+  schema: typeof ContactSchema | typeof ShippingSchema | typeof BillingSchema,
   values: unknown
 ): Partial<Record<CheckoutField, string>> {
   const r = schema.safeParse(values);

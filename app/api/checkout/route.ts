@@ -29,7 +29,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getVariantById, createOrder, releaseExpiredOrders } from "@/lib/repositories";
 import { OutOfStockError, findOrderByIdempotencyKey } from "@/lib/repositories/order.repository";
 import { checkoutRequestHash } from "@/lib/checkout/idempotency";
-import type { Order } from "@/types";
+import type { BillingInfo, Order } from "@/types";
 import { getShippingSettings } from "@/lib/shipping/shipping.repository";
 import { getCurrentCustomer } from "@/lib/auth/session";
 import { isQuoteFinal, quoteShipping, shippingModeOf, type ShippingLine } from "@/lib/shipping/quote";
@@ -41,6 +41,7 @@ import { clientIp } from "@/lib/security/rate-limit";
 import { scheduleNotifications } from "@/lib/notifications/run";
 import { CHECKOUT_CONSENT_DOCUMENTS, CHECKOUT_TERMS_VERSION, LEGAL_DOCUMENTS } from "@/lib/legal/documents";
 import {
+  type BillingInput,
   CheckoutSchema,
   CHECKOUT_MESSAGES,
   toFieldErrors,
@@ -78,6 +79,31 @@ function orderResponse(order: Order, replayed: boolean) {
   });
 }
 
+/** Doğrulanmış fatura girişi → siparişe yazılan fatura bilgisi (yoksa bireysel, teslimattaki ad-soyad) */
+function billingInfoOf(billing: BillingInput | undefined, fullName: string): BillingInfo {
+  if (!billing || billing.type === "INDIVIDUAL") {
+    return {
+      type: "INDIVIDUAL",
+      name: fullName,
+      sameAsShipping: billing?.sameAsShipping ?? true,
+      ...(billing && !billing.sameAsShipping
+        ? { address: billing.billingAddress, district: billing.billingDistrict, city: billing.billingCity }
+        : {}),
+    };
+  }
+  return {
+    type: "CORPORATE",
+    name: fullName,
+    companyName: billing.companyName,
+    taxOffice: billing.taxOffice,
+    taxNumber: billing.taxNumber?.replace(/\s/g, ""),
+    sameAsShipping: billing.sameAsShipping,
+    ...(!billing.sameAsShipping
+      ? { address: billing.billingAddress, district: billing.billingDistrict, city: billing.billingCity }
+      : {}),
+  };
+}
+
 // ── Handler ─────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
@@ -99,7 +125,7 @@ export async function POST(request: NextRequest) {
     return fail(400, "VALIDATION", message, { fieldErrors });
   }
 
-  const { items, contact, shipping, paymentMethod, termsVersion } = parsed.data;
+  const { items, contact, shipping, paymentMethod, termsVersion, billing, note } = parsed.data;
 
   // ── Idempotency: aynı anahtarla gelen istek yeni sipariş açmaz, mevcut siparişi döndürür ──
   // Stok/fiyat kontrollerinden ÖNCE bakılır: ilk istek son ürünü almış olsa da tekrar aynı siparişi görür.
@@ -291,6 +317,8 @@ export async function POST(request: NextRequest) {
         }),
       },
       items: orderItems,
+      billingInfo: billingInfoOf(billing, `${contact.firstName} ${contact.lastName}`),
+      customerNote: note || null,
       subtotalKurus,
       shippingKurus,
       paymentMethod,
