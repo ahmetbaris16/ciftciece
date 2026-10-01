@@ -12,6 +12,7 @@ import { notificationAddress, type BusinessInfo } from "@/lib/business/info";
 import { ALERT_TITLES, type PaymentAlertKind } from "@/lib/payment/alerts";
 import { paymentAlertEmail } from "@/lib/email/templates/store";
 import type { EmailDraft } from "./queue";
+import { ORDER_HANDLERS } from "./order-rules";
 
 export interface RuleContext {
   business: BusinessInfo;
@@ -53,6 +54,7 @@ const paymentAlert: Handler = async (event, ctx) => {
 
 const HANDLERS: Record<string, Handler> = {
   "payment.alert": paymentAlert,
+  ...ORDER_HANDLERS,
 };
 
 /** Kayıtlı kurallar (testler ve admin paneli için) */

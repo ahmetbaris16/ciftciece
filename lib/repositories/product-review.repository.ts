@@ -9,6 +9,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { writeOutbox } from "@/lib/outbox";
 import { prisma } from "@/lib/db/prisma";
 import { USE_DB, loadMock } from "@/lib/data/source";
 import { readMock, updateMock } from "@/lib/data/mock-store";
@@ -289,10 +290,21 @@ export async function submitReview(input: {
     adminNote: null,
     approvedAt: null,
   };
-  const r = await prisma.productReview.upsert({
-    where: { productId_userId: { productId: input.productId, userId: input.userId } },
-    create: { productId: input.productId, userId: input.userId, ...data },
-    update: data,
+  // Değerlendirme ve işletmeye "onay bekliyor" bildirimi aynı işlemde
+  const r = await prisma.$transaction(async (tx) => {
+    const saved = await tx.productReview.upsert({
+      where: { productId_userId: { productId: input.productId, userId: input.userId } },
+      create: { productId: input.productId, userId: input.userId, ...data },
+      update: data,
+    });
+    await writeOutbox(tx, {
+      topic: "review.submitted",
+      aggregateType: "review",
+      aggregateId: saved.id,
+      dedupeKey: `review:${saved.id}:${saved.updatedAt.getTime()}`,
+      payload: { reviewId: saved.id },
+    });
+    return saved;
   });
   return toMine(r);
 }

@@ -8,6 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { scheduleNotifications } from "@/lib/notifications/run";
 import { getCurrentCustomer } from "@/lib/auth/session";
 import {
   ReviewProductNotFoundError,
@@ -57,6 +58,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const review = await submitReview({ ...parsed.data, userId: session.id });
+    scheduleNotifications();
     return NextResponse.json({ success: true, review });
   } catch (err) {
     if (err instanceof ReviewProductNotFoundError) {
