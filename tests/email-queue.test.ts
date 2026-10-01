@@ -229,7 +229,7 @@ test("cron ucu: anahtar yoksa 503, yanlışsa 401, doğruysa işleri çalıştı
   assert.equal(ok.status, 200);
   const body = await ok.json();
   assert.equal(body.ok, true);
-  assert.deepEqual(body.jobs.map((j: { name: string }) => j.name), ["suresi-dolan-siparisler", "bildirimler"]);
+  assert.deepEqual(body.jobs.map((j: { name: string }) => j.name), ["kart-odeme-mutabakati", "suresi-dolan-siparisler", "havale-hatirlatma", "bildirimler"]);
   assert.equal(smtp.received.length, 1, "kuyruktaki e-posta cron ile gönderildi");
   // Sorgu parametresiyle de çalışır
   const viaQuery = await cronGet(new NextRequest(`http://localhost/api/cron/run?key=${"c".repeat(32)}`));

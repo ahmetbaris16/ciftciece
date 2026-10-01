@@ -160,7 +160,7 @@ test("imza doğrulanamazsa: işlenmez, REJECTED kaydedilir, alarm üretilir; sah
 
   // Sahte olay sipariş süre dolumunu engellemez
   await makeOverdue(order.id);
-  assert.equal(await releaseExpiredOrders(), 1);
+  assert.equal(await releaseExpiredOrders(new Date(), { cardGraceMs: 0 }), 1);
 
   // Gerçek imzalı bildirim yine işlenir (doğrulanamayan olay geçerli olayın anahtarını işgal etmez)
   assert.equal((await post(real.body, real.signature)).status, 200);
@@ -181,7 +181,7 @@ test("bildirim 'başarılı' ama iyzico'ya sorulamadı: satır açık kalır, si
   assert.equal((await orderState(order.id)).status, "PENDING");
 
   await makeOverdue(order.id);
-  assert.equal(await releaseExpiredOrders(), 0, "işlenmemiş ödeme bildirimi olan sipariş iptal edilmez");
+  assert.equal(await releaseExpiredOrders(new Date(), { cardGraceMs: 0 }), 0, "işlenmemiş ödeme bildirimi olan sipariş iptal edilmez");
 
   const r = await reconcileOrderWithProvider(order.id, "admin-1");
   assert.equal(r.orderStatusAfter, "PAID");

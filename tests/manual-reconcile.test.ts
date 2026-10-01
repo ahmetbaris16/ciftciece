@@ -69,7 +69,7 @@ test("elle sorgu iyzico'ya ulaşamazsa durum değişmez ama çalıştırma kayde
 test("süre dolup iptal edilmiş siparişte elle sorgu geç ödemeyi bulur: yeniden açılır + NEEDS_ATTENTION", async () => {
   const { order, variant } = await paidWithoutAnyNotification();
   await makeOverdue(order.id);
-  await releaseExpiredOrders();
+  await releaseExpiredOrders(new Date(), { cardGraceMs: 0 });
   assert.equal((await orderState(order.id)).status, "CANCELLED");
   assert.equal(await stockOf(variant.id), 5);
 

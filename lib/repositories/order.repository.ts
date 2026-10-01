@@ -521,15 +521,22 @@ async function expireOpenAttempts(tx: Tx, orderId: string): Promise<number> {
  * Durum geçişi koşullu (PENDING → CANCELLED) yapıldığı için eşzamanlı çağrılarda
  * aynı sipariş iki kez iade edilmez. Sipariş notuna yazılmaz; olay payment_events'e düşer.
  */
-export async function releaseExpiredOrders(now = new Date()): Promise<number> {
+export async function releaseExpiredOrders(now = new Date(), opts: { cardGraceMs?: number } = {}): Promise<number> {
   if (!USE_DB) return 0;
   const cutoff = new Date(now.getTime() - CARD_RESERVATION_MINUTES * 60_000);
+  // Kart siparişi: süre dolduktan sonra ilk 15 dk yalnız zamanlanmış iş iptal eder — o iş iptalden ÖNCE bankaya
+  // sorar (lib/payment/auto-reconcile.ts). Sipariş/admin sayfasından tetiklenen temizlik ödenmiş olabilecek
+  // siparişi sormadan iptal etmesin. Zamanlanmış iş hiç çalışmıyorsa 15 dk sonra her tetikleyici iptal eder.
+  const cardGraceMs = opts.cardGraceMs ?? 15 * 60_000;
   const expired = await prisma.order.findMany({
     where: {
       status: "PENDING",
       needsAttention: false,
       OR: [{ paymentDueAt: { lt: now } }, { paymentDueAt: null, createdAt: { lt: cutoff } }],
       paymentEvents: { none: { source: "WEBHOOK", status: { in: ["RECEIVED", "FAILED"] } } },
+      ...(cardGraceMs > 0
+        ? { NOT: { paymentMethod: "CARD", paymentDueAt: { gt: new Date(now.getTime() - cardGraceMs) } } }
+        : {}),
     },
     select: { id: true, paymentMethod: true, paymentDueAt: true },
     take: 100,

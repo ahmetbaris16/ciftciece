@@ -115,7 +115,7 @@ test("geç ödeme, stok var: sipariş yeniden açılır (PAID) ama NEEDS_ATTENTI
   const { order, variant } = await createTestOrder({ stock: 5, quantity: 2 });
   const attempt = await openAttempt(order.id);
   await makeOverdue(order.id);
-  assert.equal(await releaseExpiredOrders(), 1);
+  assert.equal(await releaseExpiredOrders(new Date(), { cardGraceMs: 0 }), 1);
   assert.equal((await orderState(order.id)).status, "CANCELLED");
   assert.equal(await stockOf(variant.id), 5, "iptalde stok iade edildi");
   assert.equal((await prisma.paymentAttempt.findUniqueOrThrow({ where: { id: attempt.id } })).status, "EXPIRED");
@@ -138,7 +138,7 @@ test("geç ödeme, stok yok: sipariş CANCELLED kalır, NEEDS_ATTENTION + iade �
   const { order, variant } = await createTestOrder({ stock: 1, quantity: 1 });
   const attempt = await openAttempt(order.id);
   await makeOverdue(order.id);
-  await releaseExpiredOrders();
+  await releaseExpiredOrders(new Date(), { cardGraceMs: 0 });
   await prisma.inventory.update({ where: { variantId: variant.id }, data: { quantity: 0 } }); // arada satıldı
 
   fake.pay(attempt.providerToken);
@@ -172,7 +172,7 @@ test("tutar uyuşmazlığı: PAID yapılmaz, MISMATCH + alarm; süresi dolsa da 
   assert.equal((await prisma.paymentAlert.findFirstOrThrow({ where: { orderId: order.id } })).kind, "PAYMENT_MISMATCH");
 
   await makeOverdue(order.id);
-  assert.equal(await releaseExpiredOrders(), 0, "NEEDS_ATTENTION sipariş otomatik iptal edilmez");
+  assert.equal(await releaseExpiredOrders(new Date(), { cardGraceMs: 0 }), 0, "NEEDS_ATTENTION sipariş otomatik iptal edilmez");
   assert.equal((await orderState(order.id)).status, "PENDING");
   assert.equal(await stockOf(variant.id), 4, "stok ayrılı kalır");
 });
@@ -206,8 +206,8 @@ test("süre dolumu: sipariş iptal, stok iade, açık denemeler EXPIRED, olay ya
   const { order, variant } = await createTestOrder({ method: "BANK_TRANSFER", stock: 3, quantity: 2 });
   assert.equal(await stockOf(variant.id), 1);
   await makeOverdue(order.id);
-  assert.equal(await releaseExpiredOrders(), 1);
-  assert.equal(await releaseExpiredOrders(), 0, "ikinci çağrı etkisiz");
+  assert.equal(await releaseExpiredOrders(new Date(), { cardGraceMs: 0 }), 1);
+  assert.equal(await releaseExpiredOrders(new Date(), { cardGraceMs: 0 }), 0, "ikinci çağrı etkisiz");
   const state = await orderState(order.id);
   assert.equal(state.status, "CANCELLED");
   assert.equal(state.notes, null);

@@ -6,6 +6,8 @@
 
 import { releaseExpiredOrders } from "@/lib/repositories/order.repository";
 import { runNotifications } from "@/lib/notifications/run";
+import { reconcilePendingCardPayments } from "@/lib/payment/auto-reconcile";
+import { enqueueTransferReminders } from "@/lib/orders/reminders";
 
 export interface CronJobResult {
   name: string;
@@ -16,10 +18,15 @@ export interface CronJobResult {
 
 type Job = { name: string; run: () => Promise<unknown> };
 
-/** Sıra önemli: önce süresi dolan siparişler (iptal olayları üretir), en son e-postalar */
+/**
+ * Sıra önemli: önce bankaya sorulur (ödenmiş sipariş iptal edilmesin), sonra süresi dolan siparişler bırakılır,
+ * havale hatırlatmaları kuyruğa girer, en son e-postalar gönderilir.
+ */
 export function cronJobs(): Job[] {
   return [
-    { name: "suresi-dolan-siparisler", run: () => releaseExpiredOrders() },
+    { name: "kart-odeme-mutabakati", run: () => reconcilePendingCardPayments() },
+    { name: "suresi-dolan-siparisler", run: () => releaseExpiredOrders(new Date(), { cardGraceMs: 0 }) },
+    { name: "havale-hatirlatma", run: () => enqueueTransferReminders() },
     { name: "bildirimler", run: () => runNotifications() },
   ];
 }
