@@ -1,99 +1,63 @@
 /**
  * Admin Ayarlar Sayfası
  *
- * Mağaza konfigürasyonu, iletişim bilgileri ve genel ayarlar.
- * Kargo ve ödeme ayarları DB'den (site_settings) düzenlenir; diğer bölümler lib/config/store.ts'ten okunur.
+ * İşletme bilgileri, kargo ve ödeme ayarları DB'den (site_settings) düzenlenir.
+ * Çalışma saatleri ve harita konumu lib/config/store.ts'tedir.
  */
 
 import { requireAdmin } from "@/lib/auth/session";
 import AdminShell from "@/components/admin/AdminShell";
-import { STORE } from "@/lib/config/store";
 import ShippingSettingsForm from "@/components/admin/ShippingSettingsForm";
 import { getShippingSettings } from "@/lib/shipping/shipping.repository";
 import PaymentSettingsForm from "@/components/admin/PaymentSettingsForm";
 import { getPaymentSettings } from "@/lib/payment/settings.repository";
 import { paymentProviderStatus } from "@/lib/payment/provider";
+import BusinessInfoForm from "@/components/admin/BusinessInfoForm";
+import { getBusinessInfo } from "@/lib/business/business.repository";
 
 export default async function AdminAyarlarPage() {
   const user = await requireAdmin();
-  const [shippingSettings, paymentSettings] = await Promise.all([getShippingSettings(), getPaymentSettings()]);
+  const [shippingSettings, paymentSettings, business] = await Promise.all([
+    getShippingSettings(),
+    getPaymentSettings(),
+    getBusinessInfo(),
+  ]);
 
   return (
     <AdminShell user={user} activeSection="ayarlar">
       <div style={{ padding: "2rem", maxWidth: "900px" }}>
         <h1 style={styles.heading}>Ayarlar</h1>
         <p style={styles.subheading}>
-          Mağaza bilgileri ve site konfigürasyonu
+          İşletme bilgileri, kargo ve ödeme. Değişiklikler siteye hemen yansır.
         </p>
 
-        {/* Mağaza Bilgileri */}
-        <section style={styles.section}>
-          <h2 style={styles.sectionTitle}>🏪 Mağaza Bilgileri</h2>
-          <div style={styles.grid}>
-            <InfoRow label="Mağaza Adı" value={STORE.name} />
-            <InfoRow label="Slogan" value={STORE.tagline} />
-            <InfoRow label="Yasal Ad" value={STORE.legalName} />
-          </div>
-        </section>
-
-        {/* İletişim */}
-        <section style={styles.section}>
-          <h2 style={styles.sectionTitle}>📞 İletişim</h2>
-          <div style={styles.grid}>
-            <InfoRow label="Telefon" value={STORE.contact.phoneFormatted} />
-            <InfoRow label="E-posta" value={STORE.contact.email} isTodo={STORE.contact.email === "TODO"} />
-            <InfoRow label="WhatsApp" value={STORE.contact.whatsapp} />
-            <InfoRow label="Instagram" value={STORE.contact.instagram} isTodo={String(STORE.contact.instagram) === "TODO"} />
-          </div>
-        </section>
-
-        {/* Adres */}
-        <section style={styles.section}>
-          <h2 style={styles.sectionTitle}>📍 Adres</h2>
-          <div style={styles.grid}>
-            <InfoRow label="Tam Adres" value={STORE.address.full} />
-            <InfoRow label="İlçe / Şehir" value={`${STORE.address.district} / ${STORE.address.city}`} />
-            <InfoRow label="Koordinat" value={`${STORE.address.lat}, ${STORE.address.lng}`} />
-          </div>
+        {/* İşletme (satıcı) bilgileri — DB'den düzenlenebilir */}
+        <section style={styles.section} id="isletme">
+          <h2 style={styles.sectionTitle}>🏪 İşletme Bilgileri</h2>
+          <BusinessInfoForm initial={business} />
         </section>
 
         {/* Kargo — DB'den düzenlenebilir */}
-        <section style={styles.section}>
+        <section style={styles.section} id="kargo">
           <h2 style={styles.sectionTitle}>📦 Kargo</h2>
           <ShippingSettingsForm initial={shippingSettings} />
         </section>
 
         {/* Ödeme */}
-        <section style={styles.section}>
+        <section style={styles.section} id="odeme">
           <h2 style={styles.sectionTitle}>💳 Ödeme</h2>
           <PaymentSettingsForm initial={paymentSettings} provider={paymentProviderStatus()} />
         </section>
 
-        {/* Yasal */}
-        <section style={styles.section}>
-          <h2 style={styles.sectionTitle}>📋 Yasal Bilgiler</h2>
-          <div style={styles.grid}>
-            <InfoRow label="Vergi No" value={STORE.legal.taxNumber} isTodo={STORE.legal.taxNumber === "TODO"} />
-            <InfoRow label="MERSIS No" value={STORE.legal.mersisNo} isTodo={STORE.legal.mersisNo === "TODO"} />
-          </div>
-        </section>
-
-        {/* Environment */}
-        <section style={styles.section}>
+        {/* Sistem */}
+        <section style={styles.section} id="sistem">
           <h2 style={styles.sectionTitle}>🔧 Sistem</h2>
           <div style={styles.grid}>
             <InfoRow label="Ortam" value={process.env.NODE_ENV ?? "development"} />
             <InfoRow label="Veritabanı" value={process.env.DATABASE_URL ? "Bağlı" : "Bağlı değil (Mock mod)"} isTodo={!process.env.DATABASE_URL} />
-            <InfoRow label="NextAuth" value={process.env.NEXTAUTH_SECRET ? "Yapılandırıldı" : "Eksik"} isTodo={!process.env.NEXTAUTH_SECRET || process.env.NEXTAUTH_SECRET.includes("TODO")} />
+            <InfoRow label="Oturum anahtarı" value={process.env.NEXTAUTH_SECRET ? "Yapılandırıldı" : "Eksik"} isTodo={!process.env.NEXTAUTH_SECRET || process.env.NEXTAUTH_SECRET.includes("TODO")} />
           </div>
         </section>
-
-        {/* TODO Notice */}
-        <div style={styles.notice}>
-          <strong>💡 Not:</strong> &quot;TODO&quot; olarak işaretli alanlar henüz
-          yapılandırılmamış. Bu bilgileri <code>.env</code> dosyasından veya{" "}
-          <code>lib/config/store.ts</code> dosyasından güncelleyebilirsiniz.
-        </div>
       </div>
     </AdminShell>
   );
@@ -188,14 +152,5 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: "4px",
     textTransform: "uppercase" as const,
     letterSpacing: "0.05em",
-  },
-  notice: {
-    padding: "1rem 1.25rem",
-    background: "rgba(251,191,36,0.08)",
-    border: "1px solid rgba(251,191,36,0.15)",
-    borderRadius: "10px",
-    fontSize: "0.85rem",
-    color: "rgba(232,228,217,0.7)",
-    lineHeight: 1.6,
   },
 };
