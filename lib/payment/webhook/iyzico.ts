@@ -131,6 +131,20 @@ export async function ingestIyzicoWebhook(
     attemptId: valid ? (attempt?.id ?? null) : null,
   };
 
+  const duplicateResult = (existing: { id: string; status: string } | null): IngestResult =>
+    valid
+      ? { kind: "accepted", eventId: existing?.id ?? "", duplicate: true, needsProcessing: existing?.status === "FAILED" }
+      : { kind: "rejected", eventId: existing?.id ?? null, duplicate: true, reason: reason ?? "" };
+  const findExisting = () =>
+    prisma.paymentEvent.findUnique({
+      where: { provider_eventKey: { provider: "iyzico", eventKey } },
+      select: { id: true, status: true },
+    });
+
+  // Tekrar teslim çoğunlukla burada yakalanır (log'a hata düşmez); eşzamanlı teslimde UNIQUE kısıt yakalar
+  const already = await findExisting();
+  if (already) return duplicateResult(already);
+
   try {
     const event = await prisma.$transaction(async (tx) => {
       const ev = await tx.paymentEvent.create({ data, select: { id: true } });
@@ -151,21 +165,11 @@ export async function ingestIyzicoWebhook(
       : { kind: "rejected", eventId: event.id, duplicate: false, reason: reason ?? "" };
   } catch (err) {
     if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002")) throw err;
-    // Aynı olay daha önce geldi: yeni satır yok. Yalnız önceki işleme BAŞARISIZ olduysa (FAILED) yeniden
+    // Aynı olay eşzamanlı geldi: yeni satır yok. Yalnız önceki işleme BAŞARISIZ olduysa (FAILED) yeniden
     // işlenir. RECEIVED satır büyük olasılıkla şu an işleniyordur (ilk teslimin yanıt sonrası işi);
     // ikinci kez işlemek iyzico'ya gereksiz sorgu demektir. Takılı kalan RECEIVED satır siparişin
     // otomatik iptalini engeller ve elle sorgu ile kapanır.
-    const existing = await prisma.paymentEvent.findUnique({
-      where: { provider_eventKey: { provider: "iyzico", eventKey } },
-      select: { id: true, status: true },
-    });
-    if (!valid) return { kind: "rejected", eventId: existing?.id ?? null, duplicate: true, reason: reason ?? "" };
-    return {
-      kind: "accepted",
-      eventId: existing?.id ?? "",
-      duplicate: true,
-      needsProcessing: existing?.status === "FAILED",
-    };
+    return duplicateResult(await findExisting());
   }
 }
 
