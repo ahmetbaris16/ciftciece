@@ -41,7 +41,11 @@ aynı test veritabanını kullanır.
 ## Ödeme sağlayıcısı testlerde
 
 Testler gerçek iyzico'ya istek göndermez. `tests/helpers/env.ts` sağlayıcıyı sahte anahtarlı
-iyzico olarak ayarlar (`test-api-key` / `test-secret-key`).
+iyzico olarak ayarlar (`test-api-key` / `test-secret-key`); HTTP çağrılarını
+`tests/helpers/fake-iyzico.ts` yakalar ve iyzico'nun dokümandaki yanıt biçimini taklit eder.
+Yakalanmayan bir dış istek testi hatayla düşürür. Bu testler bizim kodumuzun mantığını doğrular;
+iyzico'nun gerçek davranışını doğrulamaz. Gerçek sandbox ile uçtan uca deneme:
+`docs/IYZICO_SANDBOX_TEST.md`.
 
 ## Bilinen gürültü
 

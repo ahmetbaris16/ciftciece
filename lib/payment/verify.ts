@@ -43,6 +43,58 @@ export interface ClassifyContext {
   expected?: { paymentId?: string; conversationId?: string };
 }
 
+/**
+ * "Başarılı" bildirilen ödemenin doğrulanması. Herhangi biri tutmazsa sipariş PAID yapılmaz (MISMATCH).
+ *  - ödeme no (paymentId) var; tetikleyici bir ödeme no bildirdiyse (webhook) aynı
+ *  - sepet no (basketId) = sipariş id
+ *  - token ve conversationId sağlayıcı bildirdiyse denemeninkiyle aynı; tetikleyicinin bildirdiği
+ *    conversationId (webhook paymentConversationId) denemeninkiyle aynı
+ *  - para birimi = denemenin para birimi (TRY)
+ *  - sepet tutarı (price) = beklenen tutar (sipariş toplamı), kuruşu kuruşuna
+ *  - çekilen tutar (paidPrice) sepet tutarından az olamaz; tek çekimde ona eşit olmalı. Taksitte
+ *    fazlası, iyzico panelinde vade farkı müşteriye yansıtılıyorsa beklenir ve kaydedilir.
+ */
+function successMismatches(res: RetrievedOk, data: ProviderPaymentData, ctx: ClassifyContext): string[] {
+  const reasons: string[] = [];
+  if (!data.paymentId) {
+    reasons.push("sağlayıcı ödeme no (paymentId) bildirmedi");
+  } else if (ctx.expected?.paymentId && ctx.expected.paymentId !== data.paymentId) {
+    reasons.push(`ödeme no uyuşmuyor (bildirimde ${ctx.expected.paymentId}, sorguda ${data.paymentId})`);
+  }
+  if (res.basketId !== ctx.orderId) {
+    reasons.push(`sepet no uyuşmuyor (beklenen ${ctx.orderId}, gelen ${res.basketId ?? "yok"})`);
+  }
+  if (res.token && ctx.providerToken && res.token !== ctx.providerToken) {
+    reasons.push("token uyuşmuyor");
+  }
+  if (res.conversationId && ctx.conversationId && res.conversationId !== ctx.conversationId) {
+    reasons.push(`conversationId uyuşmuyor (beklenen ${ctx.conversationId}, gelen ${res.conversationId})`);
+  }
+  if (ctx.expected?.conversationId && ctx.expected.conversationId !== ctx.conversationId) {
+    reasons.push(`bildirimdeki conversationId (${ctx.expected.conversationId}) denemeyle eşleşmiyor`);
+  }
+  if (!res.currency) {
+    reasons.push("para birimi bildirilmedi");
+  } else if (res.currency !== ctx.currency) {
+    reasons.push(`para birimi uyuşmuyor (beklenen ${ctx.currency}, gelen ${res.currency})`);
+  }
+  if (data.paidAmountKurus === null) {
+    reasons.push(`sepet tutarı okunamadı (${res.price ?? "yok"})`);
+  } else if (data.paidAmountKurus !== ctx.amountKurus) {
+    reasons.push(`tutar uyuşmuyor (beklenen ${ctx.amountKurus} kuruş, sağlayıcı ${data.paidAmountKurus} kuruş)`);
+  }
+  if (data.chargedAmountKurus === null) {
+    reasons.push(`çekilen tutar okunamadı (${res.paidPrice ?? "yok"})`);
+  } else if (data.paidAmountKurus !== null) {
+    if (data.chargedAmountKurus < data.paidAmountKurus) {
+      reasons.push(`çekilen tutar (${data.chargedAmountKurus} kuruş) sepet tutarından az`);
+    } else if (data.chargedAmountKurus > data.paidAmountKurus && (data.installment ?? 1) <= 1) {
+      reasons.push(`tek çekimde çekilen tutar (${data.chargedAmountKurus} kuruş) sepet tutarından farklı`);
+    }
+  }
+  return reasons;
+}
+
 /** Saf fonksiyon: sağlayıcı yanıtı + beklenen değerler → sonuç. DB'ye dokunmaz. */
 export function classifyRetrieve(res: RetrievedOk, ctx: ClassifyContext): Classification {
   const data: ProviderPaymentData = {
@@ -64,15 +116,7 @@ export function classifyRetrieve(res: RetrievedOk, ctx: ClassifyContext): Classi
     if (res.fraudStatus === -1) {
       return { kind: "failed", data, reason: "iyzico dolandırıcılık kontrolü ödemeyi reddetti (fraudStatus -1)" };
     }
-    const reasons: string[] = [];
-    if (res.basketId !== ctx.orderId) {
-      reasons.push(`sepet no uyuşmuyor (beklenen ${ctx.orderId}, gelen ${res.basketId ?? "yok"})`);
-    }
-    if (data.paidAmountKurus === null) {
-      reasons.push(`ödenen tutar okunamadı (${res.price ?? "yok"})`);
-    } else if (data.paidAmountKurus !== ctx.amountKurus) {
-      reasons.push(`tutar uyuşmuyor (beklenen ${ctx.amountKurus} kuruş, ödenen ${data.paidAmountKurus} kuruş)`);
-    }
+    const reasons = successMismatches(res, data, ctx);
     if (reasons.length > 0) return { kind: "mismatch", data, reasons };
     return { kind: "success", data, fraudReview: res.fraudStatus === 0 };
   }
