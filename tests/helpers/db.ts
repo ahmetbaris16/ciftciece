@@ -29,7 +29,7 @@ export async function resetDb() {
 }
 
 /** Her testten önce tabloları boşaltır, dosya bitince bağlantıyı kapatır. */
-export function useTestDb() {
+export function setupTestDb() {
   beforeEach(async () => {
     await resetDb();
   });

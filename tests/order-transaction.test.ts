@@ -7,9 +7,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { prisma } from "@/lib/db/prisma";
 import { createOrder, OutOfStockError } from "@/lib/repositories/order.repository";
-import { createProduct, stockOf, useTestDb, withFailingInserts } from "./helpers/db";
+import { createProduct, stockOf, setupTestDb, withFailingInserts } from "./helpers/db";
 
-useTestDb();
+setupTestDb();
 
 function orderInput(items: Array<{ variantId: string; priceKurus: number; quantity: number }>) {
   const subtotalKurus = items.reduce((s, i) => s + i.priceKurus * i.quantity, 0);
