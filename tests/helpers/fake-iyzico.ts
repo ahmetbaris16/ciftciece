@@ -86,6 +86,11 @@ export class FakeIyzico {
     return p;
   }
 
+  /** Bu sürümden önce (eski kodla) açılmış bir formu taklit eder */
+  register(payment: Omit<FakePayment, "state" | "installment" | "fraudStatus"> & Partial<FakePayment>) {
+    this.payments.set(payment.token, { state: "INIT", installment: 1, fraudStatus: 1, ...payment });
+  }
+
   /** Kart reddedildi */
   fail(token: string) {
     this.get(token).state = "FAILURE";

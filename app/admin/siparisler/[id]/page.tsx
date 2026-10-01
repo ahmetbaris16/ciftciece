@@ -9,6 +9,7 @@ import { requireAdmin } from "@/lib/auth/session";
 import { getOrderByReference } from "@/lib/repositories";
 import AdminShell from "@/components/admin/AdminShell";
 import OrderActions from "@/components/admin/OrderActions";
+import ReconcileButton from "@/components/admin/ReconcileButton";
 import { formatPrice, type Order } from "@/types";
 import { prisma } from "@/lib/db/prisma";
 import { PAYMENT_METHOD_LABELS } from "@/lib/payment/methods";
@@ -175,6 +176,12 @@ export default async function AdminSiparisDetay({ params }: Props) {
             <p style={{ ...styles.textLight, marginTop: "0.5rem" }}>
               Eski ödeme kaydı: {legacyPayment.provider} · {legacyPayment.status}
             </p>
+          )}
+          {order.paymentMethod === "CARD" && (
+            <ReconcileButton
+              orderId={order.id}
+              label={(process.env.PAYMENT_PROVIDER ?? "stub") === "iyzico" ? "iyzico'dan sorgula" : "Ödeme sağlayıcısından sorgula"}
+            />
           )}
         </div>
 
