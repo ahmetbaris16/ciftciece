@@ -52,6 +52,8 @@ export interface Product {
   isPublished: boolean;
   isFeatured: boolean;
   sortOrder: number;
+  /** KDV oranı (baz puan: 100 = %1); boş = girilmemiş */
+  vatRateBps?: number | null;
 }
 
 // Liste sayfaları için hafif versiyon (images[0] + variants[0] içerir)
@@ -136,6 +138,10 @@ export interface OrderItem {
   snapshotVariant: string;
   snapshotPrice: number; // kuruş
   quantity: number;
+  /** Sipariş anındaki KDV oranı (baz puan); bilinmiyorsa null */
+  vatRateBps: number | null;
+  /** Kalem indirimi (kuruş) */
+  discountKurus: number;
 }
 
 export interface Order {

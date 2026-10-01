@@ -46,6 +46,9 @@ const SOURCE_TR: Record<string, string> = {
   SYSTEM: "Sistem",
 };
 
+/** Baz puan → "1", "10", "20", "8,5" (yalnız gösterim) */
+const formatRate = (bps: number) => (bps % 100 === 0 ? String(bps / 100) : (bps / 100).toFixed(2).replace(".", ","));
+
 const dateTimeTr = (d: Date) =>
   new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Istanbul" }).format(d);
 
@@ -202,8 +205,15 @@ export default async function AdminSiparisDetay({ params }: Props) {
           <h2 style={styles.sectionTitle}>Ürünler</h2>
           {order.items.map((item) => (
             <div key={item.id} style={styles.line}>
-              <span style={styles.text}>{item.snapshotName} — {item.snapshotVariant} × {item.quantity}</span>
-              <span style={styles.text}>{formatPrice(item.snapshotPrice * item.quantity)}</span>
+              <span style={styles.text}>
+                {item.snapshotName} — {item.snapshotVariant} × {item.quantity}
+                <span style={styles.textLight}>
+                  {" "}· birim {formatPrice(item.snapshotPrice)} ·{" "}
+                  {item.vatRateBps !== null ? `KDV %${formatRate(item.vatRateBps)}` : "KDV oranı girilmemiş"}
+                  {item.discountKurus > 0 && <> · indirim {formatPrice(item.discountKurus)}</>}
+                </span>
+              </span>
+              <span style={styles.text}>{formatPrice(item.snapshotPrice * item.quantity - item.discountKurus)}</span>
             </div>
           ))}
           <div style={styles.line}>

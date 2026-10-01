@@ -87,6 +87,9 @@ model Product {
   isPublished Boolean          @default(false)
   isFeatured  Boolean          @default(false)
   sortOrder   Int              @default(0)
+  // KDV oranı, baz puan (100 = %1, 1000 = %10, 2000 = %20). Boş = girilmemiş (bilinmiyor):
+  // oran uydurulmaz, sipariş kalemine de boş kopyalanır.
+  vatRateBps  Int?
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
@@ -231,6 +234,10 @@ model OrderItem {
   snapshotVariant String         // Varyant adı (sipariş anında)
   snapshotPrice   Int            // Birim fiyat kuruş (sipariş anında)
   quantity        Int
+  // Sipariş anındaki KDV oranı (baz puan); ürün kaydında oran yoksa boş
+  vatRateBps      Int?
+  // Kalem indirimi (kuruş; birim fiyat × adetten düşülür). Şu an kampanya yok → 0
+  discountKurus   Int            @default(0)
 
   @@map("order_items")
 }

@@ -30,6 +30,8 @@ function toOrder(o: DbOrderWithItems): Order {
       snapshotVariant: i.snapshotVariant,
       snapshotPrice: i.snapshotPrice,
       quantity: i.quantity,
+      vatRateBps: i.vatRateBps,
+      discountKurus: i.discountKurus,
     })),
     shippingAddress: o.shippingAddress as unknown as ShippingAddress,
     subtotalKurus: o.subtotalKurus,
@@ -64,9 +66,15 @@ interface CreateOrderInput {
     variantId: string;
     snapshotName: string;
     snapshotVariant: string;
+    /** Birim fiyat (kuruş), DB'den */
     snapshotPrice: number;
     quantity: number;
+    /** Ürünün KDV oranı (baz puan); bilinmiyorsa null — uydurulmaz */
+    vatRateBps?: number | null;
+    /** Kalem indirimi (kuruş) */
+    discountKurus?: number;
   }>;
+  /** Kalemlerin (birim × adet − kalem indirimi) toplamı */
   subtotalKurus: number;
   shippingKurus: number;
   discountKurus?: number;
@@ -97,6 +105,14 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
     throw new Error("DB bağlantısı olmadan sipariş oluşturulamaz");
   }
 
+  // Ara toplam kalemlerden yeniden hesaplanır: çağıranın hesabı kalemlerle uyuşmuyorsa sipariş açılmaz
+  const itemsTotal = input.items.reduce(
+    (sum, item) => sum + item.snapshotPrice * item.quantity - (item.discountKurus ?? 0),
+    0
+  );
+  if (itemsTotal !== input.subtotalKurus) {
+    throw new Error(`Ara toplam (${input.subtotalKurus}) kalemlerle (${itemsTotal}) uyuşmuyor`);
+  }
   const totalKurus =
     input.subtotalKurus + input.shippingKurus + (input.paymentFeeKurus ?? 0) - (input.discountKurus ?? 0);
 
@@ -151,6 +167,8 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
             snapshotVariant: item.snapshotVariant,
             snapshotPrice: item.snapshotPrice,
             quantity: item.quantity,
+            vatRateBps: item.vatRateBps ?? null,
+            discountKurus: item.discountKurus ?? 0,
           })),
         },
       },

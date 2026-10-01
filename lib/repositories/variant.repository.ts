@@ -80,6 +80,7 @@ export async function getVariantById(variantId: string): Promise<VariantLookupRe
     isPublished: p.isPublished,
     isFeatured: p.isFeatured,
     sortOrder: p.sortOrder,
+    vatRateBps: p.vatRateBps,
   };
 
   const mappedVariant: ProductVariant = {

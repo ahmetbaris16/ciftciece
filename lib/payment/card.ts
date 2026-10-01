@@ -113,7 +113,12 @@ export async function startCardPayment(
     },
     // Sağlayıcıda kalemlerin toplamı sipariş tutarına eşit olmalı → kargo da kalem
     items: [
-      ...order.items.map((i) => ({ name: `${i.snapshotName} - ${i.snapshotVariant}`, priceKurus: i.snapshotPrice, quantity: i.quantity })),
+      // Kalem tutarı = birim × adet − kalem indirimi (iyzico'da adet alanı yok)
+      ...order.items.map((i) => ({
+        name: `${i.snapshotName} - ${i.snapshotVariant} × ${i.quantity}`,
+        priceKurus: i.snapshotPrice * i.quantity - i.discountKurus,
+        quantity: 1,
+      })),
       ...(order.shippingKurus > 0 ? [{ name: "Kargo", priceKurus: order.shippingKurus, quantity: 1 }] : []),
       ...(order.paymentFeeKurus > 0 ? [{ name: "Ödeme hizmet bedeli", priceKurus: order.paymentFeeKurus, quantity: 1 }] : []),
     ],

@@ -83,6 +83,8 @@ export async function POST(request: NextRequest) {
     snapshotVariant: string;
     snapshotPrice: number;
     quantity: number;
+    vatRateBps: number | null;
+    discountKurus: number;
   }> = [];
   let subtotalKurus = 0;
   const shippingLines: ShippingLine[] = [];
@@ -123,7 +125,9 @@ export async function POST(request: NextRequest) {
       continue;
     }
 
-    const lineTotalKurus = variant.priceKurus * item.quantity;
+    // Kalem indirimi: şu an kampanya/kupon yok → 0 (alan snapshot'ta tutulur)
+    const discountKurus = 0;
+    const lineTotalKurus = variant.priceKurus * item.quantity - discountKurus;
     subtotalKurus += lineTotalKurus;
 
     orderItems.push({
@@ -132,6 +136,8 @@ export async function POST(request: NextRequest) {
       snapshotVariant: variant.name,   // Sipariş anı snapshot
       snapshotPrice: variant.priceKurus, // SERVER'DAN — frontend fiyatı değil
       quantity: item.quantity,
+      vatRateBps: product.vatRateBps ?? null, // Katalogda yoksa boş — oran uydurulmaz
+      discountKurus,
     });
     shippingLines.push({ sku: variant.sku, quantity: item.quantity });
   }

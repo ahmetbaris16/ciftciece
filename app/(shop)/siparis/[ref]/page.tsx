@@ -197,7 +197,7 @@ export default async function SiparisOnayPage({ params, searchParams }: Props) {
                     </span>
                   </div>
                   <span className={styles.itemPrice}>
-                    {formatPrice(item.snapshotPrice * item.quantity)}
+                    {formatPrice(item.snapshotPrice * item.quantity - item.discountKurus)}
                   </span>
                 </li>
               ))}
