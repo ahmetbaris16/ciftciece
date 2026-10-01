@@ -201,6 +201,7 @@ model Order {
   paymentAttempts PaymentAttempt[]
   paymentEvents   PaymentEvent[]
   paymentAlerts   PaymentAlert[]
+  consents        OrderConsent[]
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
@@ -240,6 +241,23 @@ model OrderItem {
   discountKurus   Int            @default(0)
 
   @@map("order_items")
+}
+
+// Siparişte müşterinin onayladığı yasal metinler (Ön Bilgilendirme Formu, Mesafeli Satış Sözleşmesi):
+// hangi sürüm, ne zaman (sunucu saati), hangi IP'den. Yalnız eklenir.
+model OrderConsent {
+  id         String   @id @default(cuid())
+  orderId    String
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  // "PRE_INFORMATION_FORM" | "DISTANCE_SALES_CONTRACT" (lib/legal/documents.ts)
+  document   String
+  version    String
+  acceptedAt DateTime
+  // İstemci IP'si (vekil sunucu başlığından okunur; başlık güvenilir vekilce yazılmıyorsa doğrulanamaz)
+  ipAddress  String?
+
+  @@unique([orderId, document])
+  @@map("order_consents")
 }
 
 // ============================================================

@@ -318,6 +318,38 @@
   color: var(--color-primary);
 }
 
+/* Sözleşme onayı (Ön Bilgilendirme Formu + Mesafeli Satış Sözleşmesi) */
+.termsBox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: var(--space-5) 0 var(--space-3);
+}
+
+.termsLabel {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.termsLabel input {
+  accent-color: var(--color-primary);
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.termsLabel a {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 /* Payment note inline */
 .paymentNote {
   display: flex;

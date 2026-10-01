@@ -13,6 +13,7 @@ import { formatPrice, type Order } from "@/types";
 import { prisma } from "@/lib/db/prisma";
 import { PAYMENT_METHOD_LABELS } from "@/lib/payment/methods";
 import { ALERT_TITLES, type PaymentAlertKind } from "@/lib/payment/alerts";
+import { LEGAL_DOCUMENTS, type LegalDocumentId } from "@/lib/legal/documents";
 
 const USE_DB = !!process.env.DATABASE_URL;
 
@@ -69,11 +70,12 @@ export default async function AdminSiparisDetay({ params }: Props) {
 
   if (!order) notFound();
 
-  const [attempts, events, alerts, legacyPayment] = await Promise.all([
+  const [attempts, events, alerts, legacyPayment, consents] = await Promise.all([
     prisma.paymentAttempt.findMany({ where: { orderId: order.id }, orderBy: { createdAt: "asc" } }),
     prisma.paymentEvent.findMany({ where: { orderId: order.id }, orderBy: { processedAt: "desc" }, take: 40 }),
     prisma.paymentAlert.findMany({ where: { orderId: order.id }, orderBy: { createdAt: "desc" } }),
     prisma.payment.findUnique({ where: { orderId: order.id }, select: { status: true, provider: true } }),
+    prisma.orderConsent.findMany({ where: { orderId: order.id }, orderBy: { document: "asc" } }),
   ]);
   const openAlerts = alerts.filter((a) => !a.resolvedAt);
 
@@ -190,6 +192,20 @@ export default async function AdminSiparisDetay({ params }: Props) {
                 </span>
                 <span style={styles.textLight}>{e.outcome ?? e.status}</span>
               </div>
+            ))
+          )}
+        </div>
+
+        <div style={styles.card}>
+          <h2 style={styles.sectionTitle}>Sözleşme onayı</h2>
+          {consents.length === 0 ? (
+            <p style={styles.textLight}>Kayıt yok (bu sürümden önce verilmiş sipariş).</p>
+          ) : (
+            consents.map((c) => (
+              <p key={c.id} style={styles.textLight}>
+                {LEGAL_DOCUMENTS[c.document as LegalDocumentId]?.title ?? c.document} · sürüm {c.version} ·{" "}
+                {dateTimeTr(c.acceptedAt)} · IP {c.ipAddress ?? "bilinmiyor"}
+              </p>
             ))
           )}
         </div>

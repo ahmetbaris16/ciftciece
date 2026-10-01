@@ -1,3 +1,5 @@
+// Bu metin değişirse lib/legal/documents.ts içindeki sürümü güncelleyin: siparişte müşterinin
+// onayladığı sürüm order_consents tablosuna oradan yazılır.
 import type { Metadata } from "next";
 import Link from "next/link";
 import styles from "../legal.module.css";

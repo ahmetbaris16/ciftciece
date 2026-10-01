@@ -37,6 +37,7 @@ import { remainingForFreeShipping } from "@/lib/shipping/settings";
 import { RECIPIENT_PAYS_NOTE, SHIPPING_BASIS_NOTE } from "@/lib/shipping/quote";
 import { usePaymentOptions } from "@/lib/payment/usePaymentOptions";
 import { isOptionAllowed, type PaymentMethodId } from "@/lib/payment/methods";
+import { CHECKOUT_TERMS_VERSION, LEGAL_DOCUMENTS } from "@/lib/legal/documents";
 import styles from "./page.module.css";
 
 type Step = "iletisim" | "teslimat" | "odeme";
@@ -105,6 +106,8 @@ function OdemeContent() {
   const quoteState = useShippingQuote(cart.items);
   const paymentOptionsState = usePaymentOptions();
   const [chosenMethod, setChosenMethod] = useState<PaymentMethodId | null>(null);
+  // Ön Bilgilendirme Formu + Mesafeli Satış Sözleşmesi onayı (sunucu sürümle birlikte kaydeder)
+  const [acceptTerms, setAcceptTerms] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<CheckoutField, string>>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(() => returnError);
@@ -147,6 +150,12 @@ function OdemeContent() {
       setIsSubmitting(false);
       return;
     }
+    if (!acceptTerms) {
+      setErrors((e) => ({ ...e, acceptTerms: CHECKOUT_MESSAGES.acceptTerms }));
+      setIsSubmitting(false);
+      document.getElementById("accept-terms")?.focus();
+      return;
+    }
     const orderKey = JSON.stringify({ items, contact, shipping, paymentMethod });
 
     const fail = (message: string) => {
@@ -166,6 +175,8 @@ function OdemeContent() {
             contact,
             shipping: { ...shipping, postalCode: shipping.postalCode || undefined },
             paymentMethod,
+            acceptTerms: true,
+            termsVersion: CHECKOUT_TERMS_VERSION,
           }),
         });
         const checkoutData = await checkoutRes.json().catch(() => null);
@@ -180,7 +191,7 @@ function OdemeContent() {
             setCurrentStep(
               keys.some((k) => contactFields.includes(k as CheckoutField))
                 ? "iletisim"
-                : keys.every((k) => k === "paymentMethod")
+                : keys.every((k) => k === "paymentMethod" || k === "acceptTerms")
                   ? "odeme"
                   : "teslimat"
             );
@@ -227,7 +238,7 @@ function OdemeContent() {
       console.error("[checkout] Beklenmeyen hata:", err);
       fail("Bağlantı sorunu oluştu. İnternetinizi kontrol edip tekrar deneyin.");
     }
-  }, [cart.items, contact, shipping, router, pendingOrder]);
+  }, [cart.items, contact, shipping, router, pendingOrder, acceptTerms]);
 
   // Hydration bekleniyor
   if (!isHydrated) {
@@ -660,6 +671,35 @@ function OdemeContent() {
                     </div>
                   )}
                 </fieldset>
+
+                <div className={styles.termsBox}>
+                  <label className={styles.termsLabel}>
+                    <input
+                      id="accept-terms"
+                      type="checkbox"
+                      checked={acceptTerms}
+                      aria-invalid={!!errors.acceptTerms}
+                      aria-describedby={errors.acceptTerms ? "terms-error" : undefined}
+                      onChange={(e) => {
+                        setAcceptTerms(e.target.checked);
+                        clearError("acceptTerms");
+                      }}
+                    />
+                    <span>
+                      <Link href={LEGAL_DOCUMENTS.PRE_INFORMATION_FORM.path} target="_blank" rel="noopener">
+                        {LEGAL_DOCUMENTS.PRE_INFORMATION_FORM.title}
+                      </Link>
+                      &apos;nu ve{" "}
+                      <Link href={LEGAL_DOCUMENTS.DISTANCE_SALES_CONTRACT.path} target="_blank" rel="noopener">
+                        {LEGAL_DOCUMENTS.DISTANCE_SALES_CONTRACT.title}
+                      </Link>
+                      &apos;ni okudum, onaylıyorum.
+                    </span>
+                  </label>
+                  {errors.acceptTerms && (
+                    <span id="terms-error" className={styles.error} role="alert">{errors.acceptTerms}</span>
+                  )}
+                </div>
 
                 <div className={styles.paymentNote}>
                   <LockIcon />

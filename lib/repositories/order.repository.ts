@@ -90,6 +90,12 @@ interface CreateOrderInput {
   initialStatus: "PENDING" | "PROCESSING";
   /** Havale/kapıda ödemede sağlayıcısız ödeme denemesi ("havale" / "kapida") — kartta deneme ödeme başlatılınca açılır */
   offlinePaymentProvider?: "havale" | "kapida";
+  /** Müşterinin onayladığı yasal metinler (sürüm) — siparişle aynı transaction'da yazılır */
+  consents?: {
+    documents: Array<{ document: string; version: string }>;
+    acceptedAt: Date;
+    ipAddress: string | null;
+  };
 }
 
 /**
@@ -158,6 +164,16 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
               amountKurus: totalKurus,
               currency: "TRY",
             },
+          },
+        }),
+        ...(input.consents && {
+          consents: {
+            create: input.consents.documents.map((d) => ({
+              document: d.document,
+              version: d.version,
+              acceptedAt: input.consents!.acceptedAt,
+              ipAddress: input.consents!.ipAddress,
+            })),
           },
         }),
         items: {

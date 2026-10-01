@@ -21,6 +21,9 @@ export const CHECKOUT_MESSAGES = {
   shippingUnknown:
     "Siparişinizin kargo ücreti henüz hesaplanamıyor, bu yüzden sipariş şu anda çevrimiçi tamamlanamıyor. Siparişinizi telefon ya da WhatsApp ile verebilirsiniz: 0532 682 53 72",
   paymentMethod: "Bir ödeme yöntemi seçin.",
+  acceptTerms: "Siparişi tamamlamak için Ön Bilgilendirme Formu'nu ve Mesafeli Satış Sözleşmesi'ni onaylayın.",
+  termsOutdated: "Sözleşme metni güncellendi. Sayfayı yenileyip metni tekrar onaylayın.",
+  pageOutdated: "Ödeme sayfası güncellendi. Lütfen sayfayı yenileyip tekrar deneyin.",
   paymentMethodUnavailable: "Seçtiğiniz ödeme yöntemi bu sipariş için kullanılamıyor. Lütfen başka bir yöntem seçin.",
   noPaymentMethod:
     "Şu anda çevrimiçi ödeme alamıyoruz. Siparişinizi telefon ya da WhatsApp ile verebilirsiniz: 0532 682 53 72",
@@ -41,7 +44,8 @@ export type CheckoutField =
   | "district"
   | "city"
   | "postalCode"
-  | "paymentMethod";
+  | "paymentMethod"
+  | "acceptTerms";
 
 // ── Telefon (Türkiye cep) ───────────────────────────────────
 
@@ -136,6 +140,10 @@ export const CheckoutSchema = z.object({
   shipping: ShippingSchema,
   // Kullanılabilirlik (ayar, tutar sınırı) sunucuda lib/payment/methods ile ayrıca kontrol edilir
   paymentMethod: z.enum(["CARD", "BANK_TRANSFER", "CASH_ON_DELIVERY"], { error: CHECKOUT_MESSAGES.paymentMethod }),
+  // Ön Bilgilendirme Formu + Mesafeli Satış Sözleşmesi onayı ve müşteriye gösterilen sürüm
+  // (lib/legal/documents.ts). Sunucu sürümü kendi sürümüyle karşılaştırır, onayı sipariş kaydına yazar.
+  acceptTerms: z.literal(true, { error: CHECKOUT_MESSAGES.acceptTerms }),
+  termsVersion: z.string({ error: CHECKOUT_MESSAGES.termsOutdated }).max(100),
 });
 
 export type CheckoutInput = z.infer<typeof CheckoutSchema>;

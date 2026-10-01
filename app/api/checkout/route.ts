@@ -33,6 +33,8 @@ import { getPaymentSettings } from "@/lib/payment/settings.repository";
 import { availablePaymentOptions, isOptionAllowed } from "@/lib/payment/methods";
 import { isCardPaymentReady } from "@/lib/payment/provider";
 import { PENDING_ORDER_TTL_MINUTES } from "@/lib/repositories/order.repository";
+import { clientIp } from "@/lib/security/rate-limit";
+import { CHECKOUT_CONSENT_DOCUMENTS, CHECKOUT_TERMS_VERSION, LEGAL_DOCUMENTS } from "@/lib/legal/documents";
 import {
   CheckoutSchema,
   CHECKOUT_MESSAGES,
@@ -62,13 +64,27 @@ export async function POST(request: NextRequest) {
     return fail(400, "BAD_REQUEST", CHECKOUT_MESSAGES.orderFailed);
   }
 
+  // Sözleşme onay alanı hiç yoksa istek bu sürümden önceki ödeme sayfasından geliyordur (onay kutusu yok)
+  if (body && typeof body === "object" && !("acceptTerms" in body)) {
+    return fail(409, "CLIENT_OUTDATED", CHECKOUT_MESSAGES.pageOutdated);
+  }
+
   const parsed = CheckoutSchema.safeParse(body);
   if (!parsed.success) {
     const { fieldErrors, message } = toFieldErrors(parsed.error);
     return fail(400, "VALIDATION", message, { fieldErrors });
   }
 
-  const { items, contact, shipping, paymentMethod } = parsed.data;
+  const { items, contact, shipping, paymentMethod, termsVersion } = parsed.data;
+
+  // Müşterinin gördüğü sözleşme sürümü güncel değilse onay geçersiz: güncel metni onaylaması istenir
+  if (termsVersion !== CHECKOUT_TERMS_VERSION) {
+    return fail(409, "TERMS_OUTDATED", CHECKOUT_MESSAGES.termsOutdated, {
+      fieldErrors: { acceptTerms: CHECKOUT_MESSAGES.termsOutdated },
+    });
+  }
+  const consentAcceptedAt = new Date();
+  const requestIp = clientIp(request.headers);
 
   // Süresi dolmuş ödenmemiş siparişlerin ayırdığı stoğu önce serbest bırak
   await releaseExpiredOrders().catch((err) =>
@@ -232,6 +248,11 @@ export async function POST(request: NextRequest) {
       initialStatus: paymentMethod === "CASH_ON_DELIVERY" ? "PROCESSING" : "PENDING",
       offlinePaymentProvider:
         paymentMethod === "BANK_TRANSFER" ? "havale" : paymentMethod === "CASH_ON_DELIVERY" ? "kapida" : undefined,
+      consents: {
+        documents: CHECKOUT_CONSENT_DOCUMENTS.map((document) => ({ document, version: LEGAL_DOCUMENTS[document].version })),
+        acceptedAt: consentAcceptedAt,
+        ipAddress: requestIp === "yerel" ? null : requestIp.slice(0, 64),
+      },
     });
 
     return NextResponse.json({
