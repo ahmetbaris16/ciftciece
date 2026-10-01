@@ -10,6 +10,7 @@ import type { Order, OrderStatus, PaymentMethod, ShippingAddress } from "@/types
 import type { Prisma } from "@prisma/client";
 import { recordPaymentEvent } from "@/lib/payment/events";
 import { recordCashOnDeliveryCollected } from "@/lib/payment/offline";
+import { CARD_RESERVATION_MINUTES } from "@/lib/payment/reservation";
 
 const USE_DB = !!process.env.DATABASE_URL;
 
@@ -314,11 +315,6 @@ export async function updateOrderStatus(
 // Stok iadesi ve süresi dolan siparişler
 // ============================================================
 
-/** Kartla ödenmemiş (PENDING) sipariş stoğu bu süre kadar ayırır; sonra iptal edilip stok iade edilir. */
-export const PENDING_ORDER_TTL_MINUTES = Math.max(
-  15,
-  Number(process.env.PENDING_ORDER_TTL_MINUTES ?? 60) || 60
-);
 
 type Tx = Prisma.TransactionClient;
 
@@ -348,7 +344,7 @@ async function expireOpenAttempts(tx: Tx, orderId: string): Promise<number> {
 /**
  * Süresi dolan PENDING siparişleri iptal eder ve stoklarını iade eder.
  * Son ödeme zamanı siparişte (paymentDueAt): kart ve havale için checkout'ta belirlenir.
- * paymentDueAt'i olmayan eski siparişlerde oluşturulma + PENDING_ORDER_TTL_MINUTES kullanılır.
+ * paymentDueAt'i olmayan eski siparişlerde oluşturulma + CARD_RESERVATION_MINUTES kullanılır.
  * Cron gerektirmez: checkout ve admin sipariş listesi her açıldığında çağrılır.
  *
  * İptal EDİLMEYENLER:
@@ -359,7 +355,7 @@ async function expireOpenAttempts(tx: Tx, orderId: string): Promise<number> {
  */
 export async function releaseExpiredOrders(now = new Date()): Promise<number> {
   if (!USE_DB) return 0;
-  const cutoff = new Date(now.getTime() - PENDING_ORDER_TTL_MINUTES * 60_000);
+  const cutoff = new Date(now.getTime() - CARD_RESERVATION_MINUTES * 60_000);
   const expired = await prisma.order.findMany({
     where: {
       status: "PENDING",

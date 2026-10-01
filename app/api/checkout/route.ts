@@ -12,7 +12,7 @@
  * 4. Ödeme yöntemi (kart / havale / kapıda ödeme) ayara ve tutar sınırına göre doğrulanır
  * 5. Toplam = ara toplam + kargo + yöntem ücreti (kapıda ödeme bedeli)
  * 6. DB'ye order kaydet (createOrder — transaction + stok düş)
- *    - kart: PENDING, ~1 sa içinde ödenmezse iptal; istemci /api/payment/create ile ödemeye geçer
+ *    - kart: PENDING, 30 dk içinde ödenmezse iptal (lib/payment/reservation.ts); istemci /api/payment/create ile ödemeye geçer
  *    - havale: PENDING, ayardaki süre (varsayılan 48 sa) içinde ödenmezse iptal
  *    - kapıda ödeme: PROCESSING (kesin sipariş)
  * 7. orderId + sonraki adım (nextStep) döndür
@@ -32,7 +32,7 @@ import { isQuoteFinal, quoteShipping, shippingModeOf, type ShippingLine } from "
 import { getPaymentSettings } from "@/lib/payment/settings.repository";
 import { availablePaymentOptions, isOptionAllowed } from "@/lib/payment/methods";
 import { isCardPaymentReady } from "@/lib/payment/provider";
-import { PENDING_ORDER_TTL_MINUTES } from "@/lib/repositories/order.repository";
+import { cardPaymentDueAt } from "@/lib/payment/reservation";
 import { clientIp } from "@/lib/security/rate-limit";
 import { CHECKOUT_CONSENT_DOCUMENTS, CHECKOUT_TERMS_VERSION, LEGAL_DOCUMENTS } from "@/lib/legal/documents";
 import {
@@ -203,7 +203,7 @@ export async function POST(request: NextRequest) {
   const now = Date.now();
   const paymentDueAt =
     paymentMethod === "CARD"
-      ? new Date(now + PENDING_ORDER_TTL_MINUTES * 60_000)
+      ? cardPaymentDueAt(now)
       : paymentMethod === "BANK_TRANSFER"
         ? new Date(now + paymentSettings.bankTransfer.paymentWindowHours * 3_600_000)
         : null;

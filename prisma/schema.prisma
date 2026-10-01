@@ -190,7 +190,8 @@ model Order {
   paymentMethod   PaymentMethod @default(CARD)
   // Ödeme yöntemine bağlı ek ücret (kapıda ödeme hizmet bedeli); totalKurus'a dahildir
   paymentFeeKurus Int         @default(0)
-  // Ödenmezse bu andan sonra otomatik iptal + stok iadesi (kart: ~1 sa, havale: ayardaki süre; kapıda ödeme: yok)
+  // Ödenmezse bu andan sonra otomatik iptal + stok iadesi (kart: 30 dk, havale: ayardaki süre — 48 sa;
+  // kapıda ödeme: yok). Süreler lib/payment/reservation.ts
   paymentDueAt    DateTime?
   // Yalnız eski kayıtlar ve insan notu. Kod artık buraya yazmaz: ödeme olayları payment_events'te,
   // uyarılar payment_alerts'ta.

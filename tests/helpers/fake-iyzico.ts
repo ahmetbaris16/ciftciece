@@ -48,6 +48,8 @@ export class FakeIyzico {
   readonly calls: Array<{ path: string; body: Record<string, unknown> }> = [];
   /** Sonraki N istek ağ hatası versin (iyzico'ya ulaşılamıyor taklidi) */
   networkFailures = 0;
+  /** initialize yanıtındaki tokenExpireTime (saniye); dokümandaki değer 1800 */
+  tokenExpireSeconds = 1800;
   private original: typeof fetch | null = null;
   private seq = 0;
 
@@ -139,7 +141,7 @@ export class FakeIyzico {
       conversationId: body.conversationId,
       token,
       checkoutFormContent: "<script></script>",
-      tokenExpireTime: 1800,
+      tokenExpireTime: this.tokenExpireSeconds,
       paymentPageUrl: `https://sandbox-cpp.iyzipay.com?token=${token}&lang=tr`,
     };
   }

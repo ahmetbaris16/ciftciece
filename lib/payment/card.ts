@@ -15,13 +15,14 @@ import { getPaymentProvider } from "./provider";
 import { getPaymentSettings } from "./settings.repository";
 import { recordPaymentEvent } from "./events";
 import { verifyAttempt, type VerifyOutcome } from "./verify";
+import { cardPaymentDueAt } from "./reservation";
 
 export type StartCardPaymentResult =
   | { ok: true; redirectUrl?: string; checkoutFormHtml?: string }
   | {
       ok: false;
       status: number;
-      code: "NOT_FOUND" | "NOT_CARD" | "NOT_PENDING" | "ALREADY_PAID" | "REVIEW" | "PROVIDER_ERROR";
+      code: "NOT_FOUND" | "NOT_CARD" | "NOT_PENDING" | "EXPIRED" | "ALREADY_PAID" | "REVIEW" | "PROVIDER_ERROR";
       error: string;
       reference?: string;
     };
@@ -47,6 +48,16 @@ export async function startCardPayment(
       code: "REVIEW",
       reference: order.reference,
       error: "Bu siparişin ödemesi kontrol ediliyor. Tekrar ödeme yapmayın; sizinle iletişime geçeceğiz.",
+    };
+  }
+  if (order.status === "PENDING" && order.paymentDueAt && order.paymentDueAt.getTime() <= Date.now()) {
+    // Rezervasyon bitti: yeni ödeme formu açılmaz (sipariş birazdan otomatik iptal edilir)
+    return {
+      ok: false,
+      status: 409,
+      code: "EXPIRED",
+      reference: order.reference,
+      error: "Bu siparişin ödeme süresi doldu. Lütfen siparişi yeniden verin.",
     };
   }
   if (order.status !== "PENDING") {
@@ -138,9 +149,36 @@ export async function startCardPayment(
     return { ok: false, status: 502, code: "PROVIDER_ERROR", error: "Ödeme başlatılamadı. Lütfen tekrar deneyin." };
   }
 
-  await prisma.paymentAttempt.update({
-    where: { id: attempt.id },
-    data: { providerToken: result.providerRef, tokenExpiresAt: result.tokenExpiresAt ?? null, conversationId: attempt.id },
+  await prisma.$transaction(async (tx) => {
+    await tx.paymentAttempt.update({
+      where: { id: attempt.id },
+      data: { providerToken: result.providerRef, tokenExpiresAt: result.tokenExpiresAt ?? null, conversationId: attempt.id },
+    });
+    // Rezervasyon, en son açılan formun token ömrünü geçmez ve siparişten itibaren 30 dk'yı aşmaz
+    // (lib/payment/reservation.ts). Dokümandaki token ömrü 30 dk olduğu için normalde değişiklik olmaz.
+    if (result.tokenExpiresAt) {
+      const cap = cardPaymentDueAt(order.createdAt).getTime();
+      const due = new Date(Math.min(cap, result.tokenExpiresAt.getTime()));
+      const current = order.paymentDueAt?.getTime() ?? cap;
+      // 1 sn tolerans: checkout'taki süre ile createdAt arasındaki milisaniye farkı değişiklik sayılmaz
+      if (Math.abs(due.getTime() - current) > 1000) {
+        const { count } = await tx.order.updateMany({
+          where: { id: order.id, status: "PENDING" },
+          data: { paymentDueAt: due },
+        });
+        if (count === 1 && due.getTime() < cap - 1000) {
+          console.warn(`[payment/create] iyzico token ömrü rezervasyondan kısa; son ödeme ${due.toISOString()} (${order.reference})`);
+          await recordPaymentEvent(tx, {
+            source: "SYSTEM",
+            eventType: "reservation.shortened_to_token",
+            provider: provider.name,
+            orderId: order.id,
+            attemptId: attempt.id,
+            payload: { tokenExpiresAt: result.tokenExpiresAt!.toISOString(), paymentDueAt: due.toISOString() },
+          });
+        }
+      }
+    }
   });
 
   return { ok: true, redirectUrl: result.redirectUrl, checkoutFormHtml: result.checkoutFormHtml };

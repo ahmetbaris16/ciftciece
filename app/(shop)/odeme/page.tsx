@@ -217,8 +217,14 @@ function OdemeContent() {
       const paymentData = await paymentRes.json().catch(() => null);
 
       if (!paymentRes.ok) {
-        // Sipariş artık ödenebilir durumda değilse bir sonraki denemede yeni sipariş açılsın
-        if (paymentData?.code === "NOT_PENDING") setPendingOrder(null);
+        const code = paymentData?.code;
+        // Ödeme zaten alınmış ya da kontrol ediliyorsa müşteri tekrar ödemesin: sipariş sayfasına
+        if ((code === "ALREADY_PAID" || code === "REVIEW") && typeof paymentData?.reference === "string") {
+          router.push(`/siparis/${paymentData.reference}`);
+          return;
+        }
+        // Sipariş artık ödenebilir durumda değilse (kapandı / süresi doldu) bir sonraki denemede yeni sipariş açılsın
+        if (code === "NOT_PENDING" || code === "EXPIRED") setPendingOrder(null);
         return fail(typeof paymentData?.error === "string" ? paymentData.error : CHECKOUT_MESSAGES.paymentFailed);
       }
 
