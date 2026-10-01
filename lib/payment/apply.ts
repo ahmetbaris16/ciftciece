@@ -263,6 +263,19 @@ export async function applyProviderResult(input: ApplyInput): Promise<ApplyResul
           data: { status: "PROCESSED", outcome, orderId: order.id, attemptId: attempt.id, handledAt: new Date(), error: null },
         });
       }
+      // Sonuç kesinleştiyse bu denemenin bekleyen (işlenmemiş) diğer bildirimleri de kapanır:
+      // aynı ödeme için callback/elle sorgu önce geldiyse webhook satırı gelen kutusunda asılı kalmaz.
+      if (outcome !== "pending") {
+        await tx.paymentEvent.updateMany({
+          where: {
+            source: "WEBHOOK",
+            attemptId: attempt.id,
+            status: { in: ["RECEIVED", "FAILED"] },
+            ...(input.inboxEventId ? { id: { not: input.inboxEventId } } : {}),
+          },
+          data: { status: "PROCESSED", outcome: `settled:${outcome}`, handledAt: new Date() },
+        });
+      }
 
       const raised: Array<{ kind: PaymentAlertKind; message: string }> = [];
       for (const alert of alerts) {

@@ -195,6 +195,7 @@ export default async function AdminSiparisDetay({ params }: Props) {
                 <span style={styles.textLight}>
                   {dateTimeTr(e.processedAt)} · {e.source ? SOURCE_TR[e.source] ?? e.source : "—"} · {e.eventType}
                   {e.actorId && <> · admin {e.actorId.slice(0, 8)}</>}
+                  {e.signatureValid === false && <span style={{ color: "#f3a0a0" }}> · imza geçersiz</span>}
                   {e.error && <span style={{ color: "#f3a0a0" }}> · {e.error}</span>}
                 </span>
                 <span style={styles.textLight}>{e.outcome ?? e.status}</span>

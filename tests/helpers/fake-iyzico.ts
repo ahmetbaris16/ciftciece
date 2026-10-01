@@ -96,6 +96,33 @@ export class FakeIyzico {
     this.get(token).state = "FAILURE";
   }
 
+  /**
+   * Bu ödeme için iyzico'nun göndereceği HPP webhook'u (docs.iyzico.com/en/advanced/webhook).
+   * İmza, üretim kodundan bağımsız olarak dokümandaki örneğe göre burada hesaplanır:
+   * HMAC-SHA256(key = secretKey, msg = secretKey + iyziEventType + iyziPaymentId + token +
+   * paymentConversationId + status), HEX.
+   */
+  webhook(token: string, opts: { status?: string; iyziEventType?: string; secretKey?: string } = {}) {
+    const p = this.get(token);
+    const status = opts.status ?? (p.state === "SUCCESS" ? "SUCCESS" : p.state === "FAILURE" ? "FAILURE" : "INIT_THREEDS");
+    const iyziEventType = opts.iyziEventType ?? "CHECKOUT_FORM_AUTH";
+    const iyziPaymentId = Number(p.paymentId ?? 0);
+    const body = {
+      paymentConversationId: p.conversationId,
+      merchantId: 123456,
+      token: p.token,
+      status,
+      iyziReferenceCode: `ref-${p.token}`,
+      iyziEventType,
+      iyziEventTime: Date.now(),
+      iyziPaymentId,
+    };
+    const secret = opts.secretKey ?? TEST_SECRET_KEY;
+    const message = secret + iyziEventType + String(iyziPaymentId) + p.token + p.conversationId + status;
+    const signature = createHmac("sha256", secret).update(message).digest("hex");
+    return { body: JSON.stringify(body), signature };
+  }
+
   private async handle(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     if (!url.startsWith(FAKE_BASE_URL)) throw new Error(`Testte beklenmeyen dış istek: ${url}`);

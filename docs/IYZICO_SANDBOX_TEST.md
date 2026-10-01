@@ -52,3 +52,49 @@ Doğrulanacak açık sorular (sonuçları `harbi/RELIABILITY_AUDIT.md` §6'ya i�
   `reservation.shortened_to_token` olayı yazılır.
 - Aynı `basketId` ile ikinci başarılı ödemeye izin veriliyor mu (R-03)? İki sekmede iki form açıp
   ikisini de ödeyin: ikincisi **Çift ödeme** + "Dikkat" alarmı olmalı.
+
+## B. Webhook (Üye İşyeri Bildirimi)
+
+Uç nokta: `POST /api/payment/webhook/iyzico`. Kaynak: <https://docs.iyzico.com/en/advanced/webhook>.
+
+Ek ön koşullar:
+
+1. **Herkese açık HTTPS adres.** iyzico yalnız HTTPS adrese bildirim gönderir; `localhost`'a
+   ulaşamaz. Yerelde denemek için bir tünel gerekir (ör. `cloudflared tunnel --url http://localhost:3000`
+   ya da ngrok). Bu yeni bir araçtır; kurulumu sizin kararınız. Tünel adresini `NEXT_PUBLIC_APP_URL`
+   olarak da verin (callback de o adrese döner).
+2. Sandbox panelinde: Ayarlar > Üye İşyeri Ayarları > Üye İşyeri Bildirimleri →
+   `https://<tünel-adresi>/api/payment/webhook/iyzico`.
+3. **X-IYZ-SIGNATURE-V3 imzasının açılması** için iyzico'ya yazın (entegrasyon@iyzico.com).
+   İmza açılmadan gelen bildirimler **reddedilir** (401) ve admin'de "İmzası doğrulanamayan ödeme
+   bildirimi" alarmı görünür — bu beklenen davranıştır, imzasız bildirim işlenmez.
+4. İmza anahtarı üye işyerinin API gizli anahtarıdır (`IYZICO_SECRET_KEY`); ayrı bir webhook
+   anahtarı yoktur (`.env.example`'daki `IYZICO_WEBHOOK_SECRET` kullanılmaz).
+
+| # | Adım | Beklenen |
+|---|------|----------|
+| B1 | Başarılı kartla öde, iyzico "başarılı" sayfasında **tarayıcı sekmesini hemen kapat** (callback gelmesin) | 10–15 sn içinde bildirim gelir; admin → sipariş: Ödendi; olaylarda `webhook.CHECKOUT_FORM_AUTH` satırı **İşlendi (paid)** ve `verify.success` (kaynak: Bildirim) |
+| B2 | Normal ödeme (callback de gelir) | Hangisi önce gelirse sipariş Ödendi olur; sonraki `already_paid` ya da `settled:paid` olarak kapanır. Sipariş tek kez Ödendi, stok tek kez düşer |
+| B3 | Panelde bildirim adresini geçici olarak yanlış yap (ör. 404 veren yol) → öde → adresi düzelt | iyzico 15 dk arayla en çok 3 kez dener; düzeltme 3. denemeden önceyse bildirim işlenir. Kaçtıysa admin → "iyzico'dan sorgula" ile düzelir (C1) |
+| B4 | Başarısız kartla öde | Bildirim gelir, deneme **Başarısız**; sipariş Ödeme bekleniyor kalır |
+| B5 | Gerçek bildirimin gövdesini ve başlıklarını not edin (gelen kutusu satırının içeriği) | `iyziPaymentId`/`iyziEventTime` sayı mı metin mi, `merchantId` alanı, imza başlığının adı — dokümanla karşılaştırın, farklıysa `harbi/FINDINGS.md`'ye yazın |
+
+## C. Elle sorgu ("iyzico'dan sorgula")
+
+| # | Adım | Beklenen |
+|---|------|----------|
+| C1 | B1'i webhook adresi tanımlı değilken yap (bildirim de gelmesin), sonra admin → sipariş → "iyzico'dan sorgula" | Sonuç kutusunda iyzico durumu SUCCESS, ödeme no, tutarlar; sipariş Ödendi; olaylarda `manual_query.run` (admin kimliği) |
+| C2 | Sipariş süre dolup iptal edildikten sonra C1 | "Geç ödeme" — stok varsa sipariş yeniden açılır ve **Dikkat** işaretlenir |
+
+## D. Sandbox yokken yerel deneme
+
+Uç noktanın imza doğrulaması, gelen kutusu ve tekrar koruması gerçek HTTP üzerinden şu betikle
+denenebilir (iyzico'yu taklit eder, gerçek bildirim biçimini kanıtlamaz):
+
+```bash
+npx tsx scripts/iyzico-webhook-sim.ts --attempt <denemeId> --twice
+```
+
+- 1. gönderim `200 {"received":true,"duplicate":false}`, 2. gönderim `duplicate:true` olmalı.
+- `--bad-signature` ile `401` ve admin'de imza alarmı.
+- Betik yalnız yerel adrese gönderir; `IYZICO_SECRET_KEY` `.env`'den okunur.
