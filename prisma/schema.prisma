@@ -560,3 +560,28 @@ model PasswordResetToken {
   @@index([userId])
   @@map("password_reset_tokens")
 }
+
+// ============================================================
+// OUTBOX (dışarıya gidecek olaylar)
+// ============================================================
+// Ödeme kaydıyla AYNI transaction'da yazılır (ör. tx2: sipariş PAID + "order.paid"). Bu oturumda
+// yalnız yazılır; gönderen işçi (bildirim, e-posta, alarm kanalı) Oturum 4/6'da gelecek.
+// dedupeKey UNIQUE: aynı olay ikinci kez yazılmaz. Kişisel veri yazılmaz (yalnız kimlik/tutar).
+model OutboxEvent {
+  id            String    @id @default(cuid())
+  // Örn. "order.paid", "payment.alert"
+  topic         String
+  aggregateType String
+  aggregateId   String
+  payload       Json
+  dedupeKey     String    @unique
+  createdAt     DateTime  @default(now())
+  // İşçi bu andan sonra işler (yeniden deneme gecikmesi için)
+  availableAt   DateTime  @default(now())
+  publishedAt   DateTime?
+  attempts      Int       @default(0)
+  lastError     String?
+
+  @@index([publishedAt, availableAt])
+  @@map("outbox_events")
+}

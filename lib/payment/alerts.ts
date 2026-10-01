@@ -7,6 +7,7 @@
  */
 
 import type { Prisma } from "@prisma/client";
+import { writeOutbox } from "@/lib/outbox";
 
 export type PaymentAlertKind =
   | "PAYMENT_MISMATCH"
@@ -60,6 +61,16 @@ export async function raiseAlert(tx: Prisma.TransactionClient, alert: RaiseAlert
   });
   if (alert.orderId) {
     await tx.order.update({ where: { id: alert.orderId }, data: { needsAttention: true } });
+  }
+  if (count === 1) {
+    // Alarm kanalı (Oturum 6) bu olayı gönderecek; şimdilik aynı transaction'da kayda geçer
+    await writeOutbox(tx, {
+      topic: "payment.alert",
+      aggregateType: alert.orderId ? "order" : "payment",
+      aggregateId: alert.orderId ?? alert.eventId ?? alert.dedupeKey,
+      dedupeKey: `payment.alert:${alert.dedupeKey}`,
+      payload: { kind: alert.kind, message: alert.message, orderId: alert.orderId ?? null, attemptId: alert.attemptId ?? null },
+    });
   }
   return count === 1;
 }

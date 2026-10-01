@@ -7,6 +7,7 @@
 import { prisma } from "@/lib/db/prisma";
 import type { Prisma } from "@prisma/client";
 import { recordPaymentEvent } from "./events";
+import { orderPaidEvent, writeOutbox } from "@/lib/outbox";
 
 type Tx = Prisma.TransactionClient;
 
@@ -89,6 +90,10 @@ export async function confirmBankTransferPayment(orderId: string, actorId: strin
         outcome: "paid",
         payload: { amountKurus: attempt.amountKurus },
       });
+      await writeOutbox(
+        tx,
+        orderPaidEvent({ ...order, paymentMethod: "BANK_TRANSFER", attemptId: attempt.id, outcome: "paid" })
+      );
       return { reference: order.reference };
     },
     { timeout: 15_000 }
@@ -98,10 +103,14 @@ export async function confirmBankTransferPayment(orderId: string, actorId: strin
 /** Kapıda ödeme: sipariş teslim edildiğinde tahsilat yapılmıştır. updateOrderStatus transaction'ı içinde. */
 export async function recordCashOnDeliveryCollected(
   tx: Tx,
-  order: { id: string; totalKurus: number },
+  order: { id: string; reference: string; totalKurus: number },
   actorId: string | null
 ) {
   const attempt = await succeedOfflineAttempt(tx, order, "kapida", "CASH_ON_DELIVERY");
+  await writeOutbox(
+    tx,
+    orderPaidEvent({ ...order, paymentMethod: "CASH_ON_DELIVERY", attemptId: attempt.id, outcome: "collected_on_delivery" })
+  );
   await recordPaymentEvent(tx, {
     source: "ADMIN",
     eventType: "cash_on_delivery.collected",

@@ -19,6 +19,7 @@ import { prisma } from "@/lib/db/prisma";
 import type { OrderStatus, PaymentAttemptStatus, PaymentEventSource, Prisma } from "@prisma/client";
 import { formatPrice } from "@/types";
 import { raiseAlert, logAlert, type PaymentAlertKind } from "./alerts";
+import { orderPaidEvent, writeOutbox } from "@/lib/outbox";
 import { recordPaymentEvent } from "./events";
 import type { Classification, ProviderPaymentData } from "./verify";
 
@@ -74,8 +75,10 @@ function providerFields(data: ProviderPaymentData) {
 
 /** Siparişi ve denemeyi bu sırayla kilitler (tüm ödeme yolları aynı sırayı kullanır). */
 async function lockOrderAndAttempt(tx: Tx, attemptId: string) {
-  const orders = await tx.$queryRaw<Array<{ id: string; reference: string; status: OrderStatus; totalKurus: number }>>`
-    SELECT o.id, o.reference, o.status::text AS status, o."totalKurus"
+  const orders = await tx.$queryRaw<
+    Array<{ id: string; reference: string; status: OrderStatus; totalKurus: number; paymentMethod: string }>
+  >`
+    SELECT o.id, o.reference, o.status::text AS status, o."totalKurus", o."paymentMethod"::text AS "paymentMethod"
     FROM orders o
     WHERE o.id = (SELECT a."orderId" FROM payment_attempts a WHERE a.id = ${attemptId})
     FOR UPDATE`;
@@ -275,6 +278,22 @@ export async function applyProviderResult(input: ApplyInput): Promise<ApplyResul
           },
           data: { status: "PROCESSED", outcome: `settled:${outcome}`, handledAt: new Date() },
         });
+      }
+
+      // tx2: sipariş PAID olduysa "order.paid" olayı aynı transaction'da outbox'a yazılır (gönderen işçi
+      // sonraki oturumda). Hata olursa PAID de, deneme de, olay da geri alınır.
+      if (outcome === "paid" || outcome === "late_reopened") {
+        await writeOutbox(
+          tx,
+          orderPaidEvent({
+            id: order.id,
+            reference: order.reference,
+            totalKurus: order.totalKurus,
+            paymentMethod: order.paymentMethod,
+            attemptId: attempt.id,
+            outcome,
+          })
+        );
       }
 
       const raised: Array<{ kind: PaymentAlertKind; message: string }> = [];
