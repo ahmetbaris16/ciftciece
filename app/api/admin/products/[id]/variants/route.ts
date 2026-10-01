@@ -12,6 +12,7 @@ import { requireAdminApi } from "@/lib/auth/session";
 import { createAuditLog } from "@/lib/security/audit";
 import { z } from "zod";
 import { revalidateStorefront } from "@/lib/cache/revalidate";
+import { StockChangedError, updateVariantAndStock } from "@/lib/repositories/inventory.repository";
 
 const USE_DB = !!process.env.DATABASE_URL;
 
@@ -90,6 +91,11 @@ const UpdateVariantSchema = z.object({
   isAvailable: z.boolean().optional(),
   sortOrder: z.number().int().min(0).optional(),
   stockQuantity: z.number().int().min(0).optional(),
+  // Formun açıldığı andaki stok: yeni stok yalnız bu değer hâlâ geçerliyse yazılır (R-06)
+  expectedStock: z.number().int().min(0).optional(),
+}).refine((d) => d.stockQuantity === undefined || d.expectedStock !== undefined, {
+  message: "Stok güncellemesi için sayfadaki önceki stok (expectedStock) gerekli",
+  path: ["expectedStock"],
 });
 
 export async function PUT(request: NextRequest, context: RouteContext) {
@@ -109,29 +115,14 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "Validation failed", issues: parsed.error.issues }, { status: 400 });
   }
 
-  const { variantId, stockQuantity, ...variantData } = parsed.data;
+  const { variantId, stockQuantity, expectedStock, ...variantData } = parsed.data;
+  const stock =
+    stockQuantity !== undefined && expectedStock !== undefined ? { expected: expectedStock, quantity: stockQuantity } : undefined;
 
   try {
-    const variant = await prisma.productVariant.findFirst({
-      where: { id: variantId, productId },
-    });
-    if (!variant) return NextResponse.json({ error: "Varyant bulunamadı" }, { status: 404 });
-
-    // Varyant bilgilerini güncelle
-    const updated = await prisma.productVariant.update({
-      where: { id: variantId },
-      data: variantData,
-      include: { inventory: true },
-    });
-
-    // Stok güncelleme (ayrı tablo)
-    if (stockQuantity !== undefined) {
-      await prisma.inventory.upsert({
-        where: { variantId },
-        update: { quantity: stockQuantity },
-        create: { variantId, quantity: stockQuantity },
-      });
-    }
+    // Varyant bilgisi ve stok tek işlemde: stok bu arada değiştiyse hiçbiri yazılmaz
+    const updated = await updateVariantAndStock(productId, variantId, variantData, stock);
+    if (!updated) return NextResponse.json({ error: "Varyant bulunamadı" }, { status: 404 });
 
     await createAuditLog({
       userId: user.id,
@@ -144,6 +135,17 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     revalidateStorefront();
     return NextResponse.json({ variant: updated });
   } catch (err) {
+    if (err instanceof StockChangedError) {
+      const c = err.conflicts[0];
+      return NextResponse.json(
+        {
+          error: `Stok bu arada değişti: sayfayı açtığınızda ${c.expected} idi, şimdi ${c.current ?? "kayıt yok"}. Sayfayı yenileyip yeni değere göre tekrar girin.`,
+          code: "STOCK_CHANGED",
+          current: c.current,
+        },
+        { status: 409 }
+      );
+    }
     console.error("[admin/variants PUT]", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

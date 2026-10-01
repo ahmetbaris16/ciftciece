@@ -27,7 +27,8 @@ export default function ProductEditForm({ product, categories }: Props) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
-  // Varyant state
+  // Varyant state. initialStock: sayfa açıldığında görülen stok — stok yalnız admin değiştirdiyse ve
+  // veritabanındaki değer hâlâ buysa yazılır (bu arada satış olduysa sunucu 409 döner; R-06)
   const [variants, setVariants] = useState(
     product.variants.map((v) => ({
       id: v.id,
@@ -35,6 +36,7 @@ export default function ProductEditForm({ product, categories }: Props) {
       sku: v.sku ?? "",
       priceKurus: v.priceKurus,
       stockQuantity: v.stockQuantity ?? 0,
+      initialStock: v.stockQuantity ?? 0,
       isAvailable: v.isAvailable,
     }))
   );
@@ -62,9 +64,12 @@ export default function ProductEditForm({ product, categories }: Props) {
         return;
       }
 
-      // 2. Varyant güncellemeleri
+      // 2. Varyant güncellemeleri — her yanıt kontrol edilir; biri bile yazılmadıysa "kaydedildi" denmez
+      const failures: string[] = [];
+      const savedStock = new Map<string, number>();
       for (const v of variants) {
-        await fetch(`/api/admin/products/${product.id}/variants`, {
+        const stockChanged = v.stockQuantity !== v.initialStock;
+        const r = await fetch(`/api/admin/products/${product.id}/variants`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -73,12 +78,24 @@ export default function ProductEditForm({ product, categories }: Props) {
             sku: v.sku || null,
             priceKurus: v.priceKurus,
             isAvailable: v.isAvailable,
-            stockQuantity: v.stockQuantity,
+            ...(stockChanged ? { stockQuantity: v.stockQuantity, expectedStock: v.initialStock } : {}),
           }),
         });
+        if (r.ok) {
+          savedStock.set(v.id, v.stockQuantity);
+        } else {
+          const data = await r.json().catch(() => ({}));
+          failures.push(`${v.name}: ${data.error ?? `kaydedilemedi (HTTP ${r.status})`}`);
+        }
       }
 
-      setMessage("✓ Kaydedildi");
+      // Kaydedilen stok yeni başlangıç değeri olur (sonraki kayıt onunla karşılaştırılır)
+      setVariants((prev) => prev.map((v) => (savedStock.has(v.id) ? { ...v, initialStock: savedStock.get(v.id)! } : v)));
+      setMessage(
+        failures.length === 0
+          ? "✓ Kaydedildi"
+          : `Hata: ürün bilgileri kaydedildi ama ${failures.length} varyant kaydedilemedi — ${failures.join(" · ")}`
+      );
       router.refresh();
     } catch {
       setMessage("Bir hata oluştu");
