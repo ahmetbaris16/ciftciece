@@ -4,8 +4,9 @@
  * Boş bir veritabanını prisma/catalog.ts'deki katalogla doldurur ve ilk admin
  * kullanıcısını oluşturur.
  *
- * Kullanım:
- *   npx prisma db seed
+ * Kullanım (ilk kurulum, yönetici hesabıyla birlikte):
+ *   ADMIN_EMAIL=siz@alanadiniz.com ADMIN_PASSWORD=<en az 12 karakter> npx prisma db seed
+ * Yönetici zaten varsa ADMIN_* gerekmez. Yayın kurulumu adım adım: docs/YAYIN.md
  *
  * Güvenli tekrar çalıştırma: var olan HİÇBİR kayda dokunmaz.
  *  - Var olan kategori/ürün atlanır (fiyat, stok, görsel ezilmez)
@@ -103,27 +104,44 @@ async function main() {
     console.log("\n🚚 Kargo ayarları oluşturuldu (firma ücretleri admin panelden girilmeli)");
   }
 
-  // 5. Admin kullanıcısı — sadece yoksa oluşturulur, şifre ASLA ezilmez
-  const adminEmail = process.env.ADMIN_EMAIL || "admin@ciftciece.com";
-  const existingAdmin = await prisma.user.findUnique({ where: { email: adminEmail } });
-  if (existingAdmin) {
-    console.log(`\n👤 Admin (${adminEmail}) zaten var — şifresine dokunulmadı`);
-  } else {
-    const adminPassword = process.env.ADMIN_PASSWORD;
-    if (!adminPassword || adminPassword.length < 10) {
+  // 5. Yönetici — yalnız yoksa açılır, şifre ASLA ezilmez (Y-05). Gerçek e-posta ve güçlü şifre şart:
+  // "TODO" gibi yer tutucuyla açılan hesap giriş formundan kullanılamıyordu.
+  const rawEmail = process.env.ADMIN_EMAIL?.trim() ?? "";
+  const adminCount = await prisma.user.count({ where: { role: "ADMIN" } });
+  if (!rawEmail || /todo/i.test(rawEmail)) {
+    if (adminCount === 0) {
       throw new Error(
-        "İlk admin için ADMIN_PASSWORD (en az 10 karakter) ortam değişkeni gerekli."
+        "Hiç yönetici yok: ADMIN_EMAIL (gerçek e-posta) ve ADMIN_PASSWORD (en az 12 karakter, harf ve rakam) ile yeniden çalıştırın."
       );
     }
-    await prisma.user.create({
-      data: {
-        email: adminEmail,
-        name: "Admin",
-        passwordHash: await hash(adminPassword, 12),
-        role: "ADMIN",
-      },
-    });
-    console.log(`\n👤 Admin oluşturuldu: ${adminEmail}`);
+    console.log("\n👤 Yönetici zaten var; ADMIN_EMAIL verilmedi, dokunulmadı");
+  } else {
+    const adminEmail = rawEmail.toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminEmail)) {
+      throw new Error(`ADMIN_EMAIL geçerli bir e-posta değil: ${adminEmail}`);
+    }
+    const existing = await prisma.user.findUnique({ where: { email: adminEmail } });
+    if (existing && existing.role !== "ADMIN") {
+      throw new Error(`${adminEmail} bir müşteri hesabı; yönetici için başka bir e-posta verin.`);
+    }
+    if (existing) {
+      console.log(`\n👤 Yönetici (${adminEmail}) zaten var — şifresine dokunulmadı`);
+    } else {
+      const adminPassword = process.env.ADMIN_PASSWORD ?? "";
+      if (adminPassword.length < 12 || !/[A-Za-zÇĞİÖŞÜçğıöşü]/.test(adminPassword) || !/\d/.test(adminPassword)) {
+        throw new Error("ADMIN_PASSWORD en az 12 karakter olmalı; harf ve rakam içermeli.");
+      }
+      await prisma.user.create({
+        data: {
+          email: adminEmail,
+          name: "Yönetici",
+          passwordHash: await hash(adminPassword, 12),
+          role: "ADMIN",
+        },
+      });
+      console.log(`\n👤 Yönetici oluşturuldu: ${adminEmail}`);
+      console.log("   ADMIN_PASSWORD'u ortam değişkenlerinden silin (yalnız ilk kurulumda gerekir).");
+    }
   }
 
   console.log("\n✅ Seed tamamlandı\n");
