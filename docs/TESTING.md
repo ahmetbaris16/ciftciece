@@ -91,6 +91,14 @@ Transaction ortasında hata taklidi yapan testler (örn. `withFailingInserts`) t
 geçici bir tetikleyici (`SIGNAL SQLSTATE '45000'`) ekler ve bilerek DB hatası üretir. Prisma bu hatayı
 `prisma:error` olarak konsola yazar; test yine de geçer. Tetikleyici test bitince kaldırılır.
 
+## Yerel production derlemesi
+
+`npm run build` önce `prisma generate` çalıştırır (Hostinger'da Prisma istemcisi böyle üretilir). Windows'ta
+geliştirme sunucusu (`Siteyi Ac.bat`, 3100) açıkken Prisma motor dosyası kilitli olduğundan bu adım `EPERM`
+ile düşer: derlemeden önce o pencereyi kapatın. Yerel production denemesinde sunucuyu
+`LOCAL_PRODUCTION_TEST=1` ile başlatın (aksi hâlde ayar denetimi localhost adresini reddeder;
+`lib/config/runtime-check.ts`).
+
 ## Sorun giderme
 
 - `Can't reach database server at 127.0.0.1:3316`: Docker ya da konteyner kapalı → `Docker Baslat.bat`.
