@@ -21,6 +21,7 @@ import type { OrderStatus, PaymentAttemptStatus, PaymentEventSource } from "@pri
 import { formatPrice } from "@/types";
 import { raiseAlert, logAlert, type PaymentAlertKind } from "./alerts";
 import { orderPaidEvent, writeOutbox } from "@/lib/outbox";
+import { recordOrderEvent } from "@/lib/orders/events";
 import { recordPaymentEvent } from "./events";
 import type { Classification, ProviderPaymentData } from "./verify";
 
@@ -287,6 +288,16 @@ export async function applyProviderResult(input: ApplyInput): Promise<ApplyResul
       // tx2: sipariş PAID olduysa "order.paid" olayı aynı transaction'da outbox'a yazılır (gönderen işçi
       // sonraki oturumda). Hata olursa PAID de, deneme de, olay da geri alınır.
       if (outcome === "paid" || outcome === "late_reopened") {
+        await recordOrderEvent(tx, {
+          orderId: order.id,
+          type: "PAYMENT",
+          actorType: "PROVIDER",
+          actorId: input.actorId ?? null,
+          fromStatus: order.status as OrderStatus,
+          toStatus: "PAID",
+          visibleToCustomer: true,
+          message: "Kart ödemeniz alındı.",
+        });
         await writeOutbox(
           tx,
           orderPaidEvent({

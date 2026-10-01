@@ -9,6 +9,11 @@
 import { resolveTestDatabaseUrl } from "./test-database-url";
 
 process.env.DATABASE_URL = resolveTestDatabaseUrl(process.env);
+// Test ortamı: e-posta ayarı yoksa gönderilmez (lib/email/config.ts); SMTP isteyen test sahte sunucu açar
+Object.assign(process.env, { NODE_ENV: "test" });
+for (const k of ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "SMTP_SECURE", "SMTP_REQUIRE_TLS", "EMAIL_FROM"]) {
+  delete process.env[k];
+}
 
 process.env.PAYMENT_PROVIDER = "iyzico";
 process.env.IYZICO_API_KEY = "test-api-key";

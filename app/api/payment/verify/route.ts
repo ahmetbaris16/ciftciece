@@ -13,6 +13,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { USE_DB } from "@/lib/data/source";
 import { handleCardCallback } from "@/lib/payment/card";
+import { scheduleNotifications } from "@/lib/notifications/run";
 
 async function handle(request: NextRequest) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
@@ -33,6 +34,7 @@ async function handle(request: NextRequest) {
       attemptHint: searchParams.get("attempt"),
       orderIdHint: searchParams.get("orderId"),
     });
+    scheduleNotifications();
     // 303: POST dönüşünden sonra tarayıcı hedefi GET ile açsın
     return NextResponse.redirect(`${appUrl}${path}`, 303);
   } catch (err) {

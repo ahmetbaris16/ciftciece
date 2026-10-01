@@ -69,7 +69,9 @@ export function smtpConfigFromEnv(env: Env = process.env): SmtpConfig | null {
 
 export function emailMode(env: Env = process.env): EmailMode {
   if (smtpConfigFromEnv(env)) return "smtp";
-  return env.NODE_ENV === "production" ? "none" : "dev-outbox";
+  // Testlerde e-posta yalnız sahte SMTP sunucusuna gider (geliştirme klasörüne yazılmaz)
+  if (env.NODE_ENV === "production" || env.NODE_ENV === "test") return "none";
+  return "dev-outbox";
 }
 
 /** Admin paneli ve açılış denetimi için uyarılar (şifre içermez) */

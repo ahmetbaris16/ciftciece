@@ -38,6 +38,7 @@ import { availablePaymentOptions, isOptionAllowed } from "@/lib/payment/methods"
 import { isCardPaymentReady } from "@/lib/payment/provider";
 import { cardPaymentDueAt } from "@/lib/payment/reservation";
 import { clientIp } from "@/lib/security/rate-limit";
+import { scheduleNotifications } from "@/lib/notifications/run";
 import { CHECKOUT_CONSENT_DOCUMENTS, CHECKOUT_TERMS_VERSION, LEGAL_DOCUMENTS } from "@/lib/legal/documents";
 import {
   CheckoutSchema,
@@ -60,6 +61,8 @@ function fail(
 
 /** Başarılı yanıt — yeni sipariş ve aynı anahtarla tekrar gelen istek (replayed) aynı biçimde döner */
 function orderResponse(order: Order, replayed: boolean) {
+  // Sipariş e-postaları yanıt döndükten sonra (müşteri beklemez)
+  if (!replayed) scheduleNotifications();
   return NextResponse.json({
     success: true,
     orderId: order.id,

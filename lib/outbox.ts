@@ -2,19 +2,29 @@
  * Outbox — dışarıya gidecek olayların kaydı (outbox_events).
  *
  * Olay, ilgili iş kaydıyla AYNI transaction'da yazılır: ya ikisi birden kalır ya hiçbiri.
- * Böylece "sipariş ödendi ama bildirim olayı kayboldu" (ya da tersi) olmaz. Gönderen işçi henüz yok
- * (Oturum 4/6); o zamana kadar satırlar publishedAt boş bekler.
+ * Böylece "sipariş ödendi ama bildirim olayı kayboldu" (ya da tersi) olmaz. Dağıtıcı
+ * (lib/notifications/dispatcher.ts) olayları e-postaya çevirir ve publishedAt'i doldurur.
  * dedupeKey UNIQUE: aynı olay ikinci kez yazılmaz (tekrar gelen doğrulama, eşzamanlı istek).
  * Kişisel veri yazılmaz: yalnız kimlikler, tutar, durum.
  */
 
 import { Prisma } from "@prisma/client";
 
-export type OutboxTopic = "order.paid" | "payment.alert";
+export type OutboxTopic =
+  | "order.placed" // sipariş oluşturuldu (her yöntem)
+  | "order.paid" // ödeme alındı (kart, havale, kapıda ödeme)
+  | "order.status_changed" // hazırlanıyor, teslim, iptal, iade
+  | "order.shipped" // kargo gönderisi eklendi (takip numarasıyla)
+  | "order.refunded" // iade kaydı girildi
+  | "order.customer_request" // müşteri iptal/iade talebi
+  | "order.payment_reminder" // havale son ödeme hatırlatması
+  | "payment.alert" // ödeme uyarısı (insan kararı)
+  | "contact.received" // iletişim formu mesajı
+  | "review.submitted"; // onay bekleyen ürün değerlendirmesi
 
 export interface OutboxInput {
   topic: OutboxTopic;
-  aggregateType: "order" | "payment";
+  aggregateType: "order" | "payment" | "contact" | "review";
   aggregateId: string;
   dedupeKey: string;
   payload: Record<string, unknown>;

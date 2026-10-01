@@ -6,11 +6,13 @@
  */
 
 import { prisma } from "@/lib/db/prisma";
-import type { Order, OrderStatus, PaymentMethod, ShippingAddress } from "@/types";
+import type { BillingInfo, Order, OrderStatus, PaymentMethod, ShippingAddress } from "@/types";
 import type { Prisma } from "@prisma/client";
 import { recordPaymentEvent } from "@/lib/payment/events";
 import { recordCashOnDeliveryCollected } from "@/lib/payment/offline";
 import { CARD_RESERVATION_MINUTES } from "@/lib/payment/reservation";
+import { customerStatusMessage, recordOrderEvent, type OrderActorType } from "@/lib/orders/events";
+import { writeOutbox } from "@/lib/outbox";
 
 const USE_DB = !!process.env.DATABASE_URL;
 
@@ -44,6 +46,10 @@ function toOrder(o: DbOrderWithItems): Order {
     paymentDueAt: o.paymentDueAt,
     notes: o.notes,
     needsAttention: o.needsAttention,
+    billingInfo: (o.billingInfo as unknown as BillingInfo | null) ?? null,
+    customerNote: o.customerNote,
+    invoiceNumber: o.invoiceNumber,
+    invoiceIssuedAt: o.invoiceIssuedAt,
     createdAt: o.createdAt,
   };
 }
@@ -94,6 +100,10 @@ interface CreateOrderInput {
   /** Checkout idempotency anahtarı ve istek özeti (orders.idempotencyKey UNIQUE) */
   idempotencyKey?: string | null;
   idempotencyHash?: string | null;
+  /** Fatura bilgisi (bireysel/kurumsal) */
+  billingInfo?: BillingInfo | null;
+  /** Müşterinin sipariş notu */
+  customerNote?: string | null;
   /** Müşterinin onayladığı yasal metinler (sürüm) — siparişle aynı transaction'da yazılır */
   consents?: {
     documents: Array<{ document: string; version: string }>;
@@ -165,6 +175,8 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
         paymentDueAt: input.paymentDueAt,
         idempotencyKey: input.idempotencyKey ?? null,
         idempotencyHash: input.idempotencyHash ?? null,
+        billingInfo: (input.billingInfo ?? undefined) as Prisma.InputJsonValue | undefined,
+        customerNote: input.customerNote?.trim() || null,
         ...(input.offlinePaymentProvider && {
           paymentAttempts: {
             create: {
@@ -198,6 +210,29 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
         },
       },
       include: { items: true },
+    });
+
+    // Geçmiş ve bildirim olayı siparişle aynı işlemde: sipariş varsa kaydı ve e-postası da vardır
+    await recordOrderEvent(tx, {
+      orderId: newOrder.id,
+      type: "CREATED",
+      actorType: "CUSTOMER",
+      actorId: input.userId ?? null,
+      visibleToCustomer: true,
+      toStatus: newOrder.status,
+      message:
+        input.paymentMethod === "CARD"
+          ? "Sipariş oluşturuldu, kart ödemesi bekleniyor."
+          : input.paymentMethod === "BANK_TRANSFER"
+            ? "Siparişiniz alındı, havale/EFT ödemesi bekleniyor."
+            : "Siparişiniz alındı (kapıda ödeme).",
+    });
+    await writeOutbox(tx, {
+      topic: "order.placed",
+      aggregateType: "order",
+      aggregateId: newOrder.id,
+      dedupeKey: `order.placed:${newOrder.id}`,
+      payload: { orderId: newOrder.id, reference: newOrder.reference, paymentMethod: newOrder.paymentMethod },
     });
 
     return newOrder;
@@ -267,63 +302,177 @@ export async function getOrdersForAdmin(options?: {
   };
 }
 
+/** Durum geçişi kurallara uymuyor — mesaj admin/müşteriye gösterilebilir */
+export class OrderTransitionError extends Error {
+  constructor(message: string, public readonly status = 409) {
+    super(message);
+    this.name = "OrderTransitionError";
+  }
+}
+
 /**
- * Sipariş durumu güncelleme
+ * Elle yapılan durum geçişleri. Ödeme ("ödendi") yalnız ödeme kaydıyla (kart: banka doğrulaması, havale:
+ * confirmBankTransferPayment), kargolama yalnız takip numarasıyla (lib/orders/lifecycle.ts shipOrder) yapılır.
+ * SHIPPED → CANCELLED: teslim edilemeyen/geri dönen kapıda ödemeli paket (ödeme alınmamış).
+ */
+const MANUAL_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+  PENDING: ["CANCELLED"],
+  PAID: ["PROCESSING", "CANCELLED"],
+  PROCESSING: ["CANCELLED"],
+  SHIPPED: ["DELIVERED", "CANCELLED", "REFUNDED"],
+  DELIVERED: ["REFUNDED"],
+  CANCELLED: [],
+  REFUNDED: [],
+};
+
+export interface StatusChangeOptions {
+  actorType?: Exclude<OrderActorType, "PROVIDER">;
+  /** Müşteriye görünen kısa sebep (iptal) */
+  reason?: string | null;
+  /**
+   * Kargolanmış siparişte (iptal/iade) ürünler stoğa geri eklensin mi. Kargolanmamış siparişin iptalinde
+   * stok her zaman geri eklenir. Varsayılan: geri dönen kapıda ödemeli paket evet, iade (REFUNDED) hayır.
+   */
+  restock?: boolean;
+  /** Geçiş bir iade kaydıyla birlikte yapılıyorsa (tek e-posta gitsin) */
+  refundId?: string | null;
+}
+
+export type OrderRow = {
+  id: string;
+  reference: string;
+  status: OrderStatus;
+  paymentMethod: PaymentMethod;
+  totalKurus: number;
+};
+
+/** Siparişin alınmış ödemesi (kuruş): başarılı denemenin karttan çekilen/bildirilen tutarı; ödeme yoksa 0 */
+export async function paidAmountKurus(tx: Tx, orderId: string): Promise<number> {
+  const a = await tx.paymentAttempt.findFirst({
+    where: { orderId, status: "SUCCEEDED" },
+    select: { chargedAmountKurus: true, paidAmountKurus: true, amountKurus: true },
+  });
+  return a ? (a.chargedAmountKurus ?? a.paidAmountKurus ?? a.amountKurus) : 0;
+}
+
+export async function refundedAmountKurus(tx: Tx, orderId: string): Promise<number> {
+  const r = await tx.refund.aggregate({ where: { orderId }, _sum: { amountKurus: true } });
+  return r._sum.amountKurus ?? 0;
+}
+
+/**
+ * Durum geçişi — çağıranın işlemi içinde. Sipariş satırı koşullu güncellenir (aynı anda iki geçiş olmaz),
+ * stok kurala göre geri eklenir, geçmiş ve bildirim olayı aynı işlemde yazılır.
+ */
+export async function changeStatusInTx(
+  tx: Tx,
+  order: OrderRow,
+  newStatus: OrderStatus,
+  actorId: string | null,
+  opts: StatusChangeOptions = {}
+): Promise<void> {
+  if (newStatus === "PAID") {
+    throw new OrderTransitionError("“Ödendi” durumu yalnız ödeme kaydıyla verilir (havale onayı ya da banka doğrulaması).");
+  }
+  if (newStatus === "SHIPPED") {
+    throw new OrderTransitionError("Kargoya vermek için kargo takip numarasını girin.");
+  }
+  const allowed = MANUAL_TRANSITIONS[order.status] ?? [];
+  if (!allowed.includes(newStatus)) {
+    throw new OrderTransitionError(`Bu geçiş yapılamaz: ${order.status} → ${newStatus}`);
+  }
+
+  // Ödemesi alınmış sipariş iade kaydı olmadan iptal/iade edilemez (R-07)
+  if (newStatus === "CANCELLED" || newStatus === "REFUNDED") {
+    const paid = await paidAmountKurus(tx, order.id);
+    if (paid > 0) {
+      const refunded = await refundedAmountKurus(tx, order.id);
+      if (refunded < paid) {
+        throw new OrderTransitionError(
+          "Bu siparişin ödemesi alınmış. Önce parayı iade edip iade kaydını girin; sipariş iade kaydıyla birlikte kapanır."
+        );
+      }
+    } else if (newStatus === "REFUNDED") {
+      throw new OrderTransitionError("Ödemesi alınmamış sipariş “iade edildi” yapılamaz; iptal edin.");
+    }
+  }
+
+  const { count } = await tx.order.updateMany({
+    where: { id: order.id, status: order.status },
+    data: { status: newStatus },
+  });
+  if (count !== 1) throw new OrderTransitionError("Sipariş durumu bu sırada değişti, sayfayı yenileyin.");
+
+  const shipped = order.status === "SHIPPED" || order.status === "DELIVERED";
+  if (newStatus === "CANCELLED") {
+    if (!shipped || opts.restock !== false) await restoreStock(tx, order.id);
+    // Ödenmemiş denemeler kapanır; başarılı ödeme kaydına dokunulmaz (iade ayrı kayıt)
+    const expired = await expireOpenAttempts(tx, order.id);
+    await tx.payment.updateMany({ where: { orderId: order.id, status: "PENDING" }, data: { status: "FAILED" } });
+    if (expired > 0) {
+      await recordPaymentEvent(tx, {
+        source: opts.actorType === "CUSTOMER" ? "SYSTEM" : "ADMIN",
+        eventType: "attempts.expired",
+        orderId: order.id,
+        actorId,
+        outcome: "order_cancelled",
+        payload: { previousStatus: order.status, expiredAttempts: expired },
+      });
+    }
+  }
+  if (newStatus === "REFUNDED" && opts.restock === true) await restoreStock(tx, order.id);
+
+  // Kapıda ödeme: teslim edildiğinde para kargo görevlisine ödenmiştir
+  if (newStatus === "DELIVERED" && order.paymentMethod === "CASH_ON_DELIVERY") {
+    await recordCashOnDeliveryCollected(tx, order, actorId);
+  }
+
+  const actorType = opts.actorType ?? "ADMIN";
+  await recordOrderEvent(tx, {
+    orderId: order.id,
+    type: "STATUS",
+    actorType,
+    actorId,
+    fromStatus: order.status,
+    toStatus: newStatus,
+    visibleToCustomer: true,
+    message: customerStatusMessage(newStatus, opts.reason),
+  });
+  await writeOutbox(tx, {
+    topic: "order.status_changed",
+    aggregateType: "order",
+    aggregateId: order.id,
+    dedupeKey: `order.status:${order.id}:${newStatus}`,
+    payload: {
+      orderId: order.id,
+      from: order.status,
+      to: newStatus,
+      actorType,
+      reason: opts.reason ?? null,
+      refundId: opts.refundId ?? null,
+    },
+  });
+}
+
+/**
+ * Sipariş durumu güncelleme (admin ya da müşteri). Kurallar changeStatusInTx'te.
  */
 export async function updateOrderStatus(
   orderId: string,
   newStatus: OrderStatus,
-  actorId: string | null = null
+  actorId: string | null = null,
+  opts: StatusChangeOptions = {}
 ): Promise<Order | null> {
   if (!USE_DB) return null;
 
-  // Geçerli durum geçişleri (PENDING → PAID yalnız ödeme kaydıyla: confirmBankTransferPayment / applyProviderResult)
-  const VALID_TRANSITIONS: Record<string, string[]> = {
-    PENDING: ["PAID", "CANCELLED"],
-    PAID: ["PROCESSING", "CANCELLED", "REFUNDED"],
-    PROCESSING: ["SHIPPED", "CANCELLED"],
-    SHIPPED: ["DELIVERED"],
-    DELIVERED: [],
-    CANCELLED: [],
-    REFUNDED: [],
-  };
-
-  const order = await prisma.order.findUnique({ where: { id: orderId } });
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    select: { id: true, reference: true, status: true, paymentMethod: true, totalKurus: true },
+  });
   if (!order) return null;
 
-  const allowed = VALID_TRANSITIONS[order.status] ?? [];
-  if (!allowed.includes(newStatus)) {
-    throw new Error(`Geçersiz durum geçişi: ${order.status} → ${newStatus}`);
-  }
-
-  // İptalde ayrılmış stok iade edilir (PENDING/PAID/PROCESSING → CANCELLED).
-  // Koşullu güncelleme: aynı anda iki iptal isteği stoğu iki kez iade etmez.
   const updated = await prisma.$transaction(async (tx) => {
-    const { count } = await tx.order.updateMany({
-      where: { id: orderId, status: order.status },
-      data: { status: newStatus },
-    });
-    if (count !== 1) throw new Error("Sipariş durumu bu sırada değişti, sayfayı yenileyin.");
-    if (newStatus === "CANCELLED") {
-      await restoreStock(tx, orderId);
-      // Ödenmemiş denemeler kapanır; başarılı ödeme kaydına dokunulmaz (iade ayrı kayıt, Oturum 5)
-      const expired = await expireOpenAttempts(tx, orderId);
-      await tx.payment.updateMany({ where: { orderId, status: "PENDING" }, data: { status: "FAILED" } });
-      if (expired > 0) {
-        await recordPaymentEvent(tx, {
-          source: "ADMIN",
-          eventType: "attempts.expired",
-          orderId,
-          actorId,
-          outcome: "order_cancelled",
-          payload: { previousStatus: order.status, expiredAttempts: expired },
-        });
-      }
-    }
-    // Kapıda ödeme: teslim edildiğinde para kargo görevlisine ödenmiştir
-    if (newStatus === "DELIVERED" && order.paymentMethod === "CASH_ON_DELIVERY") {
-      await recordCashOnDeliveryCollected(tx, order, actorId);
-    }
+    await changeStatusInTx(tx, order as OrderRow, newStatus, actorId, opts);
     return tx.order.findUniqueOrThrow({ where: { id: orderId }, include: { items: true } });
   });
 
@@ -403,6 +552,23 @@ export async function releaseExpiredOrders(now = new Date()): Promise<number> {
         orderId: id,
         outcome: "cancelled_stock_released",
         payload: { paymentMethod, paymentDueAt: paymentDueAt?.toISOString() ?? null, expiredAttempts },
+      });
+      const reason = "ödeme süresi içinde ödeme alınmadı";
+      await recordOrderEvent(tx, {
+        orderId: id,
+        type: "STATUS",
+        actorType: "SYSTEM",
+        fromStatus: "PENDING",
+        toStatus: "CANCELLED",
+        visibleToCustomer: true,
+        message: customerStatusMessage("CANCELLED", reason),
+      });
+      await writeOutbox(tx, {
+        topic: "order.status_changed",
+        aggregateType: "order",
+        aggregateId: id,
+        dedupeKey: `order.status:${id}:CANCELLED`,
+        payload: { orderId: id, from: "PENDING", to: "CANCELLED", actorType: "SYSTEM", reason, expired: true, refundId: null },
       });
       return true;
     });

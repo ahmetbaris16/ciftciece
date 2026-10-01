@@ -12,6 +12,7 @@ import { startCardPayment } from "@/lib/payment/card";
 import { verifyAttempt } from "@/lib/payment/verify";
 import { confirmBankTransferPayment } from "@/lib/payment/offline";
 import { updateOrderStatus } from "@/lib/repositories/order.repository";
+import { shipOrder } from "@/lib/orders/lifecycle";
 import { setupTestDb, withFailingInserts } from "./helpers/db";
 import { FakeIyzico } from "./helpers/fake-iyzico";
 import { createTestOrder, orderState } from "./helpers/orders";
@@ -33,7 +34,7 @@ test("tx2: sipariş PAID ve 'order.paid' outbox olayı birlikte yazılır; tekra
   const { order, attempt } = await paidAtProvider();
   assert.equal((await verifyAttempt(attempt.id, { source: "CALLBACK" })).outcome, "paid");
 
-  const events = await prisma.outboxEvent.findMany();
+  const events = await prisma.outboxEvent.findMany({ where: { topic: "order.paid" } });
   assert.equal(events.length, 1);
   assert.equal(events[0].topic, "order.paid");
   assert.equal(events[0].aggregateId, order.id);
@@ -44,7 +45,9 @@ test("tx2: sipariş PAID ve 'order.paid' outbox olayı birlikte yazılır; tekra
   assert.ok(!JSON.stringify(payload).includes("@"), "kişisel veri (e-posta) yok");
 
   await verifyAttempt(attempt.id, { source: "QUERY", force: true });
-  assert.equal(await prisma.outboxEvent.count(), 1);
+  assert.equal(await prisma.outboxEvent.count({ where: { topic: "order.paid" } }), 1);
+  // Sipariş geçmişine ödeme anı da aynı işlemde yazıldı (müşteri zaman çizelgesi)
+  assert.equal(await prisma.orderEvent.count({ where: { orderId: order.id, type: "PAYMENT" } }), 1);
 });
 
 test("tx2 ortasında DB hatası: ne PAID ne başarılı deneme ne outbox kalır; sonraki tetikleyici tamamlar", async () => {
@@ -58,7 +61,8 @@ test("tx2 ortasında DB hatası: ne PAID ne başarılı deneme ne outbox kalır;
   assert.equal(after1.status, "INITIATED", "deneme yarım SUCCEEDED kalmaz");
   assert.equal(after1.successOrderId, null);
   assert.equal(await prisma.paymentEvent.count({ where: { attemptId: attempt.id, eventType: "verify.success" } }), 0);
-  assert.equal(await prisma.outboxEvent.count(), 0);
+  assert.equal(await prisma.outboxEvent.count({ where: { topic: "order.paid" } }), 0);
+  assert.equal(await prisma.orderEvent.count({ where: { orderId: order.id, type: "PAYMENT" } }), 0, "geçmiş de geri alınır");
 
   // Hata geçince (ör. webhook ya da elle sorgu) aynı ödeme tamamlanır
   assert.equal((await verifyAttempt(attempt.id, { source: "QUERY" })).outcome, "paid");
@@ -72,7 +76,7 @@ test("alarm da aynı transaction'da outbox'a yazılır (alarm kanalı sonraki ot
   const attempt = await prisma.paymentAttempt.findFirstOrThrow({ where: { orderId: order.id } });
   fake.pay(attempt.providerToken!, { overrides: { price: 1, paidPrice: 1 } });
   assert.equal((await verifyAttempt(attempt.id, { source: "CALLBACK" })).outcome, "mismatch");
-  const events = await prisma.outboxEvent.findMany();
+  const events = await prisma.outboxEvent.findMany({ where: { topic: { not: "order.placed" } } });
   assert.deepEqual(events.map((e) => e.topic), ["payment.alert"]);
   assert.equal((events[0].payload as Record<string, unknown>).kind, "PAYMENT_MISMATCH");
 });
@@ -81,10 +85,10 @@ test("havale onayı ve kapıda ödeme tahsilatı da 'order.paid' olayını aynı
   const transfer = await createTestOrder({ method: "BANK_TRANSFER", dueInMinutes: 48 * 60 });
   await confirmBankTransferPayment(transfer.order.id, "admin-1");
   const cod = await createTestOrder({ method: "CASH_ON_DELIVERY", dueInMinutes: null });
-  await updateOrderStatus(cod.order.id, "SHIPPED", "admin-1");
+  await shipOrder(cod.order.id, { carrier: "Yurtiçi Kargo", trackingNumber: "123456789012" }, "admin-1");
   await updateOrderStatus(cod.order.id, "DELIVERED", "admin-1");
 
-  const events = await prisma.outboxEvent.findMany({ orderBy: { createdAt: "asc" } });
+  const events = await prisma.outboxEvent.findMany({ where: { topic: "order.paid" }, orderBy: { createdAt: "asc" } });
   assert.deepEqual(
     events.map((e) => [e.topic, e.aggregateId, (e.payload as Record<string, unknown>).paymentMethod]),
     [

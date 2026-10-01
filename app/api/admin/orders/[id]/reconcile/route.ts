@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth/session";
 import { reconcileOrderWithProvider, ReconcileError } from "@/lib/payment/reconcile";
+import { scheduleNotifications } from "@/lib/notifications/run";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -20,6 +21,7 @@ export async function POST(_request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
   try {
     const result = await reconcileOrderWithProvider(id, user.id);
+    scheduleNotifications();
     return NextResponse.json(result);
   } catch (err) {
     if (err instanceof ReconcileError) {

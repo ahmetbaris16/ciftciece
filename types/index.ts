@@ -131,6 +131,22 @@ export interface ShippingAddress {
   }>;
 }
 
+/** Fatura bilgisi (sipariş anı). Kurumsal faturada unvan + vergi dairesi + vergi no zorunlu. */
+export interface BillingInfo {
+  type: "INDIVIDUAL" | "CORPORATE";
+  /** Bireyselde fatura adına ad-soyad */
+  name: string;
+  companyName?: string;
+  taxOffice?: string;
+  /** Kurumsal: 10 haneli VKN (şahıs şirketinde 11 haneli TCKN olabilir) */
+  taxNumber?: string;
+  /** Fatura adresi teslimat adresiyle aynı mı */
+  sameAsShipping: boolean;
+  address?: string;
+  district?: string;
+  city?: string;
+}
+
 export interface OrderItem {
   id: string;
   variantId: string;
@@ -165,6 +181,12 @@ export interface Order {
   notes?: string | null;
   /** NEEDS_ATTENTION: ödeme tarafında insan kararı gerekiyor (ayrıntı payment_alerts) */
   needsAttention: boolean;
+  /** Fatura bilgisi; eski siparişlerde yok (teslimat bilgisiyle bireysel kabul edilir) */
+  billingInfo: BillingInfo | null;
+  /** Müşterinin sipariş notu */
+  customerNote: string | null;
+  invoiceNumber: string | null;
+  invoiceIssuedAt: Date | null;
   createdAt: Date;
 }
 

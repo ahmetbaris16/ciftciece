@@ -213,6 +213,18 @@ model Order {
   paymentAlerts   PaymentAlert[]
   consents        OrderConsent[]
   emails          EmailMessage[]
+  events          OrderEvent[]
+  shipments       Shipment[]
+  refunds         Refund[]
+  requests        CustomerRequest[]
+  // Fatura bilgisi (bireysel/kurumsal) — sipariş anındaki hâli: {type, name, companyName, taxOffice,
+  // taxNumber, address, sameAsShipping}. Boş = eski sipariş (teslimat bilgileriyle bireysel kabul edilir).
+  billingInfo     Json?
+  // Müşterinin sipariş notu (teslimat tarifi vb.)
+  customerNote    String?     @db.Text
+  // Admin'in girdiği fatura numarası ve tarihi (e-Arşiv); müşteri sipariş sayfasında görür
+  invoiceNumber   String?     @db.VarChar(60)
+  invoiceIssuedAt DateTime?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
@@ -644,4 +656,133 @@ enum EmailStatus {
   SENT      // SMTP sunucusu kabul etti
   FAILED    // Deneme hakkı bitti ya da kalıcı hata — admin yeniden kuyruğa alabilir
   CANCELLED // Gönderilmeyecek (süresi geçti, admin iptal etti)
+}
+
+// ============================================================
+// SİPARİŞ GEÇMİŞİ, KARGO, İADE, MÜŞTERİ TALEPLERİ
+// ============================================================
+
+// Sipariş geçmişi — yalnız eklenir (R-10, R-20): oluşturma, ödeme, durum değişiklikleri, kargo, iade,
+// müşteri talepleri ve admin notları. Kim (actorType/actorId), ne zaman, hangi durumdan hangisine.
+// visibleToCustomer: müşterinin sipariş sayfasındaki zaman çizelgesinde görünür (iç notlar görünmez).
+model OrderEvent {
+  id                String       @id @default(cuid())
+  orderId           String
+  order             Order        @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  // CREATED | PAYMENT | STATUS | SHIPMENT | REFUND | NOTE | REQUEST | INVOICE
+  type              String       @db.VarChar(30)
+  fromStatus        OrderStatus?
+  toStatus          OrderStatus?
+  // SYSTEM | ADMIN | CUSTOMER | PROVIDER
+  actorType         String       @db.VarChar(20)
+  actorId           String?
+  message           String       @db.Text
+  visibleToCustomer Boolean      @default(false)
+  createdAt         DateTime     @default(now())
+
+  @@index([orderId, createdAt])
+  @@map("order_events")
+}
+
+// Kargo gönderisi (R-22): "Kargoya verildi" adımında takip numarası zorunlu. Bir siparişte birden fazla
+// gönderi olabilir (ek koli, yeniden gönderim).
+model Shipment {
+  id             String   @id @default(cuid())
+  orderId        String
+  order          Order    @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  carrier        String   @db.VarChar(60)
+  trackingNumber String   @db.VarChar(60)
+  // Takip sayfası (firmanın sorgulama bağlantısı); boşsa müşteriye yalnız numara gösterilir
+  trackingUrl    String?  @db.VarChar(500)
+  shippedAt      DateTime @default(now())
+  createdById    String?
+  createdAt      DateTime @default(now())
+
+  @@unique([carrier, trackingNumber])
+  @@index([orderId])
+  @@map("shipments")
+}
+
+// İade kaydı (R-07) — yalnız eklenir; ödeme kaydı silinmez/değişmez. Para hareketi sitede otomatik yapılmaz
+// (iyzico panelinden ya da havaleyle yapılır), burada kaydı tutulur. Toplam iade, alınan ödemeyi aşamaz
+// (kodda, sipariş satırı kilitliyken denetlenir).
+model Refund {
+  id          String       @id @default(cuid())
+  orderId     String
+  order       Order        @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  amountKurus Int
+  method      RefundMethod
+  // iyzico iade işlem no, dekont no vb.
+  reference   String?      @db.VarChar(120)
+  reason      String       @db.Text
+  createdById String?
+  createdAt   DateTime     @default(now())
+
+  @@index([orderId])
+  @@map("refunds")
+}
+
+enum RefundMethod {
+  CARD_PROVIDER // iyzico panelinden karta iade
+  BANK_TRANSFER // müşterinin hesabına havale
+  CASH          // elden
+  OTHER
+}
+
+// Müşteri talepleri: ödenmiş/hazırlanan siparişte iptal isteği, teslimden sonra cayma (iade) bildirimi.
+// Cayma bildirimi yazılı ya da kalıcı veri saklayıcısıyla yapılır (Mesafeli Sözleşmeler Yönetmeliği md. 11):
+// talep kaydı + işletmeye e-posta + müşteri sayfasında görünür.
+model CustomerRequest {
+  id             String                @id @default(cuid())
+  orderId        String
+  order          Order                 @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  type           CustomerRequestType
+  message        String                @db.Text
+  status         CustomerRequestStatus @default(OPEN)
+  resolutionNote String?               @db.Text
+  resolvedAt     DateTime?
+  resolvedById   String?
+  ipAddress      String?               @db.VarChar(64)
+  createdAt      DateTime              @default(now())
+
+  @@index([orderId])
+  @@index([status, createdAt])
+  @@map("customer_requests")
+}
+
+enum CustomerRequestType {
+  CANCEL // Kargolanmadan iptal isteği
+  RETURN // Cayma hakkı / iade
+}
+
+enum CustomerRequestStatus {
+  OPEN
+  RESOLVED
+  REJECTED
+}
+
+// İletişim formu mesajları — admin → Mesajlar. İşletmeye e-posta bildirimi gider; müşteriye otomatik yanıt
+// gönderilmez (formun başkası adına e-posta göndermek için kötüye kullanılmasını önler).
+model ContactMessage {
+  id             String        @id @default(cuid())
+  name           String        @db.VarChar(120)
+  email          String        @db.VarChar(254)
+  phone          String?       @db.VarChar(30)
+  subject        String        @db.VarChar(200)
+  message        String        @db.Text
+  orderReference String?       @db.VarChar(60)
+  status         ContactStatus @default(NEW)
+  ipAddress      String?       @db.VarChar(64)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([status, createdAt])
+  @@map("contact_messages")
+}
+
+enum ContactStatus {
+  NEW      // Okunmadı
+  READ     // Okundu
+  ANSWERED // Yanıtlandı
+  ARCHIVED // Arşivlendi
 }

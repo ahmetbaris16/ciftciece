@@ -21,6 +21,7 @@ import {
   ingestIyzicoWebhook,
   processWebhookEvent,
 } from "@/lib/payment/webhook/iyzico";
+import { runNotifications } from "@/lib/notifications/run";
 
 /** Yanıttan sonra işler; istek bağlamı dışında (test, betik) çağrılırsa hemen işler. */
 async function processAfterResponse(eventId: string) {
@@ -28,6 +29,7 @@ async function processAfterResponse(eventId: string) {
     try {
       const r = await processWebhookEvent(eventId);
       if (r.detail) console.info(`[webhook/iyzico] ${eventId}: ${r.outcome} (${r.detail})`);
+      await runNotifications().catch((e) => console.error("[webhook/iyzico] bildirim:", e));
     } catch (err) {
       // Olay gelen kutusunda RECEIVED/FAILED kalır: elle sorgu ya da sonraki tetikleyici işler
       console.error("[webhook/iyzico] işleme hatası:", eventId, err);
