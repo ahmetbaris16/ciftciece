@@ -44,9 +44,17 @@ export const authOptions: NextAuthOptions = {
         email: { label: "E-posta", type: "email" },
         password: { label: "Şifre", type: "password" },
       },
-      async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
+      async authorize(credentials, req) {
+        if (!credentials?.email || !credentials?.password || credentials.password.length > 200) {
           return null;
+        }
+
+        // Kaba kuvvete karşı (Y-04): IP başına 10, e-posta başına 5 deneme / 15 dk — müşteri girişinden sıkı.
+        // Sınır her denemede sayılır (başarılı giriş dahil); aşılınca şifreye bakılmaz.
+        const ip = clientIp(req?.headers);
+        const emailKey = normalizeEmail(credentials.email);
+        if (!rateLimit(`admin-login-ip:${ip}`, 10, 15 * 60_000) || !rateLimit(`admin-login-email:${emailKey}`, 5, 15 * 60_000)) {
+          throw new Error(LOGIN_RATE_LIMITED);
         }
 
         // Development mock (DB yokken). .env'deki ADMIN_EMAIL henüz "TODO" ise varsayılan kullanılır
@@ -71,15 +79,12 @@ export const authOptions: NextAuthOptions = {
 
         // Production — Prisma
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
+          where: { email: emailKey },
         });
 
-        if (!user || !user.passwordHash) {
-          return null;
-        }
-
-        const isValid = await verifyPassword(credentials.password, user.passwordHash);
-        if (!isValid) {
+        // Hesap yoksa da şifre karşılaştırması yapılır (yanıt süresi yönetici e-postasının varlığını ele vermesin)
+        const isValid = await verifyPassword(credentials.password, user?.passwordHash);
+        if (!user || !isValid) {
           return null;
         }
 

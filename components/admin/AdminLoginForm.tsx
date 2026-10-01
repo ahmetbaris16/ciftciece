@@ -34,7 +34,12 @@ export default function AdminLoginForm() {
       });
 
       if (result?.error) {
-        setLoginError("Geçersiz e-posta veya şifre");
+        // "RATE_LIMITED": lib/auth/auth-options.ts → LOGIN_RATE_LIMITED
+        setLoginError(
+          result.error === "RATE_LIMITED"
+            ? "Çok fazla deneme yapıldı. 15 dakika sonra tekrar deneyin."
+            : "Geçersiz e-posta veya şifre"
+        );
         setIsLoading(false);
         return;
       }
