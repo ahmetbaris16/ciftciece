@@ -10,7 +10,7 @@ let checked = false;
 
 async function assertTestDatabase() {
   if (checked) return;
-  const rows = await prisma.$queryRaw<Array<{ db: string }>>`SELECT current_database() AS db`;
+  const rows = await prisma.$queryRaw<Array<{ db: string | null }>>`SELECT DATABASE() AS db`;
   const db = rows[0]?.db ?? "";
   if (!db.endsWith("_test")) {
     throw new Error(`Testler yalnız test veritabanında çalışır; bağlı olunan: "${db}"`);
@@ -18,14 +18,30 @@ async function assertTestDatabase() {
   checked = true;
 }
 
+let tableNames: string[] | null = null;
+
 /** Migration tablosu dışındaki tüm tabloları boşaltır. */
 export async function resetDb() {
   await assertTestDatabase();
-  const tables = await prisma.$queryRaw<Array<{ tablename: string }>>`
-    SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'`;
-  if (tables.length === 0) return;
-  const list = tables.map((t) => `"${t.tablename.replace(/"/g, '""')}"`).join(", ");
-  await prisma.$executeRawUnsafe(`TRUNCATE TABLE ${list} RESTART IDENTITY CASCADE`);
+  if (!tableNames) {
+    const tables = await prisma.$queryRaw<Array<{ name: string }>>`
+      SELECT TABLE_NAME AS name FROM information_schema.TABLES
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME <> '_prisma_migrations'`;
+    tableNames = tables.map((t) => t.name);
+  }
+  if (tableNames.length === 0) return;
+  const names = tableNames;
+  // Yabancı anahtar denetimi oturum ayarıdır: kapatma, silme ve açma aynı bağlantıda (aynı işlemde) yapılır
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe("SET FOREIGN_KEY_CHECKS = 0");
+    try {
+      for (const name of names) {
+        await tx.$executeRawUnsafe(`DELETE FROM \`${name.replace(/`/g, "``")}\``);
+      }
+    } finally {
+      await tx.$executeRawUnsafe("SET FOREIGN_KEY_CHECKS = 1");
+    }
+  });
 }
 
 /** Her testten önce tabloları boşaltır, dosya bitince bağlantıyı kapatır. */
@@ -82,17 +98,14 @@ export async function createProduct(opts: {
 export async function withFailingInserts<T>(table: string, fn: () => Promise<T>): Promise<T> {
   await assertTestDatabase();
   if (!/^[a-z_]+$/.test(table)) throw new Error(`geçersiz tablo adı: ${table}`);
-  await prisma.$executeRawUnsafe(`
-    CREATE OR REPLACE FUNCTION test_fail_insert() RETURNS trigger AS $$
-    BEGIN RAISE EXCEPTION 'test: yapay DB hatasi (%)', TG_TABLE_NAME; END;
-    $$ LANGUAGE plpgsql`);
   await prisma.$executeRawUnsafe(
-    `CREATE TRIGGER test_fail_${table} BEFORE INSERT ON "${table}" FOR EACH ROW EXECUTE FUNCTION test_fail_insert()`
+    `CREATE TRIGGER test_fail_${table} BEFORE INSERT ON \`${table}\` FOR EACH ROW ` +
+      `SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'test: yapay DB hatasi (${table})'`
   );
   try {
     return await fn();
   } finally {
-    await prisma.$executeRawUnsafe(`DROP TRIGGER IF EXISTS test_fail_${table} ON "${table}"`);
+    await prisma.$executeRawUnsafe(`DROP TRIGGER IF EXISTS test_fail_${table}`);
   }
 }
 

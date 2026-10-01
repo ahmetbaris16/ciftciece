@@ -61,8 +61,8 @@ export async function confirmBankTransferPayment(orderId: string, actorId: strin
   return prisma.$transaction(
     async (tx) => {
       const rows = await tx.$queryRaw<Array<{ id: string; reference: string; status: string; paymentMethod: string; totalKurus: number }>>`
-        SELECT id, reference, status::text AS status, "paymentMethod"::text AS "paymentMethod", "totalKurus"
-        FROM orders WHERE id = ${orderId} FOR UPDATE`;
+        SELECT \`id\`, \`reference\`, \`status\`, \`paymentMethod\`, \`totalKurus\`
+        FROM \`orders\` WHERE \`id\` = ${orderId} FOR UPDATE`;
       const order = rows[0];
       if (!order) throw new PaymentConfirmError("Sipariş bulunamadı", 404);
       if (order.paymentMethod !== "BANK_TRANSFER") {

@@ -1,5 +1,5 @@
 /**
- * Test veritabanı adresi — geliştirme veritabanından AYRI, aynı Docker PostgreSQL'de.
+ * Test veritabanı adresi — geliştirme veritabanından AYRI, aynı Docker MariaDB'de.
  *
  * Öncelik: TEST_DATABASE_URL; yoksa DATABASE_URL'deki veritabanı adına "_test" eklenir
  * (ciftciece → ciftciece_test). Testler tabloları sildiği için iki koruma vardır:

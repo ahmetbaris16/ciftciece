@@ -2,7 +2,10 @@
  * Search Repository
  *
  * Ürün arama.
- * DB modunda PostgreSQL ILIKE kullanır.
+ * DB modunda MariaDB'nin büyük/küçük harfe duyarsız karşılaştırması kullanılır (tablolar utf8mb4_unicode_ci:
+ * "ZEYTİN", "ZEYTIN" ve "zeytin" aynı; ş/ç/ğ/ü/ö tabanıyla eşleşir — "seker" "Şeker"i bulur). Sınır:
+ * noktasız "ı" "i" ile eşleşmez ("KIZARTILMIŞ" ≠ "kızartılmış"). Prisma'nın `mode: "insensitive"`
+ * seçeneği MySQL'de yok, gerek de yok.
  * Mock modunda in-memory filter.
  */
 
@@ -26,16 +29,18 @@ export async function searchProducts(query: string): Promise<Product[]> {
     return mock.searchProducts(query);
   }
 
-  const q = query.toLowerCase().trim();
+  // Küçük harfe çevrilmez: JavaScript "İ"yi "i̇" (i + birleşik nokta) yapar ve eşleşmeyi bozar;
+  // karşılaştırmayı veritabanının harmanlaması yapar.
+  const q = query.trim();
   if (!q) return [];
 
   const products = await prisma.product.findMany({
     where: {
       isPublished: true,
       OR: [
-        { name: { contains: q, mode: "insensitive" } },
-        { description: { contains: q, mode: "insensitive" } },
-        { category: { name: { contains: q, mode: "insensitive" } } },
+        { name: { contains: q } },
+        { description: { contains: q } },
+        { category: { name: { contains: q } } },
       ],
     },
     include: PRODUCT_INCLUDE,

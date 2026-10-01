@@ -8,7 +8,7 @@
  * Kişisel veri yazılmaz: yalnız kimlikler, tutar, durum.
  */
 
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 export type OutboxTopic = "order.paid" | "payment.alert";
 
@@ -20,21 +20,29 @@ export interface OutboxInput {
   payload: Record<string, unknown>;
 }
 
-/** Transaction içinde çağrılır. Yeni yazıldıysa true. */
+/**
+ * Transaction içinde çağrılır. Yeni yazıldıysa true.
+ * createMany({ skipDuplicates }) kullanılmaz: MySQL'de INSERT IGNORE olur ve tekrar dışındaki hataları da
+ * sessizce yutar. Önce bakılır; eşzamanlı yazımda UNIQUE ihlali (P2002) "zaten var" demektir.
+ */
 export async function writeOutbox(tx: Prisma.TransactionClient, event: OutboxInput): Promise<boolean> {
-  const { count } = await tx.outboxEvent.createMany({
-    data: [
-      {
+  const existing = await tx.outboxEvent.findUnique({ where: { dedupeKey: event.dedupeKey }, select: { id: true } });
+  if (existing) return false;
+  try {
+    await tx.outboxEvent.create({
+      data: {
         topic: event.topic,
         aggregateType: event.aggregateType,
         aggregateId: event.aggregateId,
         dedupeKey: event.dedupeKey,
         payload: event.payload as Prisma.InputJsonValue,
       },
-    ],
-    skipDuplicates: true,
-  });
-  return count === 1;
+    });
+    return true;
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") return false;
+    throw err;
+  }
 }
 
 /** "Sipariş ödendi" olayı (kart, havale, kapıda ödeme) */

@@ -5,8 +5,12 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// Veritabanı: MariaDB (Hostinger web hosting; MySQL uyumlu). Yerel geliştirme ve testler aynı sürüm
+// MariaDB ile Docker'da çalışır (docs/TESTING.md).
+// MySQL'de String varsayılanı VARCHAR(191): uzun olabilecek metinler @db.Text ya da açık uzunlukla
+// tanımlanır (aşan veri katı modda hata verir, katı mod kapalıysa sessizce kesilir).
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
@@ -17,7 +21,7 @@ datasource db {
 model User {
   id            String    @id @default(cuid())
   // Müşteri kaydı/girişi e-postayı küçük harfe çevirerek kullanır
-  email         String    @unique
+  email         String    @unique @db.VarChar(254)
   name          String?
   phone         String?
   passwordHash  String?
@@ -50,7 +54,7 @@ model Address {
   city       String
   district   String
   postalCode String?
-  address    String
+  address    String  @db.Text
   isDefault  Boolean @default(false)
 
   @@map("addresses")
@@ -64,8 +68,8 @@ model Category {
   id          String    @id @default(cuid())
   name        String
   slug        String    @unique
-  description String?
-  imageUrl    String?
+  description String?   @db.Text
+  imageUrl    String?   @db.VarChar(500)
   sortOrder   Int       @default(0)
   isPublished Boolean   @default(true)
   products    Product[]
@@ -76,9 +80,9 @@ model Category {
 
 model Product {
   id          String           @id @default(cuid())
-  name        String
+  name        String           @db.VarChar(255)
   slug        String           @unique
-  description String?
+  description String?          @db.Text
   categoryId  String
   category    Category         @relation(fields: [categoryId], references: [id])
   images      ProductImage[]
@@ -100,8 +104,8 @@ model ProductImage {
   id        String  @id @default(cuid())
   productId String
   product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  url       String
-  altText   String?
+  url       String  @db.VarChar(500)
+  altText   String? @db.VarChar(500)
   sortOrder Int     @default(0)
 
   @@map("product_images")
@@ -173,7 +177,7 @@ model Order {
   userId          String?
   user            User?       @relation(fields: [userId], references: [id])
   // Guest checkout bilgileri
-  guestEmail      String?
+  guestEmail      String?     @db.VarChar(254)
   guestName       String?
   guestPhone      String?
   status          OrderStatus @default(PENDING)
@@ -195,7 +199,7 @@ model Order {
   paymentDueAt    DateTime?
   // Yalnız eski kayıtlar ve insan notu. Kod artık buraya yazmaz: ödeme olayları payment_events'te,
   // uyarılar payment_alerts'ta.
-  notes           String?
+  notes           String?     @db.Text
   // Checkout idempotency: istemcinin ürettiği anahtar (UUID). Aynı anahtarla gelen ikinci istek yeni
   // sipariş açmaz, bu siparişi döndürür. UNIQUE kısıt son savunma hattıdır (eşzamanlı istekler dahil).
   idempotencyKey  String?     @unique
@@ -211,6 +215,8 @@ model Order {
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
+  // Süresi dolan siparişleri bulan sorgu (releaseExpiredOrders) tabloyu baştan sona taramasın (R-27)
+  @@index([status, paymentDueAt])
   @@map("orders")
 }
 
@@ -237,7 +243,7 @@ model OrderItem {
   variantId       String
   variant         ProductVariant @relation(fields: [variantId], references: [id])
   // SNAPSHOT — ürün sonradan değişse de sipariş tarihi bilgisi korunur
-  snapshotName    String         // Ürün adı (sipariş anında)
+  snapshotName    String         @db.VarChar(255) // Ürün adı (sipariş anında)
   snapshotVariant String         // Varyant adı (sipariş anında)
   snapshotPrice   Int            // Birim fiyat kuruş (sipariş anında)
   quantity        Int
@@ -306,7 +312,9 @@ enum PaymentStatus {
 model PaymentAttempt {
   id                 String               @id @default(cuid())
   orderId            String
-  order              Order                @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  // onUpdate: Restrict — MySQL'de CHECK kısıtındaki sütun (orderId) ON UPDATE CASCADE'li yabancı anahtarda
+  // kullanılamaz; kimlikler zaten değişmez
+  order              Order                @relation(fields: [orderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   provider           String               // "iyzico" | "stub" | "havale" | "kapida"
   method             PaymentMethod
   status             PaymentAttemptStatus @default(INITIATED)
@@ -326,7 +334,7 @@ model PaymentAttempt {
   paidCurrency       String?
   installment        Int?
   fraudStatus        Int?
-  failureReason      String?
+  failureReason      String?              @db.Text
   successOrderId     String?              @unique
   verifiedAt         DateTime?
   events             PaymentEvent[]
@@ -377,7 +385,7 @@ model PaymentEvent {
   actorId         String?
   // İşlemenin sonucu (örn. "paid", "duplicate", "mismatch")
   outcome         String?
-  error           String?
+  error           String?         @db.Text
   handledAt       DateTime?
   alerts          PaymentAlert[]
 
@@ -420,7 +428,7 @@ model PaymentAlert {
   eventId    String?
   event      PaymentEvent?   @relation(fields: [eventId], references: [id], onDelete: Restrict)
   // Admin'e gösterilen kısa Türkçe açıklama (kişisel veri yok)
-  message    String
+  message    String          @db.Text
   details    Json?
   // Aynı durum için ikinci alarm üretilmez
   dedupeKey  String          @unique
@@ -440,12 +448,12 @@ model PaymentAlert {
 model Review {
   id           String   @id @default(cuid())
   authorName   String
-  authorAvatar String?  // URL veya initials için null
+  authorAvatar String?  @db.VarChar(500) // URL veya initials için null
   rating       Int      // 1-5
-  text         String
+  text         String   @db.Text
   date         DateTime
   source       String?  // "google", "manual"
-  sourceUrl    String?
+  sourceUrl    String?  @db.VarChar(1000)
   isPublished  Boolean  @default(false)
   sortOrder    Int      @default(0)
   createdAt    DateTime @default(now())
@@ -467,12 +475,12 @@ model ProductReview {
   user               User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   rating             Int          // 1-5
   title              String?
-  text               String
+  text               String       @db.Text
   status             ReviewStatus @default(PENDING)
   // Gönderim anında: müşterinin ödenmiş siparişlerinde bu ürün var mı ("Satın aldı" rozeti)
   isVerifiedPurchase Boolean      @default(false)
   // Reddedilme sebebi vb. — yalnız admin görür
-  adminNote          String?
+  adminNote          String?      @db.Text
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
   approvedAt         DateTime?
@@ -521,7 +529,8 @@ enum CouponType {
 model SiteSetting {
   id    String @id @default(cuid())
   key   String @unique
-  value String
+  // JSON metni (kargo ayarları paket ölçüleriyle birkaç KB olabilir)
+  value String @db.Text
 
   @@map("site_settings")
 }
@@ -580,7 +589,7 @@ model OutboxEvent {
   availableAt   DateTime  @default(now())
   publishedAt   DateTime?
   attempts      Int       @default(0)
-  lastError     String?
+  lastError     String?   @db.Text
 
   @@index([publishedAt, availableAt])
   @@map("outbox_events")

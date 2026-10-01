@@ -16,7 +16,8 @@
  */
 
 import { prisma } from "@/lib/db/prisma";
-import type { OrderStatus, PaymentAttemptStatus, PaymentEventSource, Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import type { OrderStatus, PaymentAttemptStatus, PaymentEventSource } from "@prisma/client";
 import { formatPrice } from "@/types";
 import { raiseAlert, logAlert, type PaymentAlertKind } from "./alerts";
 import { orderPaidEvent, writeOutbox } from "@/lib/outbox";
@@ -75,17 +76,19 @@ function providerFields(data: ProviderPaymentData) {
 
 /** Siparişi ve denemeyi bu sırayla kilitler (tüm ödeme yolları aynı sırayı kullanır). */
 async function lockOrderAndAttempt(tx: Tx, attemptId: string) {
+  // Denemenin siparişi hiç değişmez; kilitsiz okumak güvenli. Kilit sırası: önce sipariş, sonra deneme.
+  const owner = await tx.paymentAttempt.findUnique({ where: { id: attemptId }, select: { orderId: true } });
+  if (!owner) throw new Error(`Ödeme denemesi bulunamadı: ${attemptId}`);
   const orders = await tx.$queryRaw<
     Array<{ id: string; reference: string; status: OrderStatus; totalKurus: number; paymentMethod: string }>
   >`
-    SELECT o.id, o.reference, o.status::text AS status, o."totalKurus", o."paymentMethod"::text AS "paymentMethod"
-    FROM orders o
-    WHERE o.id = (SELECT a."orderId" FROM payment_attempts a WHERE a.id = ${attemptId})
+    SELECT \`id\`, \`reference\`, \`status\`, \`totalKurus\`, \`paymentMethod\`
+    FROM \`orders\` WHERE \`id\` = ${owner.orderId}
     FOR UPDATE`;
   const order = orders[0];
-  if (!order) throw new Error(`Ödeme denemesi bulunamadı: ${attemptId}`);
+  if (!order) throw new Error(`Ödeme denemesinin siparişi bulunamadı: ${attemptId}`);
   const attempts = await tx.$queryRaw<Array<{ id: string; status: PaymentAttemptStatus; provider: string }>>`
-    SELECT id, status::text AS status, provider FROM payment_attempts WHERE id = ${attemptId} FOR UPDATE`;
+    SELECT \`id\`, \`status\`, \`provider\` FROM \`payment_attempts\` WHERE \`id\` = ${attemptId} FOR UPDATE`;
   return { order, attempt: attempts[0] };
 }
 
@@ -101,9 +104,9 @@ async function tryReserveStockAgain(tx: Tx, orderId: string): Promise<boolean> {
   if (variantIds.length === 0) return true;
 
   const rows = await tx.$queryRaw<Array<{ variantId: string; quantity: number }>>`
-    SELECT "variantId", quantity FROM inventory
-    WHERE "variantId" = ANY(${variantIds}::text[])
-    ORDER BY "variantId"
+    SELECT \`variantId\`, \`quantity\` FROM \`inventory\`
+    WHERE \`variantId\` IN (${Prisma.join(variantIds)})
+    ORDER BY \`variantId\`
     FOR UPDATE`;
   const available = new Map(rows.map((r) => [r.variantId, r.quantity]));
   if (variantIds.some((id) => (available.get(id) ?? 0) < (need.get(id) ?? 0))) return false;

@@ -6,7 +6,7 @@
  * Bildirim kanalı (e-posta/Telegram) ayrı karar ve ayrı oturum; şimdilik kayıt + sunucu logu.
  */
 
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { writeOutbox } from "@/lib/outbox";
 
 export type PaymentAlertKind =
@@ -45,24 +45,34 @@ export interface RaiseAlertInput {
  * Dönen değer: yeni alarm yazıldıysa true (daha önce yazılmışsa false).
  */
 export async function raiseAlert(tx: Prisma.TransactionClient, alert: RaiseAlertInput): Promise<boolean> {
-  const { count } = await tx.paymentAlert.createMany({
-    data: [
-      {
-        kind: alert.kind,
-        dedupeKey: alert.dedupeKey,
-        message: alert.message,
-        orderId: alert.orderId ?? null,
-        attemptId: alert.attemptId ?? null,
-        eventId: alert.eventId ?? null,
-        details: (alert.details ?? undefined) as Prisma.InputJsonValue | undefined,
-      },
-    ],
-    skipDuplicates: true,
-  });
+  // Aynı durum için ikinci alarm yazılmaz (dedupeKey UNIQUE). createMany({ skipDuplicates }) MySQL'de
+  // INSERT IGNORE olur ve tekrar dışındaki hataları da (veri kesilmesi, yabancı anahtar) sessizce
+  // uyarıya çevirir; bu yüzden önce bakılır, eşzamanlı yazımda UNIQUE ihlali yakalanır. MariaDB'de
+  // başarısız tek komut işlemi bozmaz, işlem devam eder.
+  let created = false;
+  const existing = await tx.paymentAlert.findUnique({ where: { dedupeKey: alert.dedupeKey }, select: { id: true } });
+  if (!existing) {
+    try {
+      await tx.paymentAlert.create({
+        data: {
+          kind: alert.kind,
+          dedupeKey: alert.dedupeKey,
+          message: alert.message,
+          orderId: alert.orderId ?? null,
+          attemptId: alert.attemptId ?? null,
+          eventId: alert.eventId ?? null,
+          details: (alert.details ?? undefined) as Prisma.InputJsonValue | undefined,
+        },
+      });
+      created = true;
+    } catch (err) {
+      if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002")) throw err;
+    }
+  }
   if (alert.orderId) {
     await tx.order.update({ where: { id: alert.orderId }, data: { needsAttention: true } });
   }
-  if (count === 1) {
+  if (created) {
     // Alarm kanalı (Oturum 6) bu olayı gönderecek; şimdilik aynı transaction'da kayda geçer
     await writeOutbox(tx, {
       topic: "payment.alert",
@@ -72,7 +82,7 @@ export async function raiseAlert(tx: Prisma.TransactionClient, alert: RaiseAlert
       payload: { kind: alert.kind, message: alert.message, orderId: alert.orderId ?? null, attemptId: alert.attemptId ?? null },
     });
   }
-  return count === 1;
+  return created;
 }
 
 /** Alarm logu — transaction başarıyla bittikten sonra çağrılır. */
