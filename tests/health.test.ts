@@ -15,6 +15,6 @@ test("veritabanı ayakta ve ayarlar doğruysa ok", async () => {
   const body = await res.json();
   assert.equal(body.status, "ok");
   assert.equal(body.db, "ok");
-  assert.deepEqual(body.checks, { strictMode: true, utf8mb4: true });
+  assert.deepEqual(body.checks, { strictMode: true, utf8mb4: true, readCommittedSafe: true });
   assert.equal(res.headers.get("cache-control"), "no-store");
 });

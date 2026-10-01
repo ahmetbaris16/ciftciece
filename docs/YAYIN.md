@@ -75,7 +75,11 @@ Site adresi değişirse `NEXTAUTH_URL` ve `NEXT_PUBLIC_APP_URL`'i güncelleyip *
 
 ## 5. Yayın sonrası kontrol
 
-1. `https://alanadiniz.com/api/health` → `{"status":"ok","db":"ok", ... "checks":{"strictMode":true,"utf8mb4":true}}`.
+1. `https://alanadiniz.com/api/health` → `{"status":"ok","db":"ok", ... "checks":{"strictMode":true,"utf8mb4":true,"readCommittedSafe":true}}`.
+   - `readCommittedSafe: false`: veritabanının ikili günlüğü STATEMENT biçiminde. Bu biçimde MariaDB, sipariş
+     ve ödeme işlemlerinin kullandığı yalıtım düzeyinde (READ COMMITTED) yazmayı reddeder (hata 1665 —
+     yerelde denendi): **sipariş alınamaz.** Hostinger desteğinden biçimin MIXED ya da ROW yapılmasını
+     isteyin; olmazsa haber verin (kod tarafında başka çözüm gerekir). Varsayılan MariaDB ayarı (MIXED) sorunsuz.
    - `"degraded"` ve `strictMode: false`: veritabanı "katı mod"da değil — sığmayan veri hata vermek yerine
      sessizce kesilebilir. Hostinger desteğine sorun; düzelene kadar yayına almayın.
    - `utf8mb4: false`: veritabanı Türkçe karakter/emoji için doğru karakter setinde açılmamış; veritabanını
