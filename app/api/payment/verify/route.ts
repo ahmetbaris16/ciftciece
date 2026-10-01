@@ -1,75 +1,43 @@
 /**
- * /api/payment/verify — ödeme sağlayıcısı dönüşü (3DS / callback)
+ * /api/payment/verify — ödeme sağlayıcısı dönüşü (callbackUrl)
  *
- * Akış:
- * 1. Sağlayıcıdan token doğrulanır (stub: kendi token'ı dışında reddeder)
- * 2. Sağlayıcı tutar bildiriyorsa sipariş tutarıyla karşılaştırılır
- * 3. markOrderPaid: PENDING → PAID (idempotent); süresi dolmuş siparişte stok
- *    yeniden ayrılamıyorsa admin incelemesine düşer
- * 4. Müşteri sipariş sayfasına yönlendirilir (sepet orada, ödeme onaylıysa temizlenir)
+ * Tarayıcı dönüşü yalnız TETİKLEYİCİDİR, kanıt değildir:
+ * 1. Gelen token bir ödeme denemesiyle eşleştirilir (adresteki ?attempt= yalnız ipucu)
+ * 2. Sonuç sağlayıcıdan sunucu tarafında sorgulanır ve doğrulanır (lib/payment/verify.ts)
+ * 3. Kayıt tek transaction'da yapılır (lib/payment/apply.ts)
+ * 4. Müşteri sipariş sayfasına (ya da başarısızsa ödeme sayfasına) yönlendirilir
+ *
+ * ?orderId= eski sürümün callback adresidir: bu sürümden önce açılmış formlar için kabul edilir.
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getPaymentProvider } from "@/lib/payment/provider";
-import { prisma } from "@/lib/db/prisma";
 import { USE_DB } from "@/lib/data/source";
-import { markOrderPaid } from "@/lib/repositories";
+import { handleCardCallback } from "@/lib/payment/card";
 
 async function handle(request: NextRequest) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-  const fail = (code: string) => NextResponse.redirect(`${appUrl}/odeme?error=${code}`);
-
-  if (!USE_DB) return fail("payment_error");
+  if (!USE_DB) return NextResponse.redirect(`${appUrl}/odeme?error=payment_error`, 303);
 
   const { searchParams } = new URL(request.url);
   let token = searchParams.get("token") ?? "";
-  const orderId = searchParams.get("orderId") ?? "";
   if (!token && request.method === "POST") {
-    // Bazı sağlayıcılar token'ı form gövdesinde gönderir
+    // iyzico token'ı form gövdesinde gönderir
     const form = await request.formData().catch(() => null);
-    token = (form?.get("token") as string | null) ?? "";
+    const value = form?.get("token");
+    token = typeof value === "string" ? value : "";
   }
 
   try {
-    const provider = getPaymentProvider();
-    const result = await provider.verifyPayment({ token });
-    if (!result.success) {
-      console.warn("[payment/verify] Doğrulama başarısız:", result.error);
-      return fail("payment_failed");
-    }
-
-    // Sağlayıcı sipariş kimliği bildiriyorsa (iyzico: basketId) callback'teki orderId ile aynı olmalı
-    if (result.orderId && orderId && result.orderId !== orderId) {
-      console.error(`[payment/verify] Sipariş kimliği uyuşmuyor: callback ${orderId}, sağlayıcı ${result.orderId}`);
-      return fail("payment_error");
-    }
-    const resolvedOrderId = result.orderId ?? orderId;
-    const order = resolvedOrderId ? await prisma.order.findUnique({ where: { id: resolvedOrderId } }) : null;
-    if (!order) {
-      console.warn("[payment/verify] Sipariş bulunamadı, orderId:", resolvedOrderId);
-      return fail("payment_not_found");
-    }
-
-    if (result.amountKurus !== undefined && result.amountKurus !== order.totalKurus) {
-      console.error(
-        `[payment/verify] TUTAR UYUŞMUYOR ${order.reference}: sağlayıcı ${result.amountKurus}, sipariş ${order.totalKurus}`
-      );
-      await prisma.order.update({
-        where: { id: order.id },
-        data: { notes: "DİKKAT: Ödeme tutarı sipariş tutarıyla uyuşmuyor — kontrol edin." },
-      });
-      return NextResponse.redirect(`${appUrl}/siparis/${order.reference}`);
-    }
-
-    const marked = await markOrderPaid(order.id, result.providerRef);
-    if (result.note && marked.outcome !== "not_found") {
-      await prisma.order.update({ where: { id: order.id }, data: { notes: result.note } });
-    }
-    if (marked.outcome === "not_found") return fail("payment_not_found");
-    return NextResponse.redirect(`${appUrl}/siparis/${marked.reference}`);
+    const path = await handleCardCallback({
+      token,
+      attemptHint: searchParams.get("attempt"),
+      orderIdHint: searchParams.get("orderId"),
+    });
+    // 303: POST dönüşünden sonra tarayıcı hedefi GET ile açsın
+    return NextResponse.redirect(`${appUrl}${path}`, 303);
   } catch (err) {
     console.error("[payment/verify]", err);
-    return fail("payment_error");
+    return NextResponse.redirect(`${appUrl}/odeme?error=payment_error`, 303);
   }
 }
 

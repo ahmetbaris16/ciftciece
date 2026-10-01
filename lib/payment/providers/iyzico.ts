@@ -7,21 +7,25 @@
  * iyzico panelinden ayarlanır.
  *
  * Akış: initialize → paymentPageUrl'e yönlendir → iyzico callbackUrl'e `token` POST eder →
- * /api/payment/verify bu token'la sonucu SUNUCUDAN sorgular (retrieve). Callback gövdesine güvenilmez.
+ * sonuç token'la SUNUCUDAN sorgulanır (retrieve). Callback gövdesine ve webhook içeriğine güvenilmez;
+ * karar lib/payment/verify.ts'de verilir.
+ *
+ * Kimlik eşlemesi: basketId = sipariş id, conversationId = ödeme denemesi id (her token ayrı deneme).
  *
  * Kimlik doğrulama: IYZWSv2 (HMAC-SHA256: randomKey + istek yolu + JSON gövde).
- * NOT: Bu dosya iyzico dokümantasyonuna göre yazıldı; sandbox anahtarlarıyla uçtan uca denenmeden
- * canlıya alınmamalı (IYZICO_BASE_URL=https://sandbox-api.iyzipay.com ile test edin).
+ * Kaynak: docs.iyzico.com (CF-Initialize, CF-Retrieve). Sandbox anahtarlarıyla uçtan uca denenmeden
+ * canlıya alınmamalı (IYZICO_BASE_URL=https://sandbox-api.iyzipay.com; docs/IYZICO_SANDBOX_TEST.md).
  */
 
 import { createHmac, randomBytes } from "node:crypto";
+import { kurusToDecimalString } from "../money";
+import { sanitizeProviderResponse } from "../sanitize";
 import type {
   CreatePaymentInput,
   CreatePaymentResult,
   PaymentProvider,
-  VerifyPaymentInput,
-  VerifyPaymentResult,
-  WebhookEvent,
+  RetrievePaymentInput,
+  RetrievePaymentResult,
 } from "../types";
 
 export interface IyzicoConfig {
@@ -43,12 +47,11 @@ export function iyzicoConfigFromEnv(): IyzicoConfig | null {
   };
 }
 
-/** Kuruş → iyzico fiyat metni ("1234.50") */
-export const toIyzicoPrice = (kurus: number) => (kurus / 100).toFixed(2);
-const fromIyzicoPrice = (v: unknown) => Math.round(Number(v) * 100);
+/** Kuruş → iyzico fiyat metni ("1234.50"); tam sayı aritmetiği */
+export const toIyzicoPrice = kurusToDecimalString;
 
-const INITIALIZE_PATH = "/payment/iyzipos/checkoutform/initialize/auth/ecom";
-const RETRIEVE_PATH = "/payment/iyzipos/checkoutform/auth/ecom/detail";
+export const INITIALIZE_PATH = "/payment/iyzipos/checkoutform/initialize/auth/ecom";
+export const RETRIEVE_PATH = "/payment/iyzipos/checkoutform/auth/ecom/detail";
 const INSTALLMENTS = [1, 2, 3, 6, 9, 12];
 
 /** IYZWSv2 yetkilendirme başlıkları */
@@ -58,21 +61,22 @@ export function iyzicoAuthHeaders(config: IyzicoConfig, path: string, body: stri
   return { Authorization: `IYZWSv2 ${auth}`, "x-iyzi-rnd": randomKey };
 }
 
-interface IyzicoResponse {
-  status?: "success" | "failure";
+type IyzicoResponse = Record<string, unknown> & {
+  status?: string;
   errorCode?: string;
   errorMessage?: string;
   token?: string;
+  tokenExpireTime?: number;
   paymentPageUrl?: string;
   checkoutFormContent?: string;
-  paymentStatus?: string;
-  paymentId?: string;
-  price?: number | string;
-  paidPrice?: number | string;
-  basketId?: string;
-  conversationId?: string;
-  fraudStatus?: number;
-}
+};
+
+const asString = (v: unknown): string | undefined =>
+  typeof v === "string" ? v : typeof v === "number" && Number.isFinite(v) ? String(v) : undefined;
+const asInt = (v: unknown): number | undefined => {
+  const n = typeof v === "string" && v.trim() !== "" ? Number(v) : v;
+  return typeof n === "number" && Number.isInteger(n) ? n : undefined;
+};
 
 export class IyzicoProvider implements PaymentProvider {
   readonly name = "iyzico";
@@ -96,7 +100,7 @@ export class IyzicoProvider implements PaymentProvider {
       signal: AbortSignal.timeout(20_000),
     });
     const data = (await res.json().catch(() => null)) as IyzicoResponse | null;
-    if (!data) throw new Error(`iyzico yanıtı okunamadı (HTTP ${res.status})`);
+    if (!data || typeof data !== "object") throw new Error(`iyzico yanıtı okunamadı (HTTP ${res.status})`);
     return data;
   }
 
@@ -129,10 +133,10 @@ export class IyzicoProvider implements PaymentProvider {
     try {
       const res = await this.call(INITIALIZE_PATH, {
         locale: "tr",
-        conversationId: input.orderId,
+        conversationId: input.attemptId,
         price: toIyzicoPrice(input.amountKurus),
         paidPrice: toIyzicoPrice(input.amountKurus),
-        currency: "TRY",
+        currency: input.currency,
         basketId: input.orderId,
         paymentGroup: "PRODUCT",
         callbackUrl: input.callbackUrl,
@@ -155,47 +159,50 @@ export class IyzicoProvider implements PaymentProvider {
         billingAddress: address,
         basketItems,
       });
-      if (res.status !== "success" || !res.token || !res.paymentPageUrl) {
+      if (res.status !== "success" || typeof res.token !== "string" || typeof res.paymentPageUrl !== "string") {
         return { success: false, error: `iyzico: ${res.errorCode ?? "?"} ${res.errorMessage ?? "başlatılamadı"}` };
       }
-      return { success: true, providerRef: res.token, redirectUrl: res.paymentPageUrl };
+      // tokenExpireTime: saniye (iyzico dokümanı: 1800 sn = 30 dk)
+      const ttl = asInt(res.tokenExpireTime);
+      return {
+        success: true,
+        providerRef: res.token,
+        tokenExpiresAt: ttl && ttl > 0 ? new Date(Date.now() + ttl * 1000) : undefined,
+        redirectUrl: res.paymentPageUrl,
+      };
     } catch (err) {
       return { success: false, error: `iyzico isteği başarısız: ${(err as Error).message}` };
     }
   }
 
-  async verifyPayment(input: VerifyPaymentInput): Promise<VerifyPaymentResult> {
-    if (!input.token) return { success: false, error: "token yok" };
+  async retrievePayment(input: RetrievePaymentInput): Promise<RetrievePaymentResult> {
+    if (!input.token) return { ok: false, error: "token yok" };
+    let res: IyzicoResponse;
     try {
-      const res = await this.call(RETRIEVE_PATH, {
+      res = await this.call(RETRIEVE_PATH, {
         locale: "tr",
         ...(input.conversationId ? { conversationId: input.conversationId } : {}),
         token: input.token,
       });
-      if (res.status !== "success") {
-        return { success: false, error: `iyzico: ${res.errorCode ?? "?"} ${res.errorMessage ?? "sorgu başarısız"}` };
-      }
-      if (res.paymentStatus !== "SUCCESS") {
-        return { success: false, orderId: res.basketId, error: `ödeme durumu: ${res.paymentStatus ?? "?"}` };
-      }
-      if (res.fraudStatus === -1) {
-        return { success: false, orderId: res.basketId, error: "iyzico dolandırıcılık kontrolü ödemeyi reddetti" };
-      }
-      return {
-        success: true,
-        // price = sepet tutarı; paidPrice taksit vade farkını içerebilir → sipariş tutarıyla price karşılaştırılır
-        amountKurus: fromIyzicoPrice(res.price),
-        providerRef: res.paymentId,
-        orderId: res.basketId,
-        note: res.fraudStatus === 0 ? "iyzico ödemeyi incelemeye aldı (fraudStatus 0) — kargolamadan önce iyzico panelinden kontrol edin." : undefined,
-      };
     } catch (err) {
-      return { success: false, error: `iyzico sorgusu başarısız: ${(err as Error).message}` };
+      return { ok: false, error: `iyzico sorgusu başarısız: ${(err as Error).message}` };
     }
-  }
-
-  async parseWebhook(): Promise<WebhookEvent | null> {
-    // Ödeme sonucu callback + sunucudan sorgu (verifyPayment) ile işlenir; iyzico webhook'u kullanılmıyor.
-    return null;
+    return {
+      ok: true,
+      apiStatus: asString(res.status) ?? "",
+      errorCode: asString(res.errorCode),
+      errorMessage: asString(res.errorMessage),
+      paymentStatus: asString(res.paymentStatus),
+      paymentId: asString(res.paymentId),
+      basketId: asString(res.basketId),
+      conversationId: asString(res.conversationId),
+      token: asString(res.token),
+      currency: asString(res.currency),
+      price: asString(res.price),
+      paidPrice: asString(res.paidPrice),
+      installment: asInt(res.installment),
+      fraudStatus: asInt(res.fraudStatus),
+      raw: sanitizeProviderResponse(res),
+    };
   }
 }

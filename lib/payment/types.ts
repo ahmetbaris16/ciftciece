@@ -1,12 +1,15 @@
 /**
  * Payment Provider Types
  *
- * Ödeme sağlayıcı abstraction — iyzico, PayTR veya başka bir provider
- * bu interface'i implement eder.
+ * Ödeme sağlayıcı soyutlaması. Sağlayıcı yalnız HTTP konuşur ve yanıtı normalize eder;
+ * "ödendi mi, tutar doğru mu" kararı lib/payment/verify.ts'de, kayıt lib/payment/apply.ts'de verilir.
  */
 
 export interface CreatePaymentInput {
+  /** Sipariş kimliği — sağlayıcıda sepet no (iyzico basketId) */
   orderId: string;
+  /** Ödeme denemesi kimliği — sağlayıcıda conversationId */
+  attemptId: string;
   orderReference: string;
   amountKurus: number;
   currency: string;
@@ -34,47 +37,59 @@ export interface CreatePaymentInput {
 
 export interface CreatePaymentResult {
   success: boolean;
-  /** Provider'ın kendi ödeme referansı */
+  /** Ödeme formu token'ı (iyzico) */
   providerRef?: string;
-  /** 3D Secure veya checkout form redirect URL */
+  /** Token'ın geçerlilik sonu (sağlayıcı bildirdiyse) */
+  tokenExpiresAt?: Date;
+  /** Ödeme sayfası adresi */
   redirectUrl?: string;
   /** Checkout form HTML content (bazı provider'lar inline form verir) */
   checkoutFormHtml?: string;
-  /** Hata mesajı */
+  /** Hata mesajı (müşteriye gösterilmez) */
   error?: string;
-}
-
-export interface VerifyPaymentInput {
-  /** Provider'dan gelen callback/token */
-  token: string;
-  /** Conversation ID veya benzeri provider referansı */
-  conversationId?: string;
-}
-
-export interface VerifyPaymentResult {
-  success: boolean;
-  /** Provider'ın onayladığı tutar (kuruş) */
-  amountKurus?: number;
-  /** Provider'ın kendi referansı */
-  providerRef?: string;
-  /** Sağlayıcının bildirdiği sipariş kimliği (sepet no) — callback'teki orderId ile karşılaştırılır */
-  orderId?: string;
-  /** Admin'e not (ör. sağlayıcı dolandırıcılık incelemesinde) */
-  note?: string;
-  error?: string;
-}
-
-export interface WebhookEvent {
-  eventType: string;
-  providerEventId?: string;
-  payload: Record<string, unknown>;
-  orderId?: string;
-  status?: "SUCCESS" | "FAILED" | "REFUNDED";
-  amountKurus?: number;
 }
 
 /**
- * Tüm ödeme provider'ları bu interface'i implement eder.
+ * Sağlayıcıdan sunucu tarafında sorgulanan ödeme durumu. Alanlar sağlayıcının bildirdiği gibidir
+ * (tutarlar ondalık metin); doğrulama yapılmamıştır.
+ */
+export type RetrievePaymentResult =
+  | {
+      /** Sağlayıcıya ulaşılamadı ya da yanıt okunamadı: ödeme durumu BİLİNMİYOR */
+      ok: false;
+      error: string;
+    }
+  | {
+      ok: true;
+      /** API çağrısının sonucu ("success" | "failure") — ödemenin değil */
+      apiStatus: string;
+      errorCode?: string;
+      errorMessage?: string;
+      /** Ödemenin sonucu: "SUCCESS", "FAILURE", "INIT_THREEDS", ... */
+      paymentStatus?: string;
+      paymentId?: string;
+      basketId?: string;
+      conversationId?: string;
+      token?: string;
+      currency?: string;
+      /** Sepet tutarı (ondalık metin) */
+      price?: string;
+      /** Çekilen toplam (ondalık metin; taksit vade farkı dahil olabilir) */
+      paidPrice?: string;
+      installment?: number;
+      /** iyzico: 1 onaylı, 0 incelemede, -1 reddedildi */
+      fraudStatus?: number;
+      /** Kayda yazılacak süzülmüş yanıt (kart verisi yok) */
+      raw: Record<string, unknown>;
+    };
+
+export interface RetrievePaymentInput {
+  token: string;
+  conversationId?: string;
+}
+
+/**
+ * Tüm ödeme sağlayıcıları bu arayüzü uygular.
  */
 export interface PaymentProvider {
   readonly name: string;
@@ -82,9 +97,6 @@ export interface PaymentProvider {
   /** Ödeme başlat — redirect URL veya checkout form döner */
   createPayment(input: CreatePaymentInput): Promise<CreatePaymentResult>;
 
-  /** 3DS/callback sonrası ödeme doğrula */
-  verifyPayment(input: VerifyPaymentInput): Promise<VerifyPaymentResult>;
-
-  /** Webhook payload'ını parse et */
-  parseWebhook(rawBody: string, headers: Record<string, string>): Promise<WebhookEvent | null>;
+  /** Ödemenin güncel durumunu sağlayıcıdan sorgula (callback/webhook/elle sorgu ortak) */
+  retrievePayment(input: RetrievePaymentInput): Promise<RetrievePaymentResult>;
 }

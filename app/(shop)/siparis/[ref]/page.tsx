@@ -45,6 +45,7 @@ const STATUS_COPY: Record<string, { title: string; message: string }> = {
 
 interface Props {
   params: Promise<{ ref: string }>;
+  searchParams: Promise<{ odeme?: string | string[] }>;
 }
 
 export const metadata: Metadata = {
@@ -52,8 +53,9 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default async function SiparisOnayPage({ params }: Props) {
+export default async function SiparisOnayPage({ params, searchParams }: Props) {
   const { ref } = await params;
+  const { odeme } = await searchParams;
 
   // DB'den siparişi çek
   const order = await getOrderByReference(ref);
@@ -76,13 +78,25 @@ export default async function SiparisOnayPage({ params }: Props) {
   )}`;
   const recipientPays = addressInfo?.shippingMode === "recipient";
   const copy = STATUS_COPY[order.status];
+  // Kart dönüşünde sonuç sağlayıcıdan doğrulanamadıysa (ya da ödeme incelemedeyse) müşteri tekrar ödemesin
+  const cardPending = order.status === "PENDING" && order.paymentMethod === "CARD";
+  const reviewing = cardPending && order.needsAttention;
+  const verifying = cardPending && !reviewing && odeme === "dogrulaniyor";
 
-  const title = awaitingTransfer
+  const title = reviewing
+    ? "Ödemeniz kontrol ediliyor"
+    : verifying
+      ? "Ödemeniz doğrulanıyor"
+      : awaitingTransfer
     ? "Siparişiniz alındı — ödemeniz bekleniyor"
     : isPaid
       ? "Siparişiniz alındı"
       : copy?.title ?? "Sipariş durumu";
-  const message = awaitingTransfer
+  const message = reviewing
+    ? `Ödemenizle ilgili bir kontrol yapıyoruz. Lütfen tekrar ödeme yapmayın; size ulaşacağız. Sorunuz için: ${STORE.contact.phoneFormatted}`
+    : verifying
+      ? `Ödeme sonucunuzu ödeme kuruluşundan teyit ediyoruz. Lütfen tekrar ödeme yapmayın; birkaç dakika sonra bu sayfayı yenileyin. Sorunuz için: ${STORE.contact.phoneFormatted}`
+      : awaitingTransfer
     ? `Siparişinizi ayırdık. Aşağıdaki hesaba ${formatPrice(order.totalKurus)} gönderin; açıklamaya sipariş numaranızı yazın. Ödemeniz hesabımıza geçince siparişiniz hazırlanır.`
     : isCod && isPaid
       ? `Siparişiniz kesinleşti ve hazırlanıyor. Ödemeyi (${formatPrice(order.totalKurus)}) teslimatta kargo görevlisine yapacaksınız. Kargoya verildiğinde telefonunuza bilgi gelecek.`
@@ -164,7 +178,7 @@ export default async function SiparisOnayPage({ params }: Props) {
             </section>
           )}
 
-          {order.status === "PENDING" && order.paymentMethod === "CARD" && (
+          {cardPending && !reviewing && !verifying && (
             <p>
               <Link href="/odeme" className={styles.continueBtn}>Ödemeye dön</Link>
             </p>

@@ -8,6 +8,8 @@
 import { prisma } from "@/lib/db/prisma";
 import type { Order, OrderStatus, PaymentMethod, ShippingAddress } from "@/types";
 import type { Prisma } from "@prisma/client";
+import { recordPaymentEvent } from "@/lib/payment/events";
+import { recordCashOnDeliveryCollected } from "@/lib/payment/offline";
 
 const USE_DB = !!process.env.DATABASE_URL;
 
@@ -38,6 +40,7 @@ function toOrder(o: DbOrderWithItems): Order {
     paymentFeeKurus: o.paymentFeeKurus,
     paymentDueAt: o.paymentDueAt,
     notes: o.notes,
+    needsAttention: o.needsAttention,
     createdAt: o.createdAt,
   };
 }
@@ -77,7 +80,7 @@ interface CreateOrderInput {
    * para teslimatta alınır).
    */
   initialStatus: "PENDING" | "PROCESSING";
-  /** Havale/kapıda ödemede sağlayıcısız ödeme kaydı ("havale" / "kapida") — kart için ödeme başlatılınca açılır */
+  /** Havale/kapıda ödemede sağlayıcısız ödeme denemesi ("havale" / "kapida") — kartta deneme ödeme başlatılınca açılır */
   offlinePaymentProvider?: "havale" | "kapida";
 }
 
@@ -132,8 +135,13 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
         paymentFeeKurus: input.paymentFeeKurus ?? 0,
         paymentDueAt: input.paymentDueAt,
         ...(input.offlinePaymentProvider && {
-          payment: {
-            create: { provider: input.offlinePaymentProvider, status: "PENDING", amountKurus: totalKurus },
+          paymentAttempts: {
+            create: {
+              provider: input.offlinePaymentProvider,
+              method: input.paymentMethod,
+              amountKurus: totalKurus,
+              currency: "TRY",
+            },
           },
         }),
         items: {
@@ -210,11 +218,12 @@ export async function getOrdersForAdmin(options?: {
  */
 export async function updateOrderStatus(
   orderId: string,
-  newStatus: OrderStatus
+  newStatus: OrderStatus,
+  actorId: string | null = null
 ): Promise<Order | null> {
   if (!USE_DB) return null;
 
-  // Geçerli durum geçişleri (PENDING → PAID yalnız markOrderPaid ile: ödeme kaydı da güncellenir)
+  // Geçerli durum geçişleri (PENDING → PAID yalnız ödeme kaydıyla: confirmBankTransferPayment / applyProviderResult)
   const VALID_TRANSITIONS: Record<string, string[]> = {
     PENDING: ["PAID", "CANCELLED"],
     PAID: ["PROCESSING", "CANCELLED", "REFUNDED"],
@@ -243,11 +252,23 @@ export async function updateOrderStatus(
     if (count !== 1) throw new Error("Sipariş durumu bu sırada değişti, sayfayı yenileyin.");
     if (newStatus === "CANCELLED") {
       await restoreStock(tx, orderId);
+      // Ödenmemiş denemeler kapanır; başarılı ödeme kaydına dokunulmaz (iade ayrı kayıt, Oturum 5)
+      const expired = await expireOpenAttempts(tx, orderId);
       await tx.payment.updateMany({ where: { orderId, status: "PENDING" }, data: { status: "FAILED" } });
+      if (expired > 0) {
+        await recordPaymentEvent(tx, {
+          source: "ADMIN",
+          eventType: "attempts.expired",
+          orderId,
+          actorId,
+          outcome: "order_cancelled",
+          payload: { previousStatus: order.status, expiredAttempts: expired },
+        });
+      }
     }
     // Kapıda ödeme: teslim edildiğinde para kargo görevlisine ödenmiştir
     if (newStatus === "DELIVERED" && order.paymentMethod === "CASH_ON_DELIVERY") {
-      await tx.payment.updateMany({ where: { orderId, status: "PENDING" }, data: { status: "SUCCESS" } });
+      await recordCashOnDeliveryCollected(tx, order, actorId);
     }
     return tx.order.findUniqueOrThrow({ where: { id: orderId }, include: { items: true } });
   });
@@ -256,7 +277,7 @@ export async function updateOrderStatus(
 }
 
 // ============================================================
-// Stok iadesi, süresi dolan siparişler ve ödeme onayı
+// Stok iadesi ve süresi dolan siparişler
 // ============================================================
 
 /** Kartla ödenmemiş (PENDING) sipariş stoğu bu süre kadar ayırır; sonra iptal edilip stok iade edilir. */
@@ -267,9 +288,12 @@ export const PENDING_ORDER_TTL_MINUTES = Math.max(
 
 type Tx = Prisma.TransactionClient;
 
-/** Siparişin kalemlerindeki adetleri stoğa geri ekler (aynı transaction içinde çağrılmalı). */
+/**
+ * Siparişin kalemlerindeki adetleri stoğa geri ekler (aynı transaction içinde çağrılmalı).
+ * Satırlar variantId sırasıyla güncellenir: kilit sırası her yerde aynı olsun (deadlock olmasın).
+ */
 async function restoreStock(tx: Tx, orderId: string) {
-  const items = await tx.orderItem.findMany({ where: { orderId } });
+  const items = await tx.orderItem.findMany({ where: { orderId }, orderBy: { variantId: "asc" } });
   for (const item of items) {
     await tx.inventory.updateMany({
       where: { variantId: item.variantId },
@@ -278,13 +302,26 @@ async function restoreStock(tx: Tx, orderId: string) {
   }
 }
 
+/** Ödenmemiş (INITIATED) denemeleri kapatır; sonradan ödeme gelirse geç ödeme olarak değerlendirilir. */
+async function expireOpenAttempts(tx: Tx, orderId: string): Promise<number> {
+  const { count } = await tx.paymentAttempt.updateMany({
+    where: { orderId, status: "INITIATED" },
+    data: { status: "EXPIRED" },
+  });
+  return count;
+}
+
 /**
  * Süresi dolan PENDING siparişleri iptal eder ve stoklarını iade eder.
- * Son ödeme zamanı siparişte (paymentDueAt): kart ~1 sa, havale ödeme ayarındaki süre (varsayılan 48 sa).
+ * Son ödeme zamanı siparişte (paymentDueAt): kart ve havale için checkout'ta belirlenir.
  * paymentDueAt'i olmayan eski siparişlerde oluşturulma + PENDING_ORDER_TTL_MINUTES kullanılır.
  * Cron gerektirmez: checkout ve admin sipariş listesi her açıldığında çağrılır.
+ *
+ * İptal EDİLMEYENLER:
+ *  - NEEDS_ATTENTION işaretli sipariş (ödeme tarafında insan kararı bekleniyor),
+ *  - işlenmemiş ödeme bildirimi (webhook gelen kutusunda RECEIVED/FAILED) olan sipariş.
  * Durum geçişi koşullu (PENDING → CANCELLED) yapıldığı için eşzamanlı çağrılarda
- * aynı sipariş iki kez iade edilmez.
+ * aynı sipariş iki kez iade edilmez. Sipariş notuna yazılmaz; olay payment_events'e düşer.
  */
 export async function releaseExpiredOrders(now = new Date()): Promise<number> {
   if (!USE_DB) return 0;
@@ -292,102 +329,36 @@ export async function releaseExpiredOrders(now = new Date()): Promise<number> {
   const expired = await prisma.order.findMany({
     where: {
       status: "PENDING",
+      needsAttention: false,
       OR: [{ paymentDueAt: { lt: now } }, { paymentDueAt: null, createdAt: { lt: cutoff } }],
+      paymentEvents: { none: { source: "WEBHOOK", status: { in: ["RECEIVED", "FAILED"] } } },
     },
-    select: { id: true, paymentMethod: true },
+    select: { id: true, paymentMethod: true, paymentDueAt: true },
     take: 100,
   });
 
   let released = 0;
-  for (const { id, paymentMethod } of expired) {
+  for (const { id, paymentMethod, paymentDueAt } of expired) {
     const done = await prisma.$transaction(async (tx) => {
       const { count } = await tx.order.updateMany({
-        where: { id, status: "PENDING" },
-        data: {
-          status: "CANCELLED",
-          notes:
-            paymentMethod === "BANK_TRANSFER"
-              ? "Havale/EFT ödemesi süresinde gelmedi — otomatik iptal, stok iade edildi."
-              : "Kart ödemesi süresinde tamamlanmadı — otomatik iptal, stok iade edildi.",
-        },
+        where: { id, status: "PENDING", needsAttention: false },
+        data: { status: "CANCELLED" },
       });
       if (count !== 1) return false; // başka bir istek zaten işledi
       await restoreStock(tx, id);
+      const expiredAttempts = await expireOpenAttempts(tx, id);
       await tx.payment.updateMany({ where: { orderId: id, status: "PENDING" }, data: { status: "FAILED" } });
+      await recordPaymentEvent(tx, {
+        source: "SYSTEM",
+        eventType: "order.expired",
+        orderId: id,
+        outcome: "cancelled_stock_released",
+        payload: { paymentMethod, paymentDueAt: paymentDueAt?.toISOString() ?? null, expiredAttempts },
+      });
       return true;
     });
     if (done) released++;
   }
   if (released > 0) console.info(`[orders] ${released} süresi dolan sipariş iptal edildi, stok iade edildi.`);
   return released;
-}
-
-export type MarkPaidResult =
-  | { outcome: "paid" | "already_paid"; reference: string }
-  | { outcome: "needs_review"; reference: string; reason: string }
-  | { outcome: "not_found" };
-
-/**
- * Sağlayıcının DOĞRULADIĞI ödemeyi siparişe işler (verify callback + webhook ortak).
- * - PENDING → PAID (koşullu, idempotent)
- * - Süresi dolup iptal edilmiş siparişe geç gelen ödeme: stok yeniden ayrılabiliyorsa
- *   sipariş PAID yapılır; ayrılamıyorsa CANCELLED kalır ve admin incelemesi için loglanır
- *   (para alınmış olabilir → iade gerekir).
- */
-export async function markOrderPaid(orderId: string, providerRef?: string | null): Promise<MarkPaidResult> {
-  return prisma.$transaction(async (tx) => {
-    const order = await tx.order.findUnique({ where: { id: orderId }, include: { items: true } });
-    if (!order) return { outcome: "not_found" } as const;
-
-    await tx.payment.updateMany({
-      where: { orderId },
-      data: { status: "SUCCESS", ...(providerRef ? { providerRef } : {}) },
-    });
-
-    if (order.status !== "PENDING" && order.status !== "CANCELLED") {
-      return { outcome: "already_paid", reference: order.reference } as const;
-    }
-
-    if (order.status === "CANCELLED") {
-      // Stok yeniden ayrılabiliyor mu? (hepsi ya da hiçbiri)
-      for (const item of order.items) {
-        const { count } = await tx.inventory.updateMany({
-          where: { variantId: item.variantId, quantity: { gte: item.quantity } },
-          data: { quantity: { decrement: item.quantity } },
-        });
-        if (count !== 1) {
-          throw new PaymentAfterCancelError(order.reference);
-        }
-      }
-    }
-
-    await tx.order.update({
-      where: { id: orderId },
-      data: {
-        status: "PAID",
-        ...(order.status === "CANCELLED"
-          ? { notes: "Süresi dolduktan sonra ödeme alındı — stok yeniden ayrıldı." }
-          : {}),
-      },
-    });
-    return { outcome: "paid", reference: order.reference } as const;
-  }).catch(async (err) => {
-    if (err instanceof PaymentAfterCancelError) {
-      // Transaction geri alındı; ödeme kaydını ve incelemeyi ayrıca işaretle
-      await prisma.payment.updateMany({ where: { orderId }, data: { status: "SUCCESS" } });
-      await prisma.order.update({
-        where: { id: orderId },
-        data: { notes: "DİKKAT: İptal edilmiş siparişe ödeme geldi, stok yetersiz — müşteriye iade/iletişim gerekli." },
-      });
-      console.error(`[orders] İptal edilmiş siparişe ödeme geldi, stok yok: ${err.reference}`);
-      return { outcome: "needs_review", reference: err.reference, reason: "stock" } as const;
-    }
-    throw err;
-  });
-}
-
-class PaymentAfterCancelError extends Error {
-  constructor(public readonly reference: string) {
-    super("payment after cancel");
-  }
 }

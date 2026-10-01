@@ -83,6 +83,17 @@ export default async function AdminSiparislerPage() {
                       }}>
                         {status.label}
                       </span>
+                      {order.needsAttention && (
+                        <span
+                          title="Ödeme tarafında karar gerekiyor — detaya bakın"
+                          style={{
+                            marginLeft: "0.375rem", padding: "0.125rem 0.5rem", borderRadius: "4px",
+                            fontSize: "0.75rem", fontWeight: 700, background: "#fb923c30", color: "#fb923c",
+                          }}
+                        >
+                          Dikkat
+                        </span>
+                      )}
                     </td>
                     <td style={{ padding: "0.75rem", fontSize: "0.8125rem", color: "rgba(232,228,217,0.4)" }}>
                       {new Date(order.createdAt).toLocaleDateString("tr-TR")}

@@ -30,7 +30,6 @@ export {
   getOrdersForAdmin,
   updateOrderStatus,
   releaseExpiredOrders,
-  markOrderPaid,
 } from "./order.repository";
 
 export {

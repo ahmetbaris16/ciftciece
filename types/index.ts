@@ -155,7 +155,10 @@ export interface Order {
   paymentFeeKurus: number;
   /** Bu andan sonra ödenmemişse otomatik iptal (kapıda ödemede yok) */
   paymentDueAt: Date | null;
+  /** Yalnız eski kayıt / insan notu — kod artık yazmaz */
   notes?: string | null;
+  /** NEEDS_ATTENTION: ödeme tarafında insan kararı gerekiyor (ayrıntı payment_alerts) */
+  needsAttention: boolean;
   createdAt: Date;
 }
 

@@ -189,7 +189,15 @@ model Order {
   paymentFeeKurus Int         @default(0)
   // Ödenmezse bu andan sonra otomatik iptal + stok iadesi (kart: ~1 sa, havale: ayardaki süre; kapıda ödeme: yok)
   paymentDueAt    DateTime?
+  // Yalnız eski kayıtlar ve insan notu. Kod artık buraya yazmaz: ödeme olayları payment_events'te,
+  // uyarılar payment_alerts'ta.
   notes           String?
+  // NEEDS_ATTENTION: ödeme tarafında insan kararı gereken durum (tutar uyuşmazlığı, çift ödeme, geç ödeme...).
+  // Sebep ve ayrıntı payment_alerts'ta. İşaretli sipariş otomatik iptal edilmez.
+  needsAttention  Boolean     @default(false)
+  paymentAttempts PaymentAttempt[]
+  paymentEvents   PaymentEvent[]
+  paymentAlerts   PaymentAlert[]
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
@@ -231,6 +239,8 @@ model OrderItem {
 // ÖDEME
 // ============================================================
 
+// ESKİ: sipariş başına tek satırlık ödeme kaydı. Yeni kod bu tabloya yazmaz (yalnız eski siparişlerin
+// satırını kapatır); ödemeler payment_attempts'tadır. Eski kayıtlar korunur, tablo silinmez.
 model Payment {
   id            String        @id @default(cuid())
   orderId       String        @unique
@@ -258,17 +268,138 @@ enum PaymentStatus {
   REFUNDED
 }
 
-model PaymentEvent {
-  id          String   @id @default(cuid())
-  paymentId   String
-  payment     Payment  @relation(fields: [paymentId], references: [id])
-  // Idempotency: aynı provider event ID'si tekrar işlenmez
-  providerEventId String? @unique
-  eventType   String   // "payment.success", "payment.failed", "refund.success"
-  payload     Json
-  processedAt DateTime @default(now())
+// Ödeme denemesi: kartta her iyzico ödeme formu (token) ayrı bir denemedir; havale ve kapıda ödemede
+// sipariş başına bir deneme açılır. Satırın üzerine yeni deneme yazılmaz.
+// Bir siparişte en fazla BİR başarılı deneme olabilir: successOrderId yalnız SUCCEEDED iken orderId'ye
+// eşittir (CHECK kısıtı, migration'da) ve UNIQUE'tir. İkinci doğrulanmış ödeme DUPLICATE olur.
+model PaymentAttempt {
+  id                 String               @id @default(cuid())
+  orderId            String
+  order              Order                @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  provider           String               // "iyzico" | "stub" | "havale" | "kapida"
+  method             PaymentMethod
+  status             PaymentAttemptStatus @default(INITIATED)
+  // Beklenen tutar: deneme açıldığı andaki sipariş toplamı (kuruş)
+  amountKurus        Int
+  currency           String               @default("TRY")
+  // Sağlayıcıya giden conversationId (= bu denemenin id'si)
+  conversationId     String?
+  // iyzico Ortak Ödeme Formu token'ı ve geçerlilik sonu
+  providerToken      String?
+  tokenExpiresAt     DateTime?
+  providerPaymentId  String?
+  // Sağlayıcının bildirdiği sepet tutarı (iyzico price, kuruş)
+  paidAmountKurus    Int?
+  // Karttan çekilen toplam (iyzico paidPrice: taksit vade farkı dahil olabilir, kuruş)
+  chargedAmountKurus Int?
+  paidCurrency       String?
+  installment        Int?
+  fraudStatus        Int?
+  failureReason      String?
+  successOrderId     String?              @unique
+  verifiedAt         DateTime?
+  events             PaymentEvent[]
+  alerts             PaymentAlert[]
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
 
+  @@unique([provider, providerToken])
+  @@unique([provider, providerPaymentId])
+  @@index([orderId])
+  @@map("payment_attempts")
+}
+
+enum PaymentAttemptStatus {
+  INITIATED // Deneme açıldı (kart: ödeme formu verildi; havale/kapıda: ödeme bekleniyor)
+  SUCCEEDED // Doğrulanmış ödeme — siparişte en fazla bir tane
+  FAILED    // Sağlayıcı ödemenin gerçekleşmediğini bildirdi
+  MISMATCH  // Sağlayıcı "başarılı" dedi ama doğrulama tutmadı — para çekilmiş olabilir, insan bakar
+  DUPLICATE // Doğrulanmış ödeme ama siparişin başka başarılı ödemesi var — iade gerekir
+  EXPIRED   // Sipariş ödenmeden kapandı; sonradan ödeme gelirse yeniden değerlendirilir
+}
+
+// Ödeme olayları: sağlayıcı bildirimleri (webhook gelen kutusu), tarayıcı dönüşleri, sunucudan
+// sorgular, admin işlemleri ve otomatik işler. Yalnız eklenir; sipariş notunun yerini alır.
+// Tekrar koruması: (provider, eventKey) UNIQUE.
+model PaymentEvent {
+  id              String   @id @default(cuid())
+  // ESKİ bağlantı (payments) — yeni kayıtlarda boş
+  paymentId       String?
+  payment         Payment? @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  // ESKİ tekrar alanı — yeni kayıtlar (provider, eventKey) kullanır
+  providerEventId String?  @unique
+  eventType       String
+  // Kart verisi içermez; sağlayıcı yanıtı izinli alanlarla süzülerek yazılır
+  payload         Json
+  // Kayıt zamanı (eski adıyla). Gelen kutusu olayının işlendiği an: handledAt
+  processedAt     DateTime @default(now())
+  provider        String?
+  eventKey        String?
+  source          PaymentEventSource?
+  status          PaymentEventStatus @default(RECORDED)
+  signatureValid  Boolean?
+  orderId         String?
+  order           Order?          @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  attemptId       String?
+  attempt         PaymentAttempt? @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+  // İşlemi yapan admin kullanıcısı (elle sorgu, havale onayı)
+  actorId         String?
+  // İşlemenin sonucu (örn. "paid", "duplicate", "mismatch")
+  outcome         String?
+  error           String?
+  handledAt       DateTime?
+  alerts          PaymentAlert[]
+
+  @@unique([provider, eventKey])
+  @@index([orderId])
+  @@index([attemptId])
+  @@index([status])
   @@map("payment_events")
+}
+
+enum PaymentEventSource {
+  WEBHOOK  // Sağlayıcı bildirimi (gelen kutusu)
+  CALLBACK // Müşteri tarayıcısıyla gelen dönüş — kanıt değil, yalnız tetikleyici
+  QUERY    // Sağlayıcıya sunucudan otomatik sorgu
+  MANUAL   // Admin "iyzico'dan sorgula"
+  ADMIN    // Admin işlemi (havale onayı, iptal)
+  SYSTEM   // Otomatik iş (süre dolumu)
+}
+
+enum PaymentEventStatus {
+  RECEIVED  // Gelen kutusunda, işlenmeyi bekliyor
+  PROCESSED // İşlendi
+  IGNORED   // İşlenecek bir şey yok (bilinmeyen deneme, ara durum)
+  FAILED    // İşlenirken hata — yeniden denenebilir
+  REJECTED  // İmza doğrulanamadı — işlenmez
+  RECORDED  // İç kayıt (bilgi)
+}
+
+// Ödeme alarmları: insan kararı gereken durumlar. Siparişi NEEDS_ATTENTION yapar.
+// Bildirim kanalı (e-posta/Telegram vb.) ayrı karar (Oturum 6); burada kalıcı kayıt tutulur.
+model PaymentAlert {
+  id         String          @id @default(cuid())
+  // PAYMENT_MISMATCH | DUPLICATE_PAYMENT | LATE_PAYMENT | LATE_PAYMENT_NO_STOCK |
+  // PAYMENT_ON_CLOSED_ORDER | FRAUD_REVIEW | WEBHOOK_SIGNATURE_INVALID (lib/payment/alerts.ts)
+  kind       String
+  orderId    String?
+  order      Order?          @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  attemptId  String?
+  attempt    PaymentAttempt? @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+  eventId    String?
+  event      PaymentEvent?   @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  // Admin'e gösterilen kısa Türkçe açıklama (kişisel veri yok)
+  message    String
+  details    Json?
+  // Aynı durum için ikinci alarm üretilmez
+  dedupeKey  String          @unique
+  createdAt  DateTime        @default(now())
+  resolvedAt DateTime?
+  resolvedBy String?
+
+  @@index([orderId])
+  @@index([kind, resolvedAt])
+  @@map("payment_alerts")
 }
 
 // ============================================================
