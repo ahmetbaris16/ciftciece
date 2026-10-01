@@ -248,7 +248,10 @@ function OdemeContent() {
       // Ödeme başarısız dönerse müşteri sepetini kaybetmez.
       setPendingOrder(null);
 
-      if (paymentData?.redirectUrl) {
+      if (paymentData?.form?.action && paymentData.form.fields) {
+        // Banka ortak ödeme sayfası: imzalı alanlar POST edilir (kart bilgisi bankanın sayfasında girilir)
+        submitPaymentForm(paymentData.form as { action: string; fields: Record<string, string> });
+      } else if (paymentData?.redirectUrl) {
         window.location.href = paymentData.redirectUrl;
       } else if (paymentData?.checkoutFormHtml) {
         const win = window.open("", "_blank");
@@ -817,6 +820,23 @@ function OdemeContent() {
       </div>
     </div>
   );
+}
+
+/** Bankanın ödeme sayfasına gizli form gönderimi (tarayıcı yönlendirmesi; alanlar sunucuda imzalandı) */
+function submitPaymentForm(form: { action: string; fields: Record<string, string> }) {
+  const el = document.createElement("form");
+  el.method = "POST";
+  el.action = form.action;
+  el.style.display = "none";
+  for (const [name, value] of Object.entries(form.fields)) {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = name;
+    input.value = value;
+    el.appendChild(input);
+  }
+  document.body.appendChild(el);
+  el.submit();
 }
 
 // ── Icon Helpers ────────────────────────────────────────────

@@ -214,7 +214,7 @@ export async function applyProviderResult(input: ApplyInput): Promise<ApplyResul
             alerts.push({
               kind: "FRAUD_REVIEW",
               dedupeKey: `FRAUD_REVIEW:${attempt.id}`,
-              message: "iyzico ödemeyi incelemeye aldı (fraudStatus 0). iyzico panelinde sonuç netleşmeden kargolamayın.",
+              message: "Ödeme kuruluşu ödemeyi incelemeye aldı (fraudStatus 0). Kuruluşun panelinde sonuç netleşmeden kargolamayın.",
             });
           }
         }
@@ -228,7 +228,7 @@ export async function applyProviderResult(input: ApplyInput): Promise<ApplyResul
         alerts.push({
           kind: "PAYMENT_MISMATCH",
           dedupeKey: `PAYMENT_MISMATCH:${attempt.id}`,
-          message: `Sağlayıcı ödemeyi başarılı bildirdi ama doğrulama tutmadı: ${c.reasons.join("; ")}. Sipariş "Ödendi" yapılmadı; iyzico panelinden kontrol edin.`,
+          message: `Sağlayıcı ödemeyi başarılı bildirdi ama doğrulama tutmadı: ${c.reasons.join("; ")}. Sipariş "Ödendi" yapılmadı; ödeme kuruluşunun (banka) panelinden kontrol edin.`,
           details: { reasons: c.reasons },
         });
       } else if (c.kind === "failed") {

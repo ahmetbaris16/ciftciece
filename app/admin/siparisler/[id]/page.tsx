@@ -13,6 +13,7 @@ import ReconcileButton from "@/components/admin/ReconcileButton";
 import { formatPrice, type Order } from "@/types";
 import { prisma } from "@/lib/db/prisma";
 import { PAYMENT_METHOD_LABELS } from "@/lib/payment/methods";
+import { PROVIDER_LABELS, isTestProvider } from "@/lib/payment/provider";
 import { ALERT_TITLES, type PaymentAlertKind } from "@/lib/payment/alerts";
 import { LEGAL_DOCUMENTS, type LegalDocumentId } from "@/lib/legal/documents";
 
@@ -37,7 +38,7 @@ const ATTEMPT_STATUS_TR: Record<string, { label: string; color: string }> = {
   EXPIRED: { label: "Süresi doldu", color: "rgba(232,228,217,0.5)" },
 };
 
-const PROVIDER_TR: Record<string, string> = { iyzico: "iyzico", stub: "Test (stub)", havale: "Havale/EFT", kapida: "Kapıda ödeme" };
+const PROVIDER_TR = PROVIDER_LABELS;
 
 const SOURCE_TR: Record<string, string> = {
   WEBHOOK: "Bildirim (webhook)",
@@ -94,7 +95,7 @@ export default async function AdminSiparisDetay({ params }: Props) {
           <div style={styles.attention} role="alert">
             <h2 style={{ ...styles.sectionTitle, color: "#fb923c" }}>Dikkat — ödeme tarafında karar gerekiyor</h2>
             <p style={{ ...styles.textLight, marginBottom: "0.5rem" }}>
-              Bu sipariş otomatik iptal edilmez. Para hareketi (iade vb.) otomatik yapılmaz; iyzico panelinden kontrol edin.
+              Bu sipariş otomatik iptal edilmez. Para hareketi (iade vb.) otomatik yapılmaz; ödeme kuruluşunun (banka) panelinden kontrol edin.
             </p>
             {openAlerts.length === 0 && <p style={styles.text}>Açık alarm kaydı yok.</p>}
             {openAlerts.map((a) => (
@@ -121,6 +122,15 @@ export default async function AdminSiparisDetay({ params }: Props) {
             </p>
           )}
         </div>
+
+        {attempts.some((a) => a.status === "SUCCEEDED" && isTestProvider(a.provider)) && (
+          <div style={styles.attention} role="alert">
+            <h2 style={{ ...styles.sectionTitle, color: "#fb923c" }}>TEST ÖDEMESİ — gerçek para alınmadı</h2>
+            <p style={styles.textLight}>
+              Bu sipariş bankanın test ortamında ödendi. Kargolamayın; denemeyse iptal edin (iade kaydında “Diğer”, sebep: test).
+            </p>
+          </div>
+        )}
 
         <div style={styles.card}>
           <h2 style={styles.sectionTitle}>Ödeme</h2>
@@ -180,7 +190,13 @@ export default async function AdminSiparisDetay({ params }: Props) {
           {order.paymentMethod === "CARD" && (
             <ReconcileButton
               orderId={order.id}
-              label={(process.env.PAYMENT_PROVIDER ?? "stub") === "iyzico" ? "iyzico'dan sorgula" : "Ödeme sağlayıcısından sorgula"}
+              label={
+                process.env.PAYMENT_PROVIDER === "akbank"
+                  ? "Akbank'tan sorgula"
+                  : process.env.PAYMENT_PROVIDER === "iyzico"
+                    ? "iyzico'dan sorgula"
+                    : "Ödeme sağlayıcısından sorgula"
+              }
             />
           )}
         </div>

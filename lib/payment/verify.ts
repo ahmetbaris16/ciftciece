@@ -114,7 +114,7 @@ export function classifyRetrieve(res: RetrievedOk, ctx: ClassifyContext): Classi
 
   if (res.paymentStatus === "SUCCESS") {
     if (res.fraudStatus === -1) {
-      return { kind: "failed", data, reason: "iyzico dolandırıcılık kontrolü ödemeyi reddetti (fraudStatus -1)" };
+      return { kind: "failed", data, reason: "ödeme kuruluşunun dolandırıcılık kontrolü ödemeyi reddetti (fraudStatus -1)" };
     }
     const reasons = successMismatches(res, data, ctx);
     if (reasons.length > 0) return { kind: "mismatch", data, reasons };
@@ -220,6 +220,7 @@ export async function verifyAttempt(attemptId: string, opts: VerifyOptions): Pro
   const res = await provider.retrievePayment({
     token: attempt.providerToken,
     conversationId: attempt.conversationId ?? undefined,
+    orderId: attempt.orderId,
   });
   if (!res.ok) return unverified(res.error);
 

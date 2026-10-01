@@ -2,13 +2,21 @@
 
 /**
  * Admin — Ödeme yöntemleri
- *  - Kart (iyzico): açık/kapalı + en yüksek taksit. Anahtarlar sunucu ortam değişkenlerinde; burada yalnız durum.
+ *  - Kart (Akbank Sanal POS): açık/kapalı + durum (demo / test / canlı) ve canlıya geçiş adımları. Banka bilgileri
+ *    sunucu ortam değişkenlerinde (hPanel); burada yalnız durum gösterilir.
  *  - Havale/EFT: banka adı, hesap sahibi, IBAN, ödeme süresi. IBAN girilmeden müşteriye gösterilmez.
  *  - Kapıda ödeme: varsayılan kapalı; hizmet bedeli ve üst tutar sınırı.
  */
 
 import { useState } from "react";
 import { INSTALLMENT_CHOICES, formatIban, isValidTrIban, normalizeIban, type PaymentSettings } from "@/lib/payment/methods";
+import type { ProviderStatus } from "@/lib/payment/provider";
+
+const MODE_BADGE: Record<ProviderStatus["mode"], { label: string; color: string; bg: string }> = {
+  demo: { label: "DEMO — sanal POS bağlı değil", color: "#e8c07a", bg: "rgba(232,192,122,0.12)" },
+  test: { label: "TEST ORTAMI — gerçek para çekilmez", color: "#9ec5f0", bg: "rgba(158,197,240,0.12)" },
+  live: { label: "CANLI — gerçek tahsilat", color: "#9fd39f", bg: "rgba(159,211,159,0.12)" },
+};
 
 const parseTl = (text: string): number | null => {
   const t = text.trim().replace(/\s/g, "");
@@ -23,7 +31,7 @@ export default function PaymentSettingsForm({
   provider,
 }: {
   initial: PaymentSettings;
-  provider: { name: string; ready: boolean; note: string };
+  provider: ProviderStatus;
 }) {
   const [cardEnabled, setCardEnabled] = useState(initial.card.enabled);
   const [maxInstallment, setMaxInstallment] = useState(initial.card.maxInstallment);
@@ -41,7 +49,8 @@ export default function PaymentSettingsForm({
   const ibanOk = iban.trim() === "" || isValidTrIban(iban);
   const bankReady = bankEnabled && isValidTrIban(iban) && holder.trim().length > 1 && bankName.trim().length > 1;
   const visible = [
-    cardEnabled && provider.ready && "Kart",
+    cardEnabled && provider.mode === "live" && "Kart",
+    cardEnabled && provider.mode !== "live" && "Kart (“yakında” olarak, seçilemez)",
     bankReady && "Havale/EFT",
     codEnabled && "Kapıda ödeme",
   ].filter(Boolean) as string[];
@@ -93,24 +102,54 @@ export default function PaymentSettingsForm({
 
       {/* Kart */}
       <fieldset style={s.box}>
-        <legend style={s.legend}>Kredi / Banka Kartı (iyzico)</legend>
+        <legend style={s.legend}>Kredi / Banka Kartı ({provider.name})</legend>
+        <p style={{ ...s.badge, color: MODE_BADGE[provider.mode].color, background: MODE_BADGE[provider.mode].bg }}>
+          {MODE_BADGE[provider.mode].label}
+        </p>
+        <p style={s.hint}>{provider.note}</p>
         <label style={s.check}>
           <input type="checkbox" checked={cardEnabled} onChange={(e) => setCardEnabled(e.target.checked)} />
-          Kartla ödemeyi sun
+          Kartla ödeme seçeneğini ödeme sayfasında göster
         </label>
-        <p style={{ ...s.hint, color: provider.ready ? "#9fd39f" : "#e8c07a" }}>
-          Sağlayıcı: {provider.name} — {provider.note}
-        </p>
+        {provider.mode === "demo" && (
+          <p style={s.hint}>
+            Sanal POS bağlanana kadar müşteri kart seçeneğini “Kartla ödeme çok yakında” notuyla görür ama seçemez. Banka
+            incelemesinde ödeme sayfasında kart seçeneği görünür.
+          </p>
+        )}
+        <details style={s.details}>
+          <summary style={s.summaryToggle}>Akbank sanal POS bağlama ve canlıya geçiş adımları</summary>
+          <ol style={s.steps}>
+            <li>Akbank&apos;tan sanal POS bilgilerini alın: Güvenli İş Yeri No (merchantSafeId), Terminal Safe ID ve gizli anahtar (Akbank POS portalı → Yönetim).</li>
+            <li>
+              hPanel → Node.js uygulaması → Ortam değişkenleri: <code>PAYMENT_PROVIDER=akbank</code>,{" "}
+              <code>AKBANK_MERCHANT_SAFE_ID</code>, <code>AKBANK_TERMINAL_SAFE_ID</code>, <code>AKBANK_SECRET_KEY</code>,{" "}
+              <code>AKBANK_ENV=test</code>. Kaydedince site yeniden başlar; bu sayfada “TEST ORTAMI” görünür.
+            </li>
+            <li>Yönetici girişi açıkken sitede bir test siparişi verin, Akbank&apos;ın test kartıyla ödeyin; sipariş “Ödendi” olmalı. Başarısız kart da deneyin.</li>
+            <li>Sorun yoksa canlı bilgileri girip <code>AKBANK_ENV=prod</code> yapın. Bu sayfada “CANLI” görünür; kartla ödeme herkese açılır.</li>
+          </ol>
+          <p style={s.hint}>Ayrıntı: docs/AKBANK_TEST.md ve docs/YAYIN.md. Banka bilgileri asla bu panele ya da koda yazılmaz.</p>
+        </details>
         <label style={s.field}>
           <span style={s.label}>En yüksek taksit</span>
-          <select style={s.input} value={maxInstallment} onChange={(e) => setMaxInstallment(Number(e.target.value))}>
+          <select
+            style={s.input}
+            value={maxInstallment}
+            onChange={(e) => setMaxInstallment(Number(e.target.value))}
+            disabled={provider.name.startsWith("Akbank")}
+          >
             {INSTALLMENT_CHOICES.map((n) => (
               <option key={n} value={n}>
                 {n === 1 ? "Yalnız tek çekim" : `${n} taksite kadar`}
               </option>
             ))}
           </select>
-          <span style={s.hint}>Vade farkını müşteriye yansıtıp yansıtmamayı iyzico panelinden ayarlarsınız.</span>
+          <span style={s.hint}>
+            {provider.name.startsWith("Akbank")
+              ? "Akbank ödeme sayfasında şimdilik tek çekim. Taksit, Akbank'tan taksit yetkisi ve teknik doküman gelince açılır."
+              : "Vade farkını müşteriye yansıtıp yansıtmamayı ödeme kuruluşunun panelinden ayarlarsınız."}
+          </span>
         </label>
       </fieldset>
 
@@ -221,6 +260,10 @@ const s = {
     minWidth: 0,
   },
   footer: { display: "flex", alignItems: "center", gap: "1rem" },
+  badge: { margin: 0, padding: "0.375rem 0.625rem", borderRadius: 6, fontSize: "0.75rem", fontWeight: 700, letterSpacing: "0.03em", alignSelf: "flex-start" },
+  details: { border: "1px solid rgba(255,255,255,0.08)", borderRadius: 6, padding: "0.5rem 0.75rem" },
+  summaryToggle: { cursor: "pointer", fontSize: "0.8125rem", color: "#e8e4d9" },
+  steps: { margin: "0.5rem 0 0.5rem 1.1rem", padding: 0, fontSize: "0.8125rem", lineHeight: 1.6, color: "rgba(232,228,217,0.75)" },
   primaryBtn: {
     padding: "0.625rem 1.25rem",
     background: "#c4d68e",

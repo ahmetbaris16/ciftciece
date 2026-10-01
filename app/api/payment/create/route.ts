@@ -11,6 +11,7 @@ import { z } from "zod";
 import { CHECKOUT_MESSAGES } from "@/lib/validation/checkout";
 import { clientIp } from "@/lib/security/rate-limit";
 import { startCardPayment } from "@/lib/payment/card";
+import { cardAvailabilityForRequest } from "@/lib/payment/availability";
 
 const USE_DB = !!process.env.DATABASE_URL;
 
@@ -33,6 +34,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: CHECKOUT_MESSAGES.paymentFailed }, { status: 400 });
   }
 
+  // Kart ödemesi bu ziyaretçiye kapalıysa (sanal POS bağlı değil / test ortamında müşteri) form açılmaz
+  if ((await cardAvailabilityForRequest()) === "unavailable") {
+    return NextResponse.json({ error: CHECKOUT_MESSAGES.paymentMethodUnavailable, code: "CARD_UNAVAILABLE" }, { status: 409 });
+  }
+
   try {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
     const result = await startCardPayment(parsed.data.orderId, { appUrl, buyerIp: clientIp(request.headers) });
@@ -42,7 +48,7 @@ export async function POST(request: NextRequest) {
         { status: result.status }
       );
     }
-    return NextResponse.json({ redirectUrl: result.redirectUrl, checkoutFormHtml: result.checkoutFormHtml });
+    return NextResponse.json({ redirectUrl: result.redirectUrl, checkoutFormHtml: result.checkoutFormHtml, form: result.form });
   } catch (err) {
     console.error("[payment/create]", err);
     return NextResponse.json({ error: CHECKOUT_MESSAGES.paymentFailed }, { status: 500 });

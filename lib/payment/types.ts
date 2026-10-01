@@ -45,6 +45,11 @@ export interface CreatePaymentResult {
   redirectUrl?: string;
   /** Checkout form HTML content (bazı provider'lar inline form verir) */
   checkoutFormHtml?: string;
+  /**
+   * Ödeme sayfasına tarayıcıdan POST edilecek form (Akbank ortak ödeme sayfası). Alanlar imzalıdır, kart
+   * bilgisi içermez.
+   */
+  form?: { action: string; fields: Record<string, string> };
   /** Hata mesajı (müşteriye gösterilmez) */
   error?: string;
 }
@@ -86,6 +91,8 @@ export type RetrievePaymentResult =
 export interface RetrievePaymentInput {
   token: string;
   conversationId?: string;
+  /** Denemenin ait olduğu sipariş (sağlayıcı sipariş no'sunu bizim kaydımızla eşlerken kullanılır) */
+  orderId?: string;
 }
 
 /**
@@ -93,6 +100,8 @@ export interface RetrievePaymentInput {
  */
 export interface PaymentProvider {
   readonly name: string;
+  /** Ödeme sonrası dönüş adresi (yol); yoksa /api/payment/verify */
+  readonly callbackPath?: string;
 
   /** Ödeme başlat — redirect URL veya checkout form döner */
   createPayment(input: CreatePaymentInput): Promise<CreatePaymentResult>;

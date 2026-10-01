@@ -1,5 +1,5 @@
 /**
- * Elle mutabakat köprüsü — admin "iyzico'dan sorgula" (tek sipariş).
+ * Elle mutabakat köprüsü — admin "bankadan sorgula" (tek sipariş; Akbank ya da iyzico).
  *
  * Callback de webhook de kaçabilir; otomatik mutabakat işi henüz yok (Oturum 4). Admin bir sipariş
  * için iyzico'ya sorar: siparişin kart denemeleri tek tek sorgulanır, doğrulama (verify.ts) aynen

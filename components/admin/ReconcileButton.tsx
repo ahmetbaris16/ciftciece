@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Admin — "iyzico'dan sorgula": siparişin kart ödeme denemelerini sağlayıcıya sorar, doğrulamayı
+ * Admin — "bankadan sorgula": siparişin kart ödeme denemelerini sağlayıcıya (Akbank / iyzico) sorar, doğrulamayı
  * uygular ve gerekiyorsa durumu düzeltir (sunucu: lib/payment/reconcile.ts). Sonuç burada gösterilir;
  * sayfa yenilenir (durum, denemeler, olaylar). Kim/ne zaman çalıştırdığı sunucuda kaydedilir.
  */

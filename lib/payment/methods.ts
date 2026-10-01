@@ -1,8 +1,9 @@
 /**
  * Ödeme yöntemleri — ayarlar ve kullanılabilirlik (saf; sunucu ve istemci ortak).
  *
- *  - CARD             Kredi/banka kartı, taksit seçenekli (iyzico güvenli ödeme sayfası). Para otomatik gelir;
- *                     satıcının yapacağı iş yok. Sağlayıcı anahtarları girilmeden görünmez.
+ *  - CARD             Kredi/banka kartı (Akbank Sanal POS ortak ödeme sayfası, 3D Secure). Para otomatik gelir;
+ *                     satıcının yapacağı iş yok. Sanal POS bağlanmadan "yakında" olarak görünür, seçilemez
+ *                     (lib/payment/provider.ts: demo / test / canlı).
  *  - BANK_TRANSFER    Havale/EFT. Sipariş verilir, müşteriye IBAN + açıklama (sipariş no) gösterilir; satıcı
  *                     parayı görünce admin'de tek tıkla "ödeme alındı" der. Süresinde ödenmezse sipariş
  *                     kendiliğinden iptal olur, stok geri döner (satıcı takip etmek zorunda kalmaz).
@@ -85,6 +86,10 @@ export interface PaymentOption {
   id: PaymentMethodId;
   title: string;
   description: string;
+  /** Seçilebilir mi (kart: sanal POS bağlanmadan "yakında" görünür ama seçilemez) */
+  available: boolean;
+  /** Bankanın test ortamı: gerçek para çekilmez (yalnız yönetici görür) */
+  testMode?: boolean;
   /** Bu yöntemle toplama eklenen ücret (kuruş) */
   feeKurus: number;
   /** Kapıda ödeme üst sınırı; istemci toplam değişince yeniden kontrol eder */
@@ -102,28 +107,47 @@ export function isBankTransferReady(b: PaymentSettings["bankTransfer"]): boolean
 }
 
 /**
- * Müşteriye sunulacak yöntemler. `cardReady`: ödeme sağlayıcısı yapılandırılmış mı (sunucu bilir).
- * Sıra: kart, havale, kapıda ödeme.
+ * Kartın bu ziyaretçi için durumu: "ready" (canlı), "test" (test ortamı — yalnız yönetici), "unavailable"
+ * (sanal POS bağlı değil ya da test ortamında müşteri). Sunucu hesaplar (lib/payment/provider.ts).
  */
-export function availablePaymentOptions(s: PaymentSettings, cardReady: boolean): PaymentOption[] {
+export type CardAvailability = "ready" | "test" | "unavailable";
+
+/**
+ * Müşteriye gösterilecek yöntemler. Sıra: kart, havale, kapıda ödeme. Seçilebilenler `available: true`;
+ * kart sanal POS bağlanana kadar "yakında" olarak listelenir (seçilemez).
+ */
+export function availablePaymentOptions(s: PaymentSettings, card: CardAvailability | boolean): PaymentOption[] {
+  const cardState: CardAvailability = card === true ? "ready" : card === false ? "unavailable" : card;
   const out: PaymentOption[] = [];
-  if (s.card.enabled && cardReady) {
-    out.push({
-      id: "CARD",
-      title: PAYMENT_METHOD_LABELS.CARD,
-      description:
-        s.card.maxInstallment > 1
-          ? `Tek çekim veya ${s.card.maxInstallment} aya varan taksit. Kart bilgileriniz güvenli ödeme sayfasında girilir, sitemizde saklanmaz.`
-          : "Tek çekim. Kart bilgileriniz güvenli ödeme sayfasında girilir, sitemizde saklanmaz.",
-      feeKurus: 0,
-      maxOrderKurus: null,
-    });
+  if (s.card.enabled) {
+    out.push(
+      cardState === "unavailable"
+        ? {
+            id: "CARD",
+            title: PAYMENT_METHOD_LABELS.CARD,
+            description: "Kartla ödeme çok yakında. Şimdilik diğer yöntemlerle ödeyebilirsiniz.",
+            available: false,
+            feeKurus: 0,
+            maxOrderKurus: null,
+          }
+        : {
+            id: "CARD",
+            title: PAYMENT_METHOD_LABELS.CARD,
+            description:
+              "Tek çekim. Kart bilgileriniz bankanın 3D Secure güvenli ödeme sayfasında girilir; sitemize gelmez, saklanmaz.",
+            available: true,
+            ...(cardState === "test" ? { testMode: true } : {}),
+            feeKurus: 0,
+            maxOrderKurus: null,
+          }
+    );
   }
   if (isBankTransferReady(s.bankTransfer)) {
     out.push({
       id: "BANK_TRANSFER",
       title: PAYMENT_METHOD_LABELS.BANK_TRANSFER,
       description: `Siparişten sonra IBAN bilgimiz gösterilir. Açıklamaya sipariş numaranızı yazmanız yeterli; ödeme ${s.bankTransfer.paymentWindowHours} saat içinde yapılmalıdır.`,
+      available: true,
       feeKurus: 0,
       maxOrderKurus: null,
     });
@@ -136,6 +160,7 @@ export function availablePaymentOptions(s: PaymentSettings, cardReady: boolean):
         s.cashOnDelivery.feeKurus > 0
           ? "Ödemeyi teslimatta kargo görevlisine yaparsınız. Kapıda ödeme hizmet bedeli toplama eklenir."
           : "Ödemeyi teslimatta kargo görevlisine yaparsınız.",
+      available: true,
       feeKurus: s.cashOnDelivery.feeKurus,
       maxOrderKurus: s.cashOnDelivery.maxOrderKurus,
     });
@@ -145,7 +170,7 @@ export function availablePaymentOptions(s: PaymentSettings, cardReady: boolean):
 
 /** Seçilen yöntem bu tutar için kullanılabilir mi? (tutar: ürünler + kargo, yöntem ücreti hariç) */
 export function isOptionAllowed(option: PaymentOption, amountKurus: number): boolean {
-  return option.maxOrderKurus === null || amountKurus <= option.maxOrderKurus;
+  return option.available && (option.maxOrderKurus === null || amountKurus <= option.maxOrderKurus);
 }
 
 // ── Ayrıştırma ──────────────────────────────────────────────

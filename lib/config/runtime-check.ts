@@ -73,7 +73,22 @@ export function checkProductionConfig(env: EnvVars): ConfigCheckResult {
     errors.push("ALLOW_STUB_PAYMENTS canlıda tanımlanamaz: test sağlayıcısı her kart ödemesini başarılı sayar.");
   }
   if (provider === "stub") {
-    warnings.push("PAYMENT_PROVIDER tanımlı değil: kartla ödeme kapalı (havale/kapıda ödeme ayarlarına göre çalışır).");
+    warnings.push(
+      "PAYMENT_PROVIDER tanımlı değil: kartla ödeme “yakında” görünür (demo); sipariş havale/EFT ve açıksa kapıda ödemeyle alınır."
+    );
+  } else if (provider === "akbank") {
+    const ids = [env.AKBANK_MERCHANT_SAFE_ID, env.AKBANK_TERMINAL_SAFE_ID, env.AKBANK_SECRET_KEY].map((v) => v?.trim());
+    if (ids.some((v) => !v || PLACEHOLDER.test(v))) {
+      warnings.push("Akbank bilgileri (AKBANK_MERCHANT_SAFE_ID, AKBANK_TERMINAL_SAFE_ID, AKBANK_SECRET_KEY) eksik: kartla ödeme “yakında” (demo).");
+    }
+    const akEnv = env.AKBANK_ENV?.trim().toLowerCase() || "test";
+    if (akEnv !== "test" && akEnv !== "prod") errors.push(`AKBANK_ENV "test" ya da "prod" olmalı (şu an "${env.AKBANK_ENV}").`);
+    else if (akEnv === "test") {
+      warnings.push("Akbank TEST ortamı: gerçek para çekilmez; kartla ödeme yalnız yönetici girişi açıkken görünür.");
+    }
+    if ((env.AKBANK_API_URL || env.AKBANK_GATEWAY_URL) && !localTest) {
+      errors.push("AKBANK_API_URL / AKBANK_GATEWAY_URL yalnız yerel denemede kullanılır; canlıda tanımlanmamalı.");
+    }
   } else if (provider === "iyzico") {
     const key = env.IYZICO_API_KEY?.trim();
     const sec = env.IYZICO_SECRET_KEY?.trim();

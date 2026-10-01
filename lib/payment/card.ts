@@ -18,7 +18,7 @@ import { verifyAttempt, type VerifyOutcome } from "./verify";
 import { cardPaymentDueAt } from "./reservation";
 
 export type StartCardPaymentResult =
-  | { ok: true; redirectUrl?: string; checkoutFormHtml?: string }
+  | { ok: true; redirectUrl?: string; checkoutFormHtml?: string; form?: { action: string; fields: Record<string, string> } }
   | {
       ok: false;
       status: number;
@@ -133,7 +133,7 @@ export async function startCardPayment(
       ...(order.shippingKurus > 0 ? [{ name: "Kargo", priceKurus: order.shippingKurus, quantity: 1 }] : []),
       ...(order.paymentFeeKurus > 0 ? [{ name: "Ödeme hizmet bedeli", priceKurus: order.paymentFeeKurus, quantity: 1 }] : []),
     ],
-    callbackUrl: `${ctx.appUrl}/api/payment/verify?attempt=${encodeURIComponent(attempt.id)}`,
+    callbackUrl: `${ctx.appUrl}${provider.callbackPath ?? "/api/payment/verify"}?attempt=${encodeURIComponent(attempt.id)}`,
     buyerId: order.userId ?? undefined,
     buyerIp: ctx.buyerIp,
     maxInstallment: settings.card.maxInstallment,
@@ -181,7 +181,7 @@ export async function startCardPayment(
     }
   });
 
-  return { ok: true, redirectUrl: result.redirectUrl, checkoutFormHtml: result.checkoutFormHtml };
+  return { ok: true, redirectUrl: result.redirectUrl, checkoutFormHtml: result.checkoutFormHtml, form: result.form };
 }
 
 /**
@@ -226,6 +226,8 @@ export interface CallbackInput {
   attemptHint?: string | null;
   /** Eski callbackUrl'deki sipariş kimliği (?orderId=) */
   orderIdHint?: string | null;
+  /** Dönüşle gelen, kayda yazılacak ek bilgi (kart verisi içermez; ör. Akbank yanıt kodu, imza geçerli mi) */
+  meta?: Record<string, unknown>;
 }
 
 /** Müşterinin yönlendirileceği yol ("/siparis/…" ya da "/odeme?error=…") */
@@ -257,6 +259,7 @@ export async function handleCardCallback(input: CallbackInput): Promise<string> 
     payload: {
       attemptHint: input.attemptHint ?? null,
       hintMatches: input.attemptHint ? input.attemptHint === attempt?.id : null,
+      ...(input.meta ?? {}),
     },
   });
 

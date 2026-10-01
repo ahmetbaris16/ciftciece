@@ -59,3 +59,17 @@ test("iyzico adresi yalnız resmi canlı/test adresi olabilir; anahtar yoksa yal
   assert.deepEqual(r.errors, []);
   assert.ok(r.warnings.some((w) => w.includes("anahtar")));
 });
+
+test("Akbank: anahtarsız demo uyarısı; geçersiz ortam ve canlıda test adresi hata", () => {
+  const ak = { ...GOOD, PAYMENT_PROVIDER: "akbank" };
+  const demo = checkProductionConfig(ak);
+  assert.deepEqual(demo.errors, []);
+  assert.ok(demo.warnings.some((w) => w.includes("Akbank bilgileri")));
+  const withKeys = { ...ak, AKBANK_MERCHANT_SAFE_ID: "M1", AKBANK_TERMINAL_SAFE_ID: "T1", AKBANK_SECRET_KEY: "s".repeat(32) };
+  const testEnv = checkProductionConfig(withKeys);
+  assert.deepEqual(testEnv.errors, []);
+  assert.ok(testEnv.warnings.some((w) => w.includes("TEST ortamı")));
+  assert.deepEqual(checkProductionConfig({ ...withKeys, AKBANK_ENV: "prod" }).errors, []);
+  assert.ok(errorsOf({ ...withKeys, AKBANK_ENV: "canli" }).some((e) => e.includes("AKBANK_ENV")));
+  assert.ok(errorsOf({ ...withKeys, AKBANK_API_URL: "http://127.0.0.1:3299" }).some((e) => e.includes("AKBANK_API_URL")));
+});

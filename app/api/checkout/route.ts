@@ -35,7 +35,7 @@ import { getCurrentCustomer } from "@/lib/auth/session";
 import { isQuoteFinal, quoteShipping, shippingModeOf, type ShippingLine } from "@/lib/shipping/quote";
 import { getPaymentSettings } from "@/lib/payment/settings.repository";
 import { availablePaymentOptions, isOptionAllowed } from "@/lib/payment/methods";
-import { isCardPaymentReady } from "@/lib/payment/provider";
+import { cardAvailabilityForRequest } from "@/lib/payment/availability";
 import { cardPaymentDueAt } from "@/lib/payment/reservation";
 import { clientIp } from "@/lib/security/rate-limit";
 import { scheduleNotifications } from "@/lib/notifications/run";
@@ -243,7 +243,9 @@ export async function POST(request: NextRequest) {
     console.error("[/api/checkout] payment settings error:", err);
     return fail(503, "UNAVAILABLE", CHECKOUT_MESSAGES.serviceUnavailable);
   }
-  const option = availablePaymentOptions(paymentSettings, isCardPaymentReady()).find((o) => o.id === paymentMethod);
+  const option = availablePaymentOptions(paymentSettings, await cardAvailabilityForRequest()).find(
+    (o) => o.id === paymentMethod && o.available
+  );
   if (!option || !isOptionAllowed(option, subtotalKurus + shippingKurus)) {
     return fail(409, "PAYMENT_METHOD", CHECKOUT_MESSAGES.paymentMethodUnavailable, {
       fieldErrors: { paymentMethod: CHECKOUT_MESSAGES.paymentMethodUnavailable },
