@@ -9,8 +9,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { Product, Category } from "@/types";
-import { formatPriceRaw } from "@/types";
-import { decimalToKurus } from "@/lib/payment/money";
+import { decimalToKurus, kurusToDecimalString } from "@/lib/payment/money";
 import { VAT_RATE_CHOICES, vatBpsToPercent, vatPercentToBps } from "@/lib/catalog/vat";
 
 interface Props {
@@ -38,7 +37,10 @@ export default function ProductEditForm({ product, categories }: Props) {
       id: v.id,
       name: v.name,
       sku: v.sku ?? "",
-      priceKurus: v.priceKurus,
+      priceKurus: v.priceKurus as number | null,
+      // Fiyat alanında yazılan metin ("289.90"). Sayı alanı Türkçe biçimi ("289,90") okuyamadığı için
+      // alan boş görünüyordu; metin ayrı tutulur, kuruşa yalnız geçerliyse çevrilir (null = geçersiz)
+      priceText: kurusToDecimalString(v.priceKurus),
       stockQuantity: v.stockQuantity ?? 0,
       initialStock: v.stockQuantity ?? 0,
       isAvailable: v.isAvailable,
@@ -47,8 +49,13 @@ export default function ProductEditForm({ product, categories }: Props) {
 
   async function handleSave(e: FormEvent) {
     e.preventDefault();
-    setSaving(true);
     setMessage("");
+    const badPrice = variants.find((v) => v.priceKurus === null);
+    if (badPrice) {
+      setMessage(`Hata: "${badPrice.name}" fiyatı geçersiz — en fazla 2 ondalık basamak (ör. 289.90). Hiçbir şey kaydedilmedi.`);
+      return;
+    }
+    setSaving(true);
 
     try {
       // 1. Ürün bilgilerini güncelle
@@ -111,6 +118,11 @@ export default function ProductEditForm({ product, categories }: Props) {
 
   function updateVariant(index: number, field: string, value: unknown) {
     setVariants((prev) => prev.map((v, i) => i === index ? { ...v, [field]: value } : v));
+  }
+
+  /** Fiyat metni ve kuruş birlikte: TL → kuruş tam sayı aritmetiğiyle (F-01); geçersizse kuruş null */
+  function updateVariantPrice(index: number, text: string) {
+    setVariants((prev) => prev.map((v, i) => (i === index ? { ...v, priceText: text, priceKurus: decimalToKurus(text) } : v)));
   }
 
   return (
@@ -190,9 +202,10 @@ export default function ProductEditForm({ product, categories }: Props) {
               </div>
               <div style={styles.field}>
                 <label style={styles.labelSmall}>Fiyat (₺)</label>
-                {/* Kuruş tam sayı: en fazla 2 ondalık; geçersiz giriş (ör. 3 ondalık) önceki değeri korur (F-01) */}
-                <input style={styles.input} type="number" step="0.01" min="0" value={formatPriceRaw(v.priceKurus)}
-                  onChange={(e) => updateVariant(i, "priceKurus", decimalToKurus(e.target.value || "0") ?? v.priceKurus)} />
+                {/* Kuruş tam sayı: en fazla 2 ondalık; geçersiz giriş kaydedilmez (F-01) */}
+                <input style={{ ...styles.input, ...(v.priceKurus === null ? styles.invalid : {}) }} type="number" step="0.01" min="0"
+                  value={v.priceText} aria-invalid={v.priceKurus === null}
+                  onChange={(e) => updateVariantPrice(i, e.target.value)} />
               </div>
               <div style={styles.field}>
                 <label style={styles.labelSmall}>Stok</label>
@@ -231,4 +244,5 @@ const styles: Record<string, React.CSSProperties> = {
   labelSmall: { fontSize: "0.75rem", fontWeight: 500, color: "rgba(232,228,217,0.5)" },
   input: { padding: "0.625rem 0.875rem", background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "6px", color: "#e8e4d9", fontSize: "0.875rem", outline: "none" },
   variantRow: { padding: "1rem", background: "rgba(255,255,255,0.02)", borderRadius: "8px", marginBottom: "0.75rem", border: "1px solid rgba(255,255,255,0.04)" },
+  invalid: { borderColor: "rgba(239,68,68,0.8)" },
 };
