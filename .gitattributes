@@ -1,0 +1,16 @@
+# Satır sonları depoda LF tutulur ve checkout'ta LF yazılır.
+# Bu bilgisayarda git'in sistem ayarı core.autocrlf=true: bu dosya olmadan geri alma/checkout
+# sırasında dosyalar CRLF'ye çevrilir. Uygulanmış Prisma migration'larının sağlama toplamı
+# (checksum) dosya içeriğine bağlı olduğu için migration.sql'lerin baytı değişmemeli.
+* text=auto eol=lf
+
+# İkili dosyalar dönüştürülmez
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.node binary
