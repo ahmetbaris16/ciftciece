@@ -60,6 +60,23 @@ test("ikinci kalemde stok yetmezse ilk kalemin düşen stoğu geri alınır, sip
   assert.equal(await prisma.orderItem.count(), 0);
 });
 
+test("kalemleri ters sırada gelen eşzamanlı siparişler kilitlenmeden (deadlock) tamamlanır", async () => {
+  const a = await createProduct({ priceKurus: 10_000, stock: 100 });
+  const b = await createProduct({ priceKurus: 20_000, stock: 100 });
+  const ab = [
+    { variantId: a.variant.id, priceKurus: 10_000, quantity: 1 },
+    { variantId: b.variant.id, priceKurus: 20_000, quantity: 1 },
+  ];
+  const ba = [...ab].reverse();
+  const results = await Promise.allSettled(
+    Array.from({ length: 10 }, (_, i) => createOrder(orderInput(i % 2 === 0 ? ab : ba)))
+  );
+  const failed = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
+  assert.equal(failed.length, 0, failed.map((f) => String(f.reason)).join("\n"));
+  assert.equal(await stockOf(a.variant.id), 90);
+  assert.equal(await stockOf(b.variant.id), 90);
+});
+
 test("sipariş kalemi yazılırken DB hatası olursa yarım sipariş kalmaz, stok geri döner", async () => {
   const a = await createProduct({ priceKurus: 10_000, stock: 5 });
 

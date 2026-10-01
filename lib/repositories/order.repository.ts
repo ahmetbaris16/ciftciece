@@ -91,6 +91,9 @@ interface CreateOrderInput {
   initialStatus: "PENDING" | "PROCESSING";
   /** Havale/kapıda ödemede sağlayıcısız ödeme denemesi ("havale" / "kapida") — kartta deneme ödeme başlatılınca açılır */
   offlinePaymentProvider?: "havale" | "kapida";
+  /** Checkout idempotency anahtarı ve istek özeti (orders.idempotencyKey UNIQUE) */
+  idempotencyKey?: string | null;
+  idempotencyHash?: string | null;
   /** Müşterinin onayladığı yasal metinler (sürüm) — siparişle aynı transaction'da yazılır */
   consents?: {
     documents: Array<{ document: string; version: string }>;
@@ -128,7 +131,10 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
     //    "quantity >= istenen" koşulu UPDATE içinde değerlendirilir; Postgres satırı
     //    kilitleyip koşulu yeniden kontrol ettiği için eşzamanlı iki sipariş aynı
     //    son ürünü alamaz (önce-oku-sonra-yaz yaklaşımındaki overselling yarışı yok).
-    for (const item of input.items) {
+    //    Satırlar variantId sırasıyla kilitlenir: kalemleri farklı sırada gelen eşzamanlı
+    //    iki siparişte deadlock oluşmaz (R-26).
+    const lockOrder = [...input.items].sort((a, b) => (a.variantId < b.variantId ? -1 : a.variantId > b.variantId ? 1 : 0));
+    for (const item of lockOrder) {
       const { count } = await tx.inventory.updateMany({
         where: { variantId: item.variantId, quantity: { gte: item.quantity } },
         data: { quantity: { decrement: item.quantity } },
@@ -157,6 +163,8 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
         paymentMethod: input.paymentMethod,
         paymentFeeKurus: input.paymentFeeKurus ?? 0,
         paymentDueAt: input.paymentDueAt,
+        idempotencyKey: input.idempotencyKey ?? null,
+        idempotencyHash: input.idempotencyHash ?? null,
         ...(input.offlinePaymentProvider && {
           paymentAttempts: {
             create: {
@@ -196,6 +204,17 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
   });
 
   return toOrder(order);
+}
+
+/**
+ * Checkout idempotency anahtarıyla açılmış sipariş (yoksa null) ve isteğin özeti.
+ */
+export async function findOrderByIdempotencyKey(
+  key: string
+): Promise<{ order: Order; idempotencyHash: string | null } | null> {
+  if (!USE_DB) return null;
+  const order = await prisma.order.findUnique({ where: { idempotencyKey: key }, include: { items: true } });
+  return order ? { order: toOrder(order), idempotencyHash: order.idempotencyHash } : null;
 }
 
 /**

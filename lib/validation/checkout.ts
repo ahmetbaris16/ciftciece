@@ -24,6 +24,8 @@ export const CHECKOUT_MESSAGES = {
   acceptTerms: "Siparişi tamamlamak için Ön Bilgilendirme Formu'nu ve Mesafeli Satış Sözleşmesi'ni onaylayın.",
   termsOutdated: "Sözleşme metni güncellendi. Sayfayı yenileyip metni tekrar onaylayın.",
   pageOutdated: "Ödeme sayfası güncellendi. Lütfen sayfayı yenileyip tekrar deneyin.",
+  idempotencyConflict: "Bu sipariş isteği farklı bilgilerle daha önce gönderildi. Lütfen sayfayı yenileyip tekrar deneyin.",
+  orderClosed: "Önceki siparişinizin ödeme süresi doldu ya da sipariş kapandı. Yeni sipariş için tekrar deneyin.",
   paymentMethodUnavailable: "Seçtiğiniz ödeme yöntemi bu sipariş için kullanılamıyor. Lütfen başka bir yöntem seçin.",
   noPaymentMethod:
     "Şu anda çevrimiçi ödeme alamıyoruz. Siparişinizi telefon ya da WhatsApp ile verebilirsiniz: 0532 682 53 72",
@@ -144,6 +146,9 @@ export const CheckoutSchema = z.object({
   // (lib/legal/documents.ts). Sunucu sürümü kendi sürümüyle karşılaştırır, onayı sipariş kaydına yazar.
   acceptTerms: z.literal(true, { error: CHECKOUT_MESSAGES.acceptTerms }),
   termsVersion: z.string({ error: CHECKOUT_MESSAGES.termsOutdated }).max(100),
+  // İstemcinin ürettiği idempotency anahtarı (UUID). Aynı anahtar → aynı sipariş (orders.idempotencyKey UNIQUE).
+  // Geçiş dönemi için isteğe bağlı: bu sürümden önceki ödeme sayfası göndermez.
+  idempotencyKey: z.uuid({ error: CHECKOUT_MESSAGES.orderFailed }).optional(),
 });
 
 export type CheckoutInput = z.infer<typeof CheckoutSchema>;

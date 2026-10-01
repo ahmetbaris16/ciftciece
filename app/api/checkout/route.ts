@@ -6,6 +6,8 @@
  *
  * Flow:
  * 1. Input doğrula (lib/validation/checkout — frontend ile aynı kurallar)
+ *    Idempotency: aynı `idempotencyKey` ile daha önce sipariş açıldıysa yeni sipariş açılmaz, o döner
+ *    (orders.idempotencyKey UNIQUE; içerik farklıysa 409)
  * 2. Her varyant için server'dan fiyat ve stok kontrol (Prisma)
  * 3. Kargo: Yurtiçi Kargo ücreti koli planı + tarifeyle (lib/shipping/quote) hesaplanır;
  *    hesaplanamıyorsa alıcı ödemeli (ayar açıksa) ya da sipariş açılmaz
@@ -25,7 +27,9 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getVariantById, createOrder, releaseExpiredOrders } from "@/lib/repositories";
-import { OutOfStockError } from "@/lib/repositories/order.repository";
+import { OutOfStockError, findOrderByIdempotencyKey } from "@/lib/repositories/order.repository";
+import { checkoutRequestHash } from "@/lib/checkout/idempotency";
+import type { Order } from "@/types";
 import { getShippingSettings } from "@/lib/shipping/shipping.repository";
 import { getCurrentCustomer } from "@/lib/auth/session";
 import { isQuoteFinal, quoteShipping, shippingModeOf, type ShippingLine } from "@/lib/shipping/quote";
@@ -54,6 +58,23 @@ function fail(
   return NextResponse.json({ success: false, code, error, ...extra }, { status });
 }
 
+/** Başarılı yanıt — yeni sipariş ve aynı anahtarla tekrar gelen istek (replayed) aynı biçimde döner */
+function orderResponse(order: Order, replayed: boolean) {
+  return NextResponse.json({
+    success: true,
+    orderId: order.id,
+    // "pay": kart ödemesini başlat (/api/payment/create); "order": sipariş sayfasına git (havale bilgisi / kapıda ödeme)
+    nextStep: order.paymentMethod === "CARD" && order.status === "PENDING" ? "pay" : "order",
+    order: {
+      reference: order.reference,
+      totalKurus: order.totalKurus,
+      status: order.status,
+      paymentMethod: order.paymentMethod,
+    },
+    ...(replayed ? { replayed: true } : {}),
+  });
+}
+
 // ── Handler ─────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
@@ -76,6 +97,31 @@ export async function POST(request: NextRequest) {
   }
 
   const { items, contact, shipping, paymentMethod, termsVersion } = parsed.data;
+
+  // ── Idempotency: aynı anahtarla gelen istek yeni sipariş açmaz, mevcut siparişi döndürür ──
+  // Stok/fiyat kontrollerinden ÖNCE bakılır: ilk istek son ürünü almış olsa da tekrar aynı siparişi görür.
+  // Son savunma hattı orders.idempotencyKey UNIQUE kısıtıdır (eşzamanlı istekler aşağıda yakalanır).
+  const idempotencyKey = parsed.data.idempotencyKey ?? null;
+  const idempotencyHash = idempotencyKey ? checkoutRequestHash(parsed.data) : null;
+  const replay = async (): Promise<NextResponse | null> => {
+    if (!idempotencyKey) return null;
+    const existing = await findOrderByIdempotencyKey(idempotencyKey);
+    if (!existing) return null;
+    if (existing.idempotencyHash !== idempotencyHash) {
+      return fail(409, "IDEMPOTENCY_CONFLICT", CHECKOUT_MESSAGES.idempotencyConflict);
+    }
+    if (existing.order.status === "CANCELLED" || existing.order.status === "REFUNDED") {
+      return fail(409, "ORDER_CLOSED", CHECKOUT_MESSAGES.orderClosed, { reference: existing.order.reference });
+    }
+    return orderResponse(existing.order, true);
+  };
+  try {
+    const replayed = await replay();
+    if (replayed) return replayed;
+  } catch (err) {
+    console.error("[/api/checkout] idempotency lookup error:", err);
+    return fail(503, "UNAVAILABLE", CHECKOUT_MESSAGES.serviceUnavailable);
+  }
 
   // Müşterinin gördüğü sözleşme sürümü güncel değilse onay geçersiz: güncel metni onaylaması istenir
   if (termsVersion !== CHECKOUT_TERMS_VERSION) {
@@ -253,21 +299,18 @@ export async function POST(request: NextRequest) {
         acceptedAt: consentAcceptedAt,
         ipAddress: requestIp === "yerel" ? null : requestIp.slice(0, 64),
       },
+      idempotencyKey,
+      idempotencyHash,
     });
 
-    return NextResponse.json({
-      success: true,
-      orderId: order.id,
-      // "pay": kart ödemesini başlat (/api/payment/create); "order": sipariş sayfasına git (havale bilgisi / kapıda ödeme)
-      nextStep: paymentMethod === "CARD" ? "pay" : "order",
-      order: {
-        reference: order.reference,
-        totalKurus: order.totalKurus,
-        status: order.status,
-        paymentMethod: order.paymentMethod,
-      },
-    });
+    return orderResponse(order, false);
   } catch (err) {
+    // Aynı anahtarlı eşzamanlı istek önce yazdıysa: UNIQUE ihlali (P2002) ya da onun aldığı son stok
+    // yüzünden stok hatası. Her iki durumda da o sipariş döndürülür, ikinci sipariş açılmaz.
+    if (idempotencyKey) {
+      const replayed = await replay().catch(() => null);
+      if (replayed) return replayed;
+    }
     if (err instanceof OutOfStockError) {
       return fail(409, "STOCK", err.userMessage, { details: [err.userMessage] });
     }

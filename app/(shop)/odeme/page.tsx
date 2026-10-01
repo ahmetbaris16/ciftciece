@@ -38,6 +38,7 @@ import { RECIPIENT_PAYS_NOTE, SHIPPING_BASIS_NOTE } from "@/lib/shipping/quote";
 import { usePaymentOptions } from "@/lib/payment/usePaymentOptions";
 import { isOptionAllowed, type PaymentMethodId } from "@/lib/payment/methods";
 import { CHECKOUT_TERMS_VERSION, LEGAL_DOCUMENTS } from "@/lib/legal/documents";
+import { checkoutKeyFor, forgetCheckoutKey } from "@/lib/checkout/client-key";
 import styles from "./page.module.css";
 
 type Step = "iletisim" | "teslimat" | "odeme";
@@ -157,6 +158,9 @@ function OdemeContent() {
       return;
     }
     const orderKey = JSON.stringify({ items, contact, shipping, paymentMethod });
+    // Aynı bilgilerle tekrar gönderim (yanıt kayboldu, sayfa yenilendi, iyzico'dan dönüldü) aynı anahtarı
+    // taşır: sunucu yeni sipariş açmaz, mevcut siparişi döndürür.
+    const idempotencyKey = checkoutKeyFor(orderKey);
 
     const fail = (message: string) => {
       setSubmitError(message);
@@ -177,11 +181,17 @@ function OdemeContent() {
             paymentMethod,
             acceptTerms: true,
             termsVersion: CHECKOUT_TERMS_VERSION,
+            idempotencyKey,
           }),
         });
         const checkoutData = await checkoutRes.json().catch(() => null);
 
         if (!checkoutRes.ok || !checkoutData?.success) {
+          // Anahtar başka içerikle kullanılmış ya da o sipariş kapanmış: sonraki denemede yeni anahtar
+          if (checkoutData?.code === "IDEMPOTENCY_CONFLICT" || checkoutData?.code === "ORDER_CLOSED") {
+            forgetCheckoutKey();
+            setPendingOrder(null);
+          }
           // Sunucu mesajları zaten kısa ve Türkçe; alan hatası varsa ilgili adıma dön
           const fieldErrors = (checkoutData?.fieldErrors ?? {}) as Partial<Record<CheckoutField, string>>;
           if (Object.keys(fieldErrors).length > 0) {
@@ -224,7 +234,10 @@ function OdemeContent() {
           return;
         }
         // Sipariş artık ödenebilir durumda değilse (kapandı / süresi doldu) bir sonraki denemede yeni sipariş açılsın
-        if (code === "NOT_PENDING" || code === "EXPIRED") setPendingOrder(null);
+        if (code === "NOT_PENDING" || code === "EXPIRED") {
+          setPendingOrder(null);
+          forgetCheckoutKey();
+        }
         return fail(typeof paymentData?.error === "string" ? paymentData.error : CHECKOUT_MESSAGES.paymentFailed);
       }
 

@@ -196,6 +196,11 @@ model Order {
   // Yalnız eski kayıtlar ve insan notu. Kod artık buraya yazmaz: ödeme olayları payment_events'te,
   // uyarılar payment_alerts'ta.
   notes           String?
+  // Checkout idempotency: istemcinin ürettiği anahtar (UUID). Aynı anahtarla gelen ikinci istek yeni
+  // sipariş açmaz, bu siparişi döndürür. UNIQUE kısıt son savunma hattıdır (eşzamanlı istekler dahil).
+  idempotencyKey  String?     @unique
+  // İsteğin özeti (SHA-256): aynı anahtar farklı içerikle gelirse sipariş döndürülmez (409)
+  idempotencyHash String?
   // NEEDS_ATTENTION: ödeme tarafında insan kararı gereken durum (tutar uyuşmazlığı, çift ödeme, geç ödeme...).
   // Sebep ve ayrıntı payment_alerts'ta. İşaretli sipariş otomatik iptal edilmez.
   needsAttention  Boolean     @default(false)
