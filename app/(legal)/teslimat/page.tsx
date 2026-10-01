@@ -28,7 +28,7 @@ export default async function TeslimatPage() {
           </nav>
           <span className={styles.category}>Müşteri Hizmetleri</span>
           <h1 className={styles.title}>Teslimat Bilgileri</h1>
-          <p className={styles.meta}>Son güncelleme: Eylül 2026</p>
+          <p className={styles.meta}>Son güncelleme: 2 Ekim 2026</p>
         </header>
 
         <div className={styles.content}>
@@ -49,7 +49,8 @@ export default async function TeslimatPage() {
             <p>
               Yoğun sezon (bayram dönemleri, hasad mevsimi) veya stok
               durumuna göre teslimat süreleri uzayabilir. Bu durumda
-              sipariş onay e-postasında tahmini süre belirtilir.
+              size e-postayla bilgi veririz. Her durumda siparişiniz, bize ulaştığı tarihten itibaren en geç 30 gün
+              içinde teslim edilir (yasal üst sınır).
             </p>
           </div>
 
@@ -102,8 +103,8 @@ export default async function TeslimatPage() {
 
           <h2>Teslimat Takibi</h2>
           <p>
-            Siparişiniz kargoya verildikten sonra, kargo takip numarası
-            e-posta ile bildirilecektir. Kargo firmasının sitesinden veya
+            Siparişiniz kargoya verildiğinde kargo takip numarası e-postayla gönderilir ve sipariş sayfanızda
+            görünür. Kargo firmasının sitesinden veya
             uygulamasından teslimatınızı anlık olarak takip edebilirsiniz.
           </p>
 

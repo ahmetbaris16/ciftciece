@@ -13,7 +13,7 @@ export const ACCOUNT_MESSAGES = {
   phone: "Telefon numaranızı kontrol edin (05XX XXX XX XX).",
   password: "Şifre en az 8 karakter olmalı; en az bir harf ve bir rakam içermeli.",
   passwordLong: "Şifre çok uzun (en fazla 72 bayt).",
-  acceptTerms: "Üye olmak için kullanım koşullarını kabul edin.",
+  acceptTerms: "Üye olmak için üyelik sözleşmesini ve kullanım koşullarını kabul edin.",
   currentPassword: "Mevcut şifrenizi girin.",
   wrongPassword: "Mevcut şifreniz hatalı.",
   emailTaken: "Bu e-posta adresiyle zaten bir üyelik var. Giriş yapmayı deneyin.",

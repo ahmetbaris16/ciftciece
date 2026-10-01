@@ -1,163 +1,94 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import LegalPage from "@/components/legal/LegalPage";
 import styles from "../legal.module.css";
 
 export const metadata: Metadata = {
   title: "Çerez Politikası",
-  description:
-    "Çiftçi Ece çerez politikası — web sitemizde kullanılan çerezler hakkında bilgi.",
+  description: "Sitemizde kullanılan çerezler ve tarayıcı depolaması.",
   robots: { index: true, follow: true },
 };
 
+/**
+ * Listede yalnız sitede GERÇEKTEN kullanılanlar var: next-auth oturum çerezleri, sepet (localStorage) ve ödeme
+ * adımı anahtarı (sessionStorage). Yeni çerez/izleme eklenirse bu sayfa güncellenmeli.
+ */
 export default function CerezPolitikasiPage() {
   return (
-    <div className={styles.page}>
-      <div className={styles.container}>
-        <header className={styles.header}>
-          <nav className={styles.breadcrumb} aria-label="Sayfa yolu">
-            <Link href="/">Ana Sayfa</Link>
-            <span aria-hidden="true">/</span>
-            <span aria-current="page">Çerez Politikası</span>
-          </nav>
-          <span className={styles.category}>Yasal</span>
-          <h1 className={styles.title}>Çerez Politikası</h1>
-          <p className={styles.meta}>Son güncelleme: Eylül 2026</p>
-        </header>
+    <LegalPage title="Çerez Politikası" updated="2026-10-02">
+      <p>
+        Çerezler, sitelerin tarayıcınıza kaydettiği küçük metin dosyalarıdır. Sitemizde <strong>yalnız sitenin çalışması için
+        zorunlu</strong> çerezler ve tarayıcı depolaması kullanılır. Analiz, reklam ya da takip çerezi kullanılmaz; bu yüzden
+        çerez onayı istenmez.
+      </p>
 
-        <div className={styles.content}>
-          <div className={styles.infoBox}>
-            <p>
-              Bu politika, <strong>ciftciece.com</strong> web sitesinde
-              kullanılan çerezleri (cookie) ve benzer teknolojileri, bunların
-              amaçlarını ve yönetim seçeneklerini açıklamaktadır.
-            </p>
-          </div>
+      <h2>1. Zorunlu çerezler</h2>
+      <table className={styles.table}>
+        <thead>
+          <tr>
+            <th>Ad</th>
+            <th>Amaç</th>
+            <th>Süre</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>next-auth.session-token (güvenli bağlantıda __Secure- önekiyle)</td>
+            <td>Üye ya da yönetici girişinin açık kalması</td>
+            <td>Üyelerde 30 gün, yönetimde 8 saat; çıkış yapınca silinir</td>
+          </tr>
+          <tr>
+            <td>next-auth.csrf-token (güvenli bağlantıda __Host- önekiyle)</td>
+            <td>Giriş formlarının başka sitelerden kötüye kullanılmasını önleme</td>
+            <td>Tarayıcı kapanana kadar</td>
+          </tr>
+          <tr>
+            <td>next-auth.callback-url (güvenli bağlantıda __Secure- önekiyle)</td>
+            <td>Girişten sonra kaldığınız sayfaya dönme</td>
+            <td>Tarayıcı kapanana kadar</td>
+          </tr>
+        </tbody>
+      </table>
 
-          <h2>1. Çerez Nedir?</h2>
-          <p>
-            Çerezler, web sitelerinin tarayıcınıza yerleştirdiği küçük metin
-            dosyalarıdır. Siteyi bir sonraki ziyaretinizde sizi tanımak,
-            tercihlerinizi hatırlamak ve kullanıcı deneyimini iyileştirmek
-            amacıyla kullanılırlar.
-          </p>
+      <h2>2. Tarayıcı depolaması</h2>
+      <table className={styles.table}>
+        <thead>
+          <tr>
+            <th>Ad</th>
+            <th>Amaç</th>
+            <th>Süre</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>ciftci_ece_cart_v1 (localStorage)</td>
+            <td>Sepetinizdeki ürünler; yalnız sizin tarayıcınızda tutulur</td>
+            <td>Sepeti boşaltana ya da sipariş tamamlanana kadar</td>
+          </tr>
+          <tr>
+            <td>ciftci_ece_checkout_key_v2 (sessionStorage)</td>
+            <td>Ödeme adımında aynı siparişin iki kez oluşmasını önleme</td>
+            <td>Sekme kapanana kadar</td>
+          </tr>
+        </tbody>
+      </table>
 
-          <h2>2. Kullandığımız Çerez Türleri</h2>
+      <h2>3. Üçüncü taraflar</h2>
+      <ul>
+        <li>
+          Kartla ödemede bankanın (Akbank) ödeme sayfasına geçtiğinizde o sayfanın çerezleri bankanın politikasına tabidir.
+        </li>
+        <li>
+          Mağaza haritası görüntülendiğinde harita görselleri OpenStreetMap sunucularından yüklenir (çerez yazılmaz; IP
+          adresiniz bu sunuculara iletilir).
+        </li>
+      </ul>
 
-          <h3>a) Zorunlu Çerezler</h3>
-          <p>
-            Web sitesinin temel işlevlerinin çalışması için gereklidir. Bu
-            çerezler olmadan alışveriş sepeti, oturum yönetimi ve güvenlik
-            işlevleri çalışmaz. Onayınıza gerek kalmaksızın yerleştirilirler.
-          </p>
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th>Çerez Adı</th>
-                <th>Amaç</th>
-                <th>Süre</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>session</td>
-                <td>Oturum güvenliği</td>
-                <td>Tarayıcı kapanınca</td>
-              </tr>
-              <tr>
-                <td>cart_id</td>
-                <td>Alışveriş sepeti kimliği</td>
-                <td>30 gün</td>
-              </tr>
-              <tr>
-                <td>csrf_token</td>
-                <td>Güvenlik token&apos;ı</td>
-                <td>Tarayıcı kapanınca</td>
-              </tr>
-            </tbody>
-          </table>
-
-          <h3>b) İşlevsel Çerezler</h3>
-          <p>
-            Dil tercihi gibi kullanıcı seçimlerini hatırlamak için kullanılır.
-            Zorunlu değildir ancak kullanıcı deneyimini iyileştirir.
-          </p>
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th>Çerez Adı</th>
-                <th>Amaç</th>
-                <th>Süre</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>locale</td>
-                <td>Dil tercihi</td>
-                <td>1 yıl</td>
-              </tr>
-              <tr>
-                <td>cookie_consent</td>
-                <td>Çerez tercih kaydı</td>
-                <td>1 yıl</td>
-              </tr>
-            </tbody>
-          </table>
-
-          <h3>c) Analiz Çerezleri</h3>
-          <p>
-            Web sitemizin nasıl kullanıldığını anlamak ve iyileştirmek amacıyla
-            ziyaret istatistikleri toplanır. Bu çerezler kişisel kimlik
-            bilgisi içermez; anonimleştirilmiş istatistik verisi üretir.
-            Açık onayınıza dayanır.
-          </p>
-
-          <h2>3. Üçüncü Taraf Çerezler</h2>
-          <p>
-            Web sitemiz, ödeme işlemleri sırasında İyzico gibi ödeme
-            sağlayıcılarının çerezlerine izin verebilir. Bu çerezlere ilişkin
-            politika ilgili sağlayıcının gizlilik politikasında bulunmaktadır.
-          </p>
-
-          <h2>4. Çerezleri Yönetmek</h2>
-          <p>
-            Tarayıcınızın ayarlarından çerezleri silebilir veya engelleyebilirsiniz.
-            Ancak zorunlu çerezlerin engellenmesi durumunda site işlevleri
-            (sepet, oturum vb.) çalışmayabilir.
-          </p>
-          <p>Popüler tarayıcılar için çerez ayarları:</p>
-          <ul>
-            <li>
-              <strong>Chrome:</strong> Ayarlar → Gizlilik ve güvenlik → Çerezler
-            </li>
-            <li>
-              <strong>Firefox:</strong> Seçenekler → Gizlilik ve Güvenlik
-            </li>
-            <li>
-              <strong>Safari:</strong> Tercihler → Gizlilik → Çerezleri ve web sitesi verilerini yönet
-            </li>
-            <li>
-              <strong>Edge:</strong> Ayarlar → Çerezler ve site izinleri
-            </li>
-          </ul>
-
-          <h2>5. Politika Değişiklikleri</h2>
-          <p>
-            Bu politika gerektiğinde güncellenebilir. Önemli değişiklikler
-            web sitemizde duyurulacaktır.
-          </p>
-
-          <div className={styles.divider} />
-
-          <p>
-            Gizlilik ile ilgili daha fazla bilgi için{" "}
-            <Link href="/gizlilik">Gizlilik Politikamızı</Link> inceleyin.
-          </p>
-        </div>
-
-        <Link href="/" className={styles.backLink}>
-          ← Ana Sayfaya Dön
-        </Link>
-      </div>
-    </div>
+      <h2>4. Çerezleri yönetmek</h2>
+      <p>
+        Tarayıcı ayarlarınızdan çerezleri silebilir ya da engelleyebilirsiniz; zorunlu çerezler engellenirse giriş ve sepet
+        çalışmayabilir. Ayrıntı: <Link href="/gizlilik">Gizlilik Politikası</Link>.
+      </p>
+    </LegalPage>
   );
 }

@@ -1,155 +1,80 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import styles from "../legal.module.css";
+import LegalPage from "@/components/legal/LegalPage";
+import SellerContact from "@/components/legal/SellerContact";
+import { getBusinessInfo } from "@/lib/business/business.repository";
+import { sellerDisplayName } from "@/lib/business/info";
 
 export const metadata: Metadata = {
   title: "Kullanım Koşulları",
-  description:
-    "Çiftçi Ece web sitesi kullanım koşulları — siteyi kullanarak kabul ettiğiniz kurallar.",
+  description: "Sitenin kullanım koşulları.",
   robots: { index: true, follow: true },
 };
 
-export default function KullanimKosullariPage() {
+export const revalidate = 300;
+
+export default async function KullanimKosullariPage() {
+  const business = await getBusinessInfo();
+  const seller = sellerDisplayName(business);
   return (
-    <div className={styles.page}>
-      <div className={styles.container}>
-        <header className={styles.header}>
-          <nav className={styles.breadcrumb} aria-label="Sayfa yolu">
-            <Link href="/">Ana Sayfa</Link>
-            <span aria-hidden="true">/</span>
-            <span aria-current="page">Kullanım Koşulları</span>
-          </nav>
-          <span className={styles.category}>Yasal</span>
-          <h1 className={styles.title}>Kullanım Koşulları</h1>
-          <p className={styles.meta}>Son güncelleme: Eylül 2026</p>
-        </header>
+    <LegalPage title="Kullanım Koşulları" updated="2026-10-02">
+      <p>
+        Bu koşullar, <strong>{seller}</strong> tarafından işletilen bu internet sitesinin kullanımını düzenler. Satın alma
+        işlemleri ayrıca <Link href="/mesafeli-satis-sozlesmesi">Mesafeli Satış Sözleşmesi</Link>&apos;ne tabidir.
+      </p>
 
-        <div className={styles.content}>
-          <div className={styles.infoBox}>
-            <p>
-              <strong>ciftciece.com</strong> web sitesini ziyaret ederek veya
-              kullanarak bu kullanım koşullarını kabul etmiş sayılırsınız. Lütfen
-              dikkatlice okuyunuz.
-            </p>
-          </div>
+      <h2>1. Hizmet</h2>
+      <p>
+        Sitede zeytin, zeytinyağı ve yöresel ürünlerimizi inceleyebilir, sepete ekleyebilir ve satın alabilirsiniz. Üye
+        olmadan da sipariş verebilirsiniz; üyelik koşulları <Link href="/uyelik-sozlesmesi">Üyelik Sözleşmesi</Link>&apos;ndedir.
+      </p>
 
-          <h2>1. Genel</h2>
-          <p>
-            Bu kullanım koşulları; <strong>Çiftçi Ece</strong> tarafından işletilen{" "}
-            <strong>ciftciece.com</strong> web sitesinin kullanım esaslarını
-            düzenler. Siteyi kullanmaya devam etmeniz bu koşulları
-            kabul ettiğiniz anlamına gelir.
-          </p>
+      <h2>2. Ürün bilgileri ve fiyatlar</h2>
+      <ul>
+        <li>Fiyatlar Türk Lirası ve KDV dahildir. Kargo ücreti ödeme adımında, siparişi onaylamadan önce gösterilir.</li>
+        <li>Ürün görselleri kendi ürünlerimizin fotoğraflarıdır; doğal ürünlerde renk ve boyutta küçük farklar olabilir.</li>
+        <li>
+          Fiyatlar önceden haber verilmeden değişebilir; onaylanmış siparişin fiyatı değişmez. Açık bir fiyat hatası olursa
+          sizi bilgilendirir, siparişi sizin onayınızla düzeltir ya da ücretsiz iptal ederiz.
+        </li>
+      </ul>
 
-          <h2>2. Hizmetin Kapsamı</h2>
-          <p>
-            Web sitemiz üzerinden Çiftçi Ece tarafından sunulan ürünleri
-            inceleyebilir, sepete ekleyebilir ve satın alabilirsiniz.
-            Site; zeytin, zeytinyağı, turşu ve doğal ürünlerin tanıtım
-            ve satış platformu olarak hizmet vermektedir.
-          </p>
+      <h2>3. Kullanıcının yükümlülükleri</h2>
+      <ul>
+        <li>Siteyi hukuka uygun amaçlarla kullanmak, gerçek ve güncel bilgi vermek</li>
+        <li>Siteye yetkisiz erişim girişiminde bulunmamak, işleyişini bozmamak</li>
+        <li>Başkası adına izinsiz sipariş vermemek</li>
+      </ul>
 
-          <h2>3. Kullanıcı Yükümlülükleri</h2>
-          <p>Siteyi kullanırken aşağıdaki kurallara uymayı kabul edersiniz:</p>
-          <ul>
-            <li>Siteyi yalnızca hukuka uygun amaçlarla kullanmak</li>
-            <li>
-              Başkalarının haklarını ihlal edecek, rahatsız edecek veya zarar
-              verecek şekilde davranmamak
-            </li>
-            <li>
-              Siteye yetkisiz erişim girişiminde bulunmamak, site altyapısını
-              bozmaya çalışmamak
-            </li>
-            <li>
-              Sahte sipariş oluşturmamak veya yanıltıcı bilgi vermemek
-            </li>
-            <li>
-              Sipariş esnasında gerçek ve güncel iletişim bilgisi sağlamak
-            </li>
-          </ul>
+      <h2>4. Fikri mülkiyet</h2>
+      <p>
+        Sitedeki metin, fotoğraf, logo ve tasarımlar {seller}&apos;e aittir ya da izinle kullanılmaktadır; izinsiz
+        kopyalanamaz, ticari amaçla kullanılamaz.
+      </p>
 
-          <h2>4. Ürün Bilgileri ve Fiyatlar</h2>
-          <p>
-            Ürün açıklamaları ve görselleri doğru bilgi sunmak amacıyla
-            hazırlanmıştır. Bununla birlikte ürün ambalajı, içerik veya
-            görsel farklılıklar önceden bildirim yapılmaksızın değişebilir.
-          </p>
-          <p>
-            Fiyatlar Türk Lirası (TRY) cinsinden belirtilmiş olup KDV
-            dahildir. Ürün fiyatları önceden haber verilmeksizin değişebilir;
-            ancak sipariş onaylandıktan sonra fiyat değişikliği geçerli olmaz.
-          </p>
+      <h2>5. Kişisel veriler</h2>
+      <p>
+        Verilerinizin işlenmesi: <Link href="/gizlilik">Gizlilik Politikası</Link>,{" "}
+        <Link href="/kvkk">KVKK Aydınlatma Metni</Link>, <Link href="/cerez-politikasi">Çerez Politikası</Link>.
+      </p>
 
-          <h2>5. Fikri Mülkiyet</h2>
-          <p>
-            Bu web sitesindeki tüm içerikler (metin, görsel, logo, tasarım,
-            kod) Çiftçi Ece&apos;ye aittir veya lisanslı olarak kullanılmaktadır.
-            İçeriklerin izinsiz kopyalanması, dağıtılması veya ticari amaçlarla
-            kullanılması yasaktır.
-          </p>
+      <h2>6. Hizmet kesintileri</h2>
+      <p>
+        Bakım ya da teknik arıza nedeniyle site geçici olarak erişilemeyebilir. Bu sırada verilmiş siparişleriniz ve
+        ödemeleriniz korunur; sorun yaşarsanız bize ulaşın.
+      </p>
 
-          <h2>6. Gizlilik</h2>
-          <p>
-            Kişisel verilerinizin işlenmesi hakkında bilgi almak için{" "}
-            <Link href="/gizlilik">Gizlilik Politikamızı</Link> ve{" "}
-            <Link href="/kvkk">KVKK Aydınlatma Metnimizi</Link> inceleyiniz.
-          </p>
+      <h2>7. Değişiklikler</h2>
+      <p>Bu koşullar güncellenebilir; güncel metin bu sayfadadır. Verilmiş siparişlere sipariş anındaki koşullar uygulanır.</p>
 
-          <h2>7. Hizmet Kesintileri</h2>
-          <p>
-            Site bakım, güncelleme veya teknik arızalar nedeniyle zaman zaman
-            geçici olarak erişime kapatılabilir. Olası kesintilerden
-            kaynaklanan zararlardan sorumluluğumuz sınırlıdır.
-          </p>
+      <h2>8. Uygulanacak hukuk</h2>
+      <p>
+        Bu koşullar Türkiye Cumhuriyeti hukukuna tabidir. Tüketici işlemlerinde 6502 sayılı Tüketicinin Korunması Hakkında
+        Kanun&apos;daki başvuru ve yetki kuralları (Tüketici Hakem Heyeti, Tüketici Mahkemesi) saklıdır.
+      </p>
 
-          <h2>8. Üçüncü Taraf Bağlantılar</h2>
-          <p>
-            Web sitemiz, üçüncü taraf web sitelerine bağlantılar içerebilir.
-            Bu sitelerin içerik ve gizlilik politikalarından sorumlu değiliz.
-          </p>
-
-          <h2>9. Sorumluluk Sınırlaması</h2>
-          <p>
-            Çiftçi Ece; yanlış kullanım, teknik arızalar veya internet
-            bağlantısı sorunlarından kaynaklanan dolaylı zararlardan
-            sorumlu tutulamaz. Ürünle ilgili doğrudan şikayetler için
-            yasal haklarınızı kullanabilirsiniz.
-          </p>
-
-          <h2>10. Koşulların Değiştirilmesi</h2>
-          <p>
-            Bu kullanım koşulları önceden haber verilmeksizin güncellenebilir.
-            Güncel koşullar her zaman bu sayfada yayımlanır. Siteyi
-            kullanmaya devam etmeniz güncel koşulları kabul ettiğiniz
-            anlamına gelir.
-          </p>
-
-          <h2>11. Uygulanacak Hukuk</h2>
-          <p>
-            Bu koşullar Türkiye Cumhuriyeti hukukuna tabi olup Bursa
-            mahkemeleri yetkilidir.
-          </p>
-
-          <h2>12. İletişim</h2>
-          <p>
-            Kullanım koşullarına ilişkin sorularınız için:
-          </p>
-
-          <div className={styles.contactCard}>
-            <h3>İletişim</h3>
-            <p>
-              <strong>Çiftçi Ece</strong>
-            </p>
-            <p>Muradiye, Zeytinciler Çarşısı</p>
-            <p>16800 Orhangazi / Bursa</p>
-          </div>
-        </div>
-
-        <Link href="/" className={styles.backLink}>
-          ← Ana Sayfaya Dön
-        </Link>
-      </div>
-    </div>
+      <h2>9. İletişim</h2>
+      <SellerContact business={business} />
+    </LegalPage>
   );
 }

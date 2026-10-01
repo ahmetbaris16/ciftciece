@@ -1,6 +1,9 @@
 import Image from "next/image";
 import Link from "next/link";
 import { STORE } from "@/lib/config/store";
+import { getBusinessInfo } from "@/lib/business/business.repository";
+import { formatPhoneTr, sellerDisplayName } from "@/lib/business/info";
+import PaymentMarks from "@/components/payment/PaymentMarks";
 import styles from "./Footer.module.css";
 
 const PRODUCT_LINKS = [
@@ -15,12 +18,14 @@ const PRODUCT_LINKS = [
 ];
 
 const SERVICE_LINKS = [
-  { label: "Mağazamız", href: "/magaza" },
-  { label: "Vakumlu Paketleme", href: "/#vakumlu-paketleme" },
+  { label: "İletişim", href: "/iletisim" },
+  { label: "Sıkça Sorulan Sorular", href: "/sss" },
+  { label: "Sipariş Takibi", href: "/siparis-takip" },
   { label: "Teslimat Bilgileri", href: "/teslimat" },
   { label: "İade & İptal", href: "/iade-ve-iptal" },
+  { label: "Mağazamız", href: "/magaza" },
+  { label: "Vakumlu Paketleme", href: "/#vakumlu-paketleme" },
   { label: "Hesabım", href: "/hesabim" },
-  { label: "Sipariş Takibi", href: "/siparis-takip" },
 ];
 
 const LEGAL_LINKS = [
@@ -29,11 +34,14 @@ const LEGAL_LINKS = [
   { label: "Çerez Politikası", href: "/cerez-politikasi" },
   { label: "Mesafeli Satış Sözleşmesi", href: "/mesafeli-satis-sozlesmesi" },
   { label: "Ön Bilgilendirme", href: "/on-bilgilendirme" },
+  { label: "Üyelik Sözleşmesi", href: "/uyelik-sozlesmesi" },
   { label: "Kullanım Koşulları", href: "/kullanim-kosullari" },
 ];
 
-export default function Footer() {
+export default async function Footer() {
   const currentYear = new Date().getFullYear();
+  // İşletme bilgileri admin → Ayarlar'dan (adres, telefon, e-posta, Instagram)
+  const business = await getBusinessInfo();
 
   return (
     <footer className={styles.footer} role="contentinfo">
@@ -52,30 +60,29 @@ export default function Footer() {
           </Link>
 
           <address className={styles.address}>
-            <p>{STORE.address.neighborhood}, {STORE.address.street}</p>
-            <p>{STORE.address.postalCode} {STORE.address.district} / {STORE.address.city}</p>
+            <p>{business.address}</p>
             <p>
-              <a href={`tel:${STORE.contact.phone}`} className={styles.contactLink}>
-                {STORE.contact.phoneFormatted}
+              <a href={`tel:${business.phone}`} className={styles.contactLink}>
+                {formatPhoneTr(business.phone)}
               </a>
             </p>
-            {STORE.contact.email !== "TODO" && (
+            {business.email && (
               <p>
-                <a href={`mailto:${STORE.contact.email}`} className={styles.contactLink}>
-                  {STORE.contact.email}
+                <a href={`mailto:${business.email}`} className={styles.contactLink}>
+                  {business.email}
                 </a>
               </p>
             )}
-            {String(STORE.contact.instagramUrl) !== "TODO" && (
+            {business.instagramUrl && (
               <p>
                 <a
-                  href={STORE.contact.instagramUrl}
+                  href={business.instagramUrl}
                   className={`${styles.contactLink} ${styles.socialLink}`}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
                   <InstagramIcon />
-                  {STORE.contact.instagram}
+                  {instagramHandle(business.instagramUrl)}
                 </a>
               </p>
             )}
@@ -127,17 +134,14 @@ export default function Footer() {
       <div className={styles.bottomBar}>
         <div className={styles.bottomInner}>
           <p className={styles.copyright}>
-            © {currentYear} {STORE.name}. Tüm hakları saklıdır.
+            © {currentYear} {sellerDisplayName(business)}. Tüm hakları saklıdır.
           </p>
           <div className={styles.securityBadges}>
             <span className={styles.badge} title="SSL ile şifreli bağlantı">
               <LockIcon />
               SSL Güvenli
             </span>
-            {/* "3D Secure" rozeti iyzico canlıya alınınca eklenecek — ödeme şu an stub */}
-            <span className={styles.badge}>
-              KVKK Uyumlu
-            </span>
+            <PaymentMarks compact showSecure={false} />
           </div>
         </div>
       </div>
@@ -162,4 +166,10 @@ function LockIcon() {
       <path d="M7 11V7a5 5 0 0 1 10 0v4" />
     </svg>
   );
+}
+
+/** "https://www.instagram.com/ciftciecezeytinleri/" → "@ciftciecezeytinleri" */
+function instagramHandle(url: string): string {
+  const m = /instagram\.com\/([A-Za-z0-9._]+)/.exec(url);
+  return m ? `@${m[1]}` : "Instagram";
 }

@@ -205,6 +205,10 @@ export default function RegisterForm({ next }: { next: string }) {
             {...aria("acceptTerms")}
           />
           <span>
+            <Link href="/uyelik-sozlesmesi" target="_blank">
+              Üyelik Sözleşmesi
+            </Link>{" "}
+            ve{" "}
             <Link href="/kullanim-kosullari" target="_blank">
               Kullanım Koşulları
             </Link>

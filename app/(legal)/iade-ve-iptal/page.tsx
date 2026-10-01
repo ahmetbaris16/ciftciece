@@ -1,167 +1,96 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import LegalPage from "@/components/legal/LegalPage";
+import LegalSections from "@/components/legal/LegalSections";
+import SellerContact from "@/components/legal/SellerContact";
+import { getBusinessInfo } from "@/lib/business/business.repository";
+import { DELIVERY_TERMS, withdrawalFormSections } from "@/lib/legal/content";
 import styles from "../legal.module.css";
 
 export const metadata: Metadata = {
-  title: "İade & İptal Politikası",
-  description:
-    "Çiftçi Ece iade ve iptal politikası — Hangi ürünleri iade edebilirsiniz, süreç nasıl işler.",
+  title: "İade ve İptal",
+  description: "Sipariş iptali, cayma hakkı (14 gün), iade süreci, iade süreleri ve cayma formu.",
   robots: { index: true, follow: true },
 };
 
-export default function IadeVeIptalPage() {
+export const revalidate = 300;
+
+export default async function IadeVeIptalPage() {
+  const business = await getBusinessInfo();
   return (
-    <div className={styles.page}>
-      <div className={styles.container}>
-        <header className={styles.header}>
-          <nav className={styles.breadcrumb} aria-label="Sayfa yolu">
-            <Link href="/">Ana Sayfa</Link>
-            <span aria-hidden="true">/</span>
-            <span aria-current="page">İade &amp; İptal</span>
-          </nav>
-          <span className={styles.category}>Müşteri Hizmetleri</span>
-          <h1 className={styles.title}>İade &amp; İptal Politikası</h1>
-          <p className={styles.meta}>Son güncelleme: Eylül 2026</p>
-        </header>
-
-        <div className={styles.content}>
-          <div className={styles.infoBox}>
-            <p>
-              Müşteri memnuniyeti bizim için her şeyden önce gelir. Herhangi bir
-              sorunuz veya sorununuz olursa lütfen bizimle iletişime geçin —
-              birlikte en iyi çözümü buluruz.
-            </p>
-          </div>
-
-          <h2>Sipariş İptali</h2>
-
-          <h3>Kargoya Çıkmadan Önce</h3>
-          <p>
-            Siparişiniz henüz kargoya verilmemişse, iptal talebinizi
-            iletmeniz durumunda siparişinizi ücretsiz olarak iptal edebiliriz.
-            Ödemeniz, bankanıza bağlı olarak{" "}
-            <strong>3-14 iş günü</strong> içinde kartınıza iade edilir.
-          </p>
-
-          <h3>Kargoya Verildikten Sonra</h3>
-          <p>
-            Kargoya verilen siparişler, kargo firmasının politikaları gereği
-            geri çağrılamayabilir. Ürün elinize ulaştıktan sonra iade
-            prosedürünü başlatabilirsiniz.
-          </p>
-
-          <h2>İade Koşulları</h2>
-
-          <h3>İade Edilebilen Ürünler</h3>
-          <ul>
-            <li>
-              <strong>Ambalajı açılmamış</strong> ürünler — teslimden itibaren
-              14 gün içinde
-            </li>
-            <li>
-              Hasarlı/kırık ulaşan ürünler (fotoğraf ile belgelenmesi gerekir)
-            </li>
-            <li>Yanlış ürün gönderilmesi halinde</li>
-            <li>Sipariş edilen ürünle uyuşmayan kalite/içerik durumları</li>
-          </ul>
-
-          <h3>İade Edilemeyen Ürünler</h3>
-          <ul>
-            <li>
-              <strong>
-                Ambalajı açılmış gıda ürünleri
-              </strong>{" "}
-              (zeytin, zeytinyağı, turşu vb.) — gıda güvenliği ve hijyen
-              nedeniyle
-            </li>
-            <li>
-              Son kullanma tarihi geçmiş veya uygunsuz koşullarda saklanan ürünler
-              (müşteri kaynaklı)
-            </li>
-            <li>
-              14 günlük cayma süresini geçmiş talepler (hasarlı teslimat
-              hariç)
-            </li>
-          </ul>
-
-          <div className={styles.infoBox}>
-            <p>
-              <strong>Gıda ürünleri için önemli not:</strong> Zeytinyağı ve
-              zeytin gibi gıda ürünlerinde ambalaj açıldıktan sonra iade
-              mümkün değildir. Bu durum, 6502 sayılı Kanun kapsamındaki cayma
-              hakkı istisnasına dayanmaktadır. Lütfen ambalajı açmadan önce
-              ürünü kontrol edin.
-            </p>
-          </div>
-
-          <h2>İade Süreci</h2>
-
-          <h3>Adım 1 — Bize Ulaşın</h3>
-          <p>
-            İade talebinizi aşağıdaki iletişim bilgilerinden bize iletin.
-            Lütfen sipariş numaranızı ve iade gerekçenizi belirtin. Hasarlı
-            ürün durumunda fotoğraf paylaşın.
-          </p>
-
-          <h3>Adım 2 — Onay</h3>
-          <p>
-            Talebinizi inceleyip{" "}
-            <strong>2 iş günü</strong> içinde size geri dönecek ve iade
-            onayı veya reddi konusunda bilgi vereceğiz.
-          </p>
-
-          <h3>Adım 3 — Ürünü Gönderin</h3>
-          <p>
-            İade onayı alan ürünleri orijinal ambalajında, kırılmadan ve
-            hasarsız şekilde aşağıdaki adrese gönderiniz. İade kargo bedeli
-            aşağıdaki durumlarda <strong>Satıcı&apos;ya</strong> aittir:
-          </p>
-          <ul>
-            <li>Yanlış ürün gönderilmesi</li>
-            <li>Hasarlı/bozuk ürün teslimatı</li>
-          </ul>
-          <p>
-            Cayma hakkı kapsamındaki iadelerde kargo bedeli{" "}
-            <strong>müşteriye</strong> aittir.
-          </p>
-
-          <h3>Adım 4 — Para İadesi</h3>
-          <p>
-            Ürün bize ulaştıktan ve kontrol edildikten sonra ödeme iadesi{" "}
-            <strong>5-14 iş günü</strong> içinde aynı ödeme yöntemiyle yapılır.
-            Bankaya bağlı olarak kartınıza yansıma süresi farklılık gösterebilir.
-          </p>
-
-          <h2>İletişim</h2>
-
-          <div className={styles.contactCard}>
-            <h3>Yardım için bize ulaşın</h3>
-            <p>
-              <strong>Çiftçi Ece</strong>
-            </p>
-            <p>Muradiye, Zeytinciler Çarşısı</p>
-            <p>16800 Orhangazi / Bursa</p>
-            <p style={{ marginTop: "0.75rem" }}>
-              Mağazamıza doğrudan gelerek de işlem yapabilirsiniz.
-              Her gün <strong>07:00 – 00:00</strong> saatleri arasında açığız.
-            </p>
-          </div>
-
-          <div className={styles.divider} />
-
-          <p>
-            Mesafeli satış haklarınız hakkında daha fazla bilgi için{" "}
-            <Link href="/mesafeli-satis-sozlesmesi">
-              Mesafeli Satış Sözleşmemizi
-            </Link>{" "}
-            inceleyebilirsiniz.
-          </p>
-        </div>
-
-        <Link href="/" className={styles.backLink}>
-          ← Ana Sayfaya Dön
-        </Link>
+    <LegalPage title="İade ve İptal" category="Müşteri Hizmetleri" updated="2026-10-02">
+      <div className={styles.infoBox}>
+        <p>
+          Bir sorun olursa çözmek bizim işimiz. Talebinizi sipariş sayfanızdaki <strong>“İade / iptal”</strong> bölümünden
+          birkaç saniyede iletebilirsiniz; talebiniz kayda geçer ve size e-postayla bilgi veririz.
+        </p>
       </div>
-    </div>
+
+      <h2>1. Siparişi iptal etmek</h2>
+      <ul>
+        <li>
+          <strong>Ödemesi henüz yapılmamış sipariş</strong> (ör. havale bekleyen): sipariş sayfanızdan tek tıkla iptal
+          edebilirsiniz; ayrılan ürünler hemen serbest kalır.
+        </li>
+        <li>
+          <strong>Ödenmiş ama kargoya verilmemiş sipariş:</strong> sipariş sayfanızdan iptal isteği gönderin. Siparişi iptal
+          eder, ödediğiniz tutarın tamamını ödeme yönteminize iade ederiz.
+        </li>
+        <li>
+          <strong>Kargoya verilmiş sipariş:</strong> kargo geri çağrılamayabilir; ürün size ulaşınca cayma hakkınızı
+          kullanabilirsiniz (aşağıda).
+        </li>
+      </ul>
+
+      <h2>2. Cayma hakkı (14 gün)</h2>
+      <p>
+        Ürün size ya da gösterdiğiniz kişiye teslim edildiği günden itibaren <strong>14 gün</strong> içinde, gerekçe
+        göstermeden ve ceza ödemeden sözleşmeden cayabilirsiniz. Cayma hakkını teslimattan önce de kullanabilirsiniz.
+      </p>
+      <h3>Cayma hakkının olmadığı durumlar</h3>
+      <ul>
+        <li>Ambalajı, bandı ya da mührü açılmış gıda ürünleri (zeytin, zeytinyağı, turşu vb.) — sağlık ve hijyen nedeniyle</li>
+        <li>Çabuk bozulabilen ya da son kullanma tarihi geçebilecek ürünler</li>
+        <li>Sizin isteğinize göre hazırlanan ürünler</li>
+      </ul>
+      <p>
+        <strong>Ambalajı açılmamış, hasarsız ürünlerde cayma hakkınız geçerlidir.</strong>
+      </p>
+
+      <h2>3. İade nasıl yapılır</h2>
+      <ol>
+        <li>
+          <strong>Bildirin:</strong> sipariş sayfanızdaki “İade / cayma bildirimi” formunu kullanın ya da aşağıdaki cayma
+          formunu doldurup e-postayla gönderin. Bildirim 14 gün içinde bize ulaşmalı.
+        </li>
+        <li>
+          <strong>Gönderin:</strong> bildirimden itibaren 10 gün içinde ürünü {DELIVERY_TERMS.returnCarrier} ile, size
+          vereceğimiz iade koduyla gönderin. Bu şekilde gönderilen cayma iadelerinde kargo ücreti bize aittir.
+        </li>
+        <li>
+          <strong>Paranız iade edilir:</strong> cayma bildiriminiz bize ulaştıktan sonra <strong>en geç 14 gün</strong> içinde,
+          kargo ücreti dahil ödediğiniz tutarın tamamı ödeme yönteminize (kartınıza ya da hesabınıza) tek seferde iade edilir.
+          Kartınıza yansıma süresi bankanıza göre değişebilir. İade yapıldığında size e-posta göndeririz.
+        </li>
+      </ol>
+
+      <h2>4. Hasarlı, eksik ya da yanlış ürün</h2>
+      <p>
+        Paket hasarlıysa kargo görevlisine tutanak tutturun, fotoğraf çekin ve en kısa sürede bize bildirin. Hasarlı, eksik
+        ya da yanlış gönderilen üründe yasal seçimlik haklarınız (değişim, iade, bedel indirimi) saklıdır; kargo ücretleri
+        bize aittir.
+      </p>
+
+      <h2>5. Cayma formu</h2>
+      <p>Mesafeli Sözleşmeler Yönetmeliği ekindeki forma göre hazırlanmıştır; doldurup e-postayla gönderebilirsiniz.</p>
+      <LegalSections sections={withdrawalFormSections(business)} compact />
+
+      <h2>6. İletişim</h2>
+      <SellerContact business={business} />
+      <p>
+        Haklarınızın tamamı: <Link href="/mesafeli-satis-sozlesmesi">Mesafeli Satış Sözleşmesi</Link> ve{" "}
+        <Link href="/on-bilgilendirme">Ön Bilgilendirme Formu</Link>.
+      </p>
+    </LegalPage>
   );
 }

@@ -10,12 +10,18 @@ export const LEGAL_DOCUMENTS = {
   PRE_INFORMATION_FORM: {
     title: "Ön Bilgilendirme Formu",
     path: "/on-bilgilendirme",
-    version: "2026-10-01",
+    version: "2026-10-02",
   },
   DISTANCE_SALES_CONTRACT: {
     title: "Mesafeli Satış Sözleşmesi",
     path: "/mesafeli-satis-sozlesmesi",
-    version: "2026-10-01",
+    version: "2026-10-02",
+  },
+  // Üye olurken onaylanır (siparişte değil)
+  MEMBERSHIP_AGREEMENT: {
+    title: "Üyelik Sözleşmesi",
+    path: "/uyelik-sozlesmesi",
+    version: "2026-10-02",
   },
 } as const;
 
