@@ -10,7 +10,7 @@ import { prisma } from "@/lib/db/prisma";
 import { classifyRetrieve } from "@/lib/payment/verify";
 import { startCardPayment, handleCardCallback } from "@/lib/payment/card";
 import type { RetrievePaymentResult } from "@/lib/payment/types";
-import { setupTestDb } from "./helpers/db";
+import { setupTestDb, withFailingInserts } from "./helpers/db";
 import { FakeIyzico } from "./helpers/fake-iyzico";
 import { createTestOrder, orderState } from "./helpers/orders";
 
@@ -140,5 +140,37 @@ test("callback'teki deneme kimliği ipucudur: başka denemenin token'ı o deneme
   fake.pay(attempt.providerToken!);
   const path = await handleCardCallback({ token: attempt.providerToken!, attemptHint: "baska-deneme" });
   assert.equal(path, `/siparis/${order.reference}`);
+  assert.equal((await orderState(order.id)).status, "PAID");
+});
+
+test("callback'te doğrulama/kayıt hatası: müşteri tekrar ödemeye değil 'doğrulanıyor' sayfasına gider", async () => {
+  const { order } = await createTestOrder();
+  await startCardPayment(order.id, { appUrl: "http://localhost:3000" });
+  const attempt = await prisma.paymentAttempt.findFirstOrThrow({ where: { orderId: order.id } });
+  fake.pay(attempt.providerToken!);
+  const path = await withFailingInserts("outbox_events", () =>
+    handleCardCallback({ token: attempt.providerToken!, attemptHint: attempt.id })
+  );
+  assert.equal(path, `/siparis/${order.reference}?odeme=dogrulaniyor`);
+  assert.equal((await orderState(order.id)).status, "PENDING", "tx2 geri alındı");
+  // Sonraki tetikleyici tamamlar
+  assert.equal(await handleCardCallback({ token: attempt.providerToken! }), `/siparis/${order.reference}`);
+  assert.equal((await orderState(order.id)).status, "PAID");
+});
+
+test("eski sürüm callback'i: yalnız eski kayıttaki token'la eşleşirse deneme olarak alınır", async () => {
+  const { order } = await createTestOrder({ priceKurus: 23_900 });
+  const token = "eski-form-token";
+  await prisma.payment.create({
+    data: { orderId: order.id, provider: "iyzico", providerRef: token, status: "PENDING", amountKurus: order.totalKurus },
+  });
+  fake.register({ token, conversationId: order.id, basketId: order.id, price: "239.00", paidPrice: "239.00", currency: "TRY" });
+  fake.pay(token);
+
+  // Sipariş id'si bilinse de uydurma token deneme olarak alınmaz
+  assert.equal(await handleCardCallback({ token: "uydurma", orderIdHint: order.id }), "/odeme?error=payment_not_found");
+  assert.equal(await prisma.paymentAttempt.count({ where: { orderId: order.id } }), 0);
+
+  assert.equal(await handleCardCallback({ token, orderIdHint: order.id }), `/siparis/${order.reference}`);
   assert.equal((await orderState(order.id)).status, "PAID");
 });

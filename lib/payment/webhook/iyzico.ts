@@ -235,6 +235,14 @@ export async function processWebhookEvent(eventId: string): Promise<ProcessResul
       conversationId: p.paymentConversationId,
     },
   });
+  if (p.status !== "SUCCESS" && result.outcome === "unverified") {
+    // "Başarısız" bildirimi sorgulanamadı: kaybedilecek para yok; satır siparişin süre dolumunu engellemesin
+    await prisma.paymentEvent.updateMany({
+      where: { id: event.id, status: "FAILED" },
+      data: { status: "IGNORED", outcome: "unverified_failure_notice", handledAt: new Date() },
+    });
+    return { eventId, outcome: result.outcome, detail: result.error };
+  }
   if (p.status === "SUCCESS" && result.outcome === "pending") {
     // Bildirim "başarılı" diyor ama sorgu henüz kesin değil: satır açık kalır (yeniden denenebilir) ve
     // sipariş bu sürede otomatik iptal edilmez

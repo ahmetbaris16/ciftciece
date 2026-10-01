@@ -186,15 +186,17 @@ export async function startCardPayment(
 
 /**
  * Eski koddan (bu sürümden önce) açılmış ödeme formunun dönüşü: deneme kaydı yoktur.
- * Sipariş kartla ödeniyorsa token bu sipariş için deneme olarak kaydedilir; doğrulama yine
- * sağlayıcıdan yapılır (sepet no = sipariş id eşleşmezse ödeme işlenmez).
+ * Yalnız eski kayıttaki (payments.providerRef) token'la birebir aynıysa ve siparişin hiç denemesi
+ * yoksa token deneme olarak kaydedilir; doğrulama yine sağlayıcıdan yapılır.
  */
 async function adoptLegacyAttempt(providerName: string, token: string, orderIdHint: string) {
   const order = await prisma.order.findUnique({
     where: { id: orderIdHint },
-    select: { id: true, paymentMethod: true, totalKurus: true },
+    select: { id: true, paymentMethod: true, totalKurus: true, payment: { select: { provider: true, providerRef: true } } },
   });
   if (!order || order.paymentMethod !== "CARD") return null;
+  if (order.payment?.provider !== providerName || order.payment.providerRef !== token) return null;
+  if (await prisma.paymentAttempt.count({ where: { orderId: order.id } })) return null;
   try {
     return await prisma.paymentAttempt.create({
       data: {
@@ -266,7 +268,15 @@ export async function handleCardCallback(input: CallbackInput): Promise<string> 
     console.warn(`[payment/verify] callback denemesi (${input.attemptHint}) token'ın denemesiyle (${attempt.id}) aynı değil; token esas alındı`);
   }
 
-  const result = await verifyAttempt(attempt.id, { source: "CALLBACK" });
+  let result;
+  try {
+    result = await verifyAttempt(attempt.id, { source: "CALLBACK" });
+  } catch (err) {
+    // Doğrulama/kayıt hatası: ödeme olmuş olabilir → müşteri tekrar ödemeye yönlendirilmez
+    console.error("[payment/verify] doğrulama hatası:", attempt.id, err);
+    const order = await prisma.order.findUnique({ where: { id: attempt.orderId }, select: { reference: true } }).catch(() => null);
+    return order ? `/siparis/${order.reference}?odeme=dogrulaniyor` : "/odeme?error=payment_unverified";
+  }
   const orderPath = `/siparis/${result.orderReference}`;
   switch (result.outcome) {
     case "failed":

@@ -69,6 +69,9 @@ const PAYMENT_RETURN_ERRORS: Record<string, string> = {
   payment_failed: "Ödeme işlemi başarısız oldu. Lütfen tekrar deneyin.",
   payment_not_found: "Ödeme kaydı bulunamadı. Lütfen tekrar sipariş verin.",
   payment_error: "Ödeme sırasında bir hata oluştu. Lütfen tekrar deneyin.",
+  // Ödeme sonucu sağlayıcıdan doğrulanamadı: para çekilmiş olabilir, müşteri hemen tekrar ödemesin
+  payment_unverified:
+    "Ödemenizin sonucunu şu anda doğrulayamadık. Kartınızdan çekim yapıldıysa siparişiniz birkaç dakika içinde onaylanır; lütfen tekrar ödeme yapmadan önce “Sipariş Takibi”nden kontrol edin ya da bizi arayın: 0532 682 53 72",
 };
 
 export default function OdemePage() {

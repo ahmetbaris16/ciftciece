@@ -36,8 +36,9 @@ async function handle(request: NextRequest) {
     // 303: POST dönüşünden sonra tarayıcı hedefi GET ile açsın
     return NextResponse.redirect(`${appUrl}${path}`, 303);
   } catch (err) {
+    // Token alındı ama işlenemedi (ör. DB hatası): ödeme olmuş olabilir → "tekrar ödemeyin" mesajı
     console.error("[payment/verify]", err);
-    return NextResponse.redirect(`${appUrl}/odeme?error=payment_error`, 303);
+    return NextResponse.redirect(`${appUrl}/odeme?error=${token ? "payment_unverified" : "payment_error"}`, 303);
   }
 }
 
