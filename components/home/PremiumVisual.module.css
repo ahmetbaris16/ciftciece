@@ -1,0 +1,131 @@
+.section {
+  padding-block: var(--section-lg);
+  background-color: var(--color-bg);
+}
+
+.container {
+  max-width: var(--container-max);
+  margin-inline: auto;
+  padding-inline: var(--container-padding);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 55fr 45fr;
+  gap: clamp(2rem, 5vw, 5rem);
+  align-items: center;
+}
+
+/* ---- Image ---- */
+.imageCol {
+  position: relative;
+}
+
+.imageWrap {
+  position: relative;
+  aspect-ratio: 4 / 5;
+  border-radius: var(--radius-2xl);
+  overflow: hidden;
+  background-color: var(--color-bg-soft);
+}
+
+.image {
+  transition: transform var(--duration-slower) var(--ease-out);
+}
+
+.imageWrap:hover .image {
+  transform: scale(1.02);
+}
+
+/* ---- Content ---- */
+.contentCol {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.headline {
+  font-family: var(--font-display);
+  font-size: var(--text-4xl);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text);
+  line-height: var(--leading-tight);
+  letter-spacing: -0.03em;
+  margin: 0;
+}
+
+.headlineEm {
+  font-style: italic;
+  font-weight: var(--weight-medium);
+  color: var(--color-primary);
+}
+
+.body {
+  font-size: var(--text-md);
+  color: var(--color-text-muted);
+  line-height: var(--leading-relaxed);
+  max-width: 48ch;
+  margin: 0;
+}
+
+.features {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-block: var(--space-2);
+}
+
+.feature {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.featureDot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background-color: var(--color-sage);
+  flex-shrink: 0;
+}
+
+/* ---- Tablet ---- */
+@media (max-width: 1024px) {
+  .grid {
+    grid-template-columns: 1fr;
+    gap: var(--space-10);
+  }
+
+  .imageWrap {
+    aspect-ratio: 16 / 9;
+    max-height: 420px;
+  }
+}
+
+/* ---- Mobile ---- */
+@media (max-width: 640px) {
+  .imageWrap {
+    aspect-ratio: 4 / 3;
+    border-radius: var(--radius-xl);
+  }
+
+  .headline {
+    font-size: var(--text-3xl);
+  }
+
+  .body {
+    max-width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .image {
+    transition: none;
+  }
+  .imageWrap:hover .image {
+    transform: none;
+  }
+}

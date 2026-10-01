@@ -1,0 +1,702 @@
+/* ============================================================
+   ReviewsSection — gerçek telefon sahnesi
+   Performans: giriş ve eğim yalnız transform/opacity; gölgeler ve yansıma statik gradyan,
+   blur/backdrop-filter yok.
+   Ekran içi ölçüler em cinsindedir: 1em = telefon genişliğinin %4,3'ü (telefon küçülünce her şey orantılı küçülür).
+   ============================================================ */
+
+.section {
+  padding: clamp(64px, 8vw, 120px) 0;
+  background: var(--color-bg);
+  /* Giriş hareketi taşma yapmasın. `clip` scroll container OLUŞTURMAZ —
+     `hidden` olsaydı animation-timeline: view() sayfa yerine bu bölümü izlerdi. */
+  overflow: hidden;
+  overflow: clip;
+}
+
+.container {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 var(--container-padding);
+}
+
+/* ── Başlık ── */
+.header {
+  text-align: center;
+  margin-bottom: clamp(36px, 5vw, 64px);
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-sage-dark);
+  margin: 0 0 var(--space-3);
+}
+
+.eyebrow::before,
+.eyebrow::after {
+  content: "";
+  width: 28px;
+  height: 1px;
+  background: var(--color-sage);
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: clamp(1.9rem, 3.6vw, 2.75rem);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text);
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  margin: 0;
+  text-wrap: balance;
+}
+
+.titleItalic {
+  font-style: italic;
+  font-weight: var(--weight-regular);
+  color: var(--color-gold-dark);
+}
+
+/* ── Sahne ── */
+.stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(40px, 8vw, 128px);
+}
+
+/* ── Giriş ──
+   Varsayılan (scroll-driven desteklenmiyorsa): IO ile .entered sınıfı */
+.phoneWrap {
+  --phone-w: clamp(260px, 26vw, 300px);
+  --r: calc(var(--phone-w) * 0.165); /* köşe yarıçapı */
+  position: relative;
+  flex-shrink: 0;
+  opacity: 0;
+  transform: translate3d(0, 64px, 0) rotate(-4deg) scale(0.94);
+  transition:
+    opacity 0.8s var(--ease-out),
+    transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.entered .phoneWrap {
+  opacity: 1;
+  transform: none;
+}
+
+.sidePanel {
+  opacity: 0;
+  transform: translate3d(24px, 0, 0);
+  transition: opacity 0.7s var(--ease-out) 0.25s, transform 0.7s var(--ease-out) 0.25s;
+}
+
+.entered .sidePanel {
+  opacity: 1;
+  transform: none;
+}
+
+/* Tarayıcı destekliyorsa: hareket kaydırmaya bağlı (scrub) — sayfa kaydırması
+   serbest kalır, animasyon compositor'da çalışır. */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .phoneWrap,
+    .entered .phoneWrap {
+      opacity: 1;
+      transform: none;
+      transition: none;
+      animation: phoneRise linear both;
+      animation-timeline: view();
+      animation-range: entry 5% cover 42%;
+    }
+
+    .sidePanel,
+    .entered .sidePanel {
+      opacity: 1;
+      transform: none;
+      transition: none;
+      animation: panelIn linear both;
+      animation-timeline: view();
+      animation-range: entry 20% cover 45%;
+    }
+  }
+}
+
+@keyframes phoneRise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 140px, 0) rotate(-7deg) scale(0.9);
+  }
+  60% {
+    opacity: 1;
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes panelIn {
+  from {
+    opacity: 0;
+    transform: translate3d(32px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ── Telefon gövdesi: titanyum çerçeve ── */
+.phone {
+  position: relative;
+  width: var(--phone-w);
+  aspect-ratio: 9 / 19.5;
+  padding: 3px;
+  border-radius: var(--r);
+  background: linear-gradient(
+    135deg,
+    #8d8b86 0%,
+    #3a3936 18%,
+    #b3b1ab 34%,
+    #34332f 52%,
+    #85837e 70%,
+    #2c2b28 88%,
+    #6e6c67 100%
+  );
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.55),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.22),
+    0 2px 5px rgba(0, 0, 0, 0.28),
+    0 34px 60px -14px rgba(48, 42, 30, 0.5),
+    0 18px 30px -18px rgba(48, 42, 30, 0.4);
+  transform: perspective(1500px) rotateY(-8deg) rotateX(3deg);
+  transition: transform 0.7s var(--ease-out);
+}
+
+@media (pointer: fine) {
+  .stage:hover .phone {
+    transform: perspective(1500px) rotateY(-2deg) rotateX(1deg);
+  }
+}
+
+/* yan tuşlar */
+.hw {
+  position: absolute;
+  width: 3px;
+  border-radius: 2px 0 0 2px;
+  background: linear-gradient(90deg, #4a4945, #22211f);
+  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.2);
+}
+
+.hwAction {
+  left: -3px;
+  top: 13%;
+  height: 3.4%;
+}
+
+.hwVolUp {
+  left: -3px;
+  top: 19.5%;
+  height: 6.6%;
+}
+
+.hwVolDown {
+  left: -3px;
+  top: 28%;
+  height: 6.6%;
+}
+
+.hwPower {
+  right: -3px;
+  top: 25%;
+  height: 10%;
+  border-radius: 0 2px 2px 0;
+  background: linear-gradient(270deg, #4a4945, #22211f);
+}
+
+/* iç çerçeve (siyah bezel) */
+.bezel {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  padding: 7px;
+  border-radius: calc(var(--r) - 3px);
+  background: #050505;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+/* ekran */
+.screen {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: calc(var(--r) - 10px);
+  background: #ffffff;
+  color: #202124;
+  font-family: var(--font-body);
+  font-size: calc(var(--phone-w) * 0.043);
+  line-height: 1.35;
+}
+
+/* dinamik ada + kamera merceği */
+.island {
+  position: absolute;
+  top: 0.9em;
+  left: 50%;
+  z-index: 3;
+  width: 7.4em;
+  height: 2.1em;
+  margin-left: -3.7em;
+  border-radius: 1.1em;
+  background: #000;
+}
+
+.island i {
+  position: absolute;
+  right: 0.75em;
+  top: 50%;
+  width: 0.9em;
+  height: 0.9em;
+  margin-top: -0.45em;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #2b3a55 0 14%, #0c1220 42%, #000 72%);
+  box-shadow: 0 0 0 0.12em #0a0a0a;
+}
+
+/* durum çubuğu */
+.statusBar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  height: 3.4em;
+  padding: 0.95em 2em 0;
+  font-size: 0.98em;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.sysIcons {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+}
+
+.sysIcons svg {
+  fill: currentColor;
+}
+
+/* uygulama başlığı + sekmeler */
+.appBar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.8em;
+  padding: 0.2em 1em 0.6em;
+  color: #202124;
+}
+
+.placeName {
+  flex: 1;
+  font-size: 1.25em;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+}
+
+.tabs {
+  display: flex;
+  flex-shrink: 0;
+  border-bottom: 1px solid #dadce0;
+}
+
+.tabs span {
+  position: relative;
+  flex: 1;
+  padding: 0.8em 0 0.75em;
+  text-align: center;
+  font-size: 0.98em;
+  font-weight: 500;
+  color: #5f6368;
+}
+
+.tabs .tabActive {
+  color: #1a73e8;
+}
+
+.tabs .tabActive::after {
+  content: "";
+  position: absolute;
+  left: 18%;
+  right: 18%;
+  bottom: -1px;
+  height: 0.28em;
+  border-radius: 0.28em 0.28em 0 0;
+  background: #1a73e8;
+}
+
+/* yorum alanı (dikey kaydırma) */
+.scroller {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.scroller::-webkit-scrollbar {
+  display: none;
+}
+
+.scroller:focus-visible {
+  outline: 2px solid #1a73e8;
+  outline-offset: -2px;
+}
+
+/* puan özeti */
+.summary {
+  display: flex;
+  align-items: center;
+  gap: 1.3em;
+  padding: 1.2em 1.3em 1.1em;
+}
+
+.score {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25em;
+  min-width: 6.2em;
+}
+
+.scoreNum {
+  font-size: 3.5em;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: #202124;
+}
+
+.scoreCount {
+  font-size: 0.9em;
+  color: #5f6368;
+}
+
+.bars {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.35em;
+}
+
+.barRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  font-size: 0.85em;
+  color: #5f6368;
+}
+
+.barTrack {
+  flex: 1;
+  height: 0.5em;
+  overflow: hidden;
+  border-radius: 0.5em;
+  background: #e8eaed;
+}
+
+.barFill {
+  display: block;
+  height: 100%;
+  border-radius: 0.5em;
+  background: #fbbc04;
+}
+
+/* yıldızlar */
+.stars {
+  display: inline-flex;
+  gap: 0.05em;
+}
+
+.stars svg {
+  display: block;
+}
+
+.starOn {
+  fill: #fbbc04;
+}
+
+.starOff {
+  fill: #dadce0;
+}
+
+.starsSm svg {
+  width: 1em;
+  height: 1em;
+}
+
+.starsMd svg {
+  width: 1.15em;
+  height: 1.15em;
+}
+
+/* yorumlar */
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  padding: 1.1em 1.3em 1.15em;
+  border-top: 1px solid #ebedf0;
+}
+
+.itemHead {
+  display: flex;
+  align-items: center;
+  gap: 0.85em;
+}
+
+.avatar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2.6em;
+  height: 2.6em;
+  border-radius: 50%;
+  color: #ffffff;
+  font-size: 1em;
+  font-weight: 500;
+}
+
+.itemWho {
+  min-width: 0;
+}
+
+.itemName {
+  margin: 0;
+  overflow: hidden;
+  font-size: 1.05em;
+  font-weight: 500;
+  line-height: 1.3;
+  color: #202124;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.itemMeta {
+  margin: 0.05em 0 0;
+  font-size: 0.88em;
+  line-height: 1.3;
+  color: #5f6368;
+}
+
+.itemRating {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  margin-top: 0.7em;
+}
+
+.itemDate {
+  font-size: 0.9em;
+  color: #5f6368;
+}
+
+.itemText {
+  margin: 0.6em 0 0;
+  font-size: 1.02em;
+  line-height: 1.5;
+  color: #202124;
+}
+
+.homeIndicator {
+  flex-shrink: 0;
+  width: 10em;
+  height: 0.36em;
+  margin: 0.7em auto 0.6em;
+  border-radius: 0.4em;
+  background: #1c1c1e;
+  opacity: 0.9;
+}
+
+/* ekran camı yansıması */
+.glare {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(
+    118deg,
+    rgba(255, 255, 255, 0.16) 0%,
+    rgba(255, 255, 255, 0) 28%,
+    rgba(255, 255, 255, 0) 64%,
+    rgba(255, 255, 255, 0.06) 100%
+  );
+}
+
+/* telefonun yüzeye değdiği gölge */
+.groundShadow {
+  position: absolute;
+  right: 6%;
+  bottom: -26px;
+  left: 6%;
+  z-index: -1;
+  height: 30px;
+  background: radial-gradient(ellipse at center, rgba(40, 32, 20, 0.32) 0%, rgba(40, 32, 20, 0) 70%);
+}
+
+/* ── Yan panel ── */
+.sidePanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 220px;
+  max-width: 320px;
+}
+
+.sideScore {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin: 0;
+  line-height: 1;
+}
+
+.sideScoreNum {
+  font-family: var(--font-display);
+  font-size: 4.5rem;
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.03em;
+  color: var(--color-text);
+}
+
+.sideScore .starOn {
+  fill: var(--color-gold);
+}
+
+.starsLg svg {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.sideCaption {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.sideActions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.sideCta {
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 0 var(--space-6);
+  border-radius: var(--radius-md);
+  background-color: var(--color-primary);
+  color: var(--color-text-inverse);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.02em;
+  transition: background-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.sideCta:hover {
+  background-color: var(--color-primary-hover);
+}
+
+.sideCta:active {
+  transform: scale(0.98);
+}
+
+.sideLink {
+  padding-bottom: 2px;
+  border-bottom: 1px solid var(--color-border-strong);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-text);
+  transition: border-color var(--transition-fast);
+}
+
+.sideLink:hover {
+  border-color: var(--color-text);
+}
+
+.sideCta:focus-visible,
+.sideLink:focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 3px;
+}
+
+/* ── Mobil ── */
+@media (max-width: 767px) {
+  .stage {
+    flex-direction: column;
+    gap: var(--space-10);
+  }
+
+  .phoneWrap {
+    --phone-w: min(270px, 72vw);
+  }
+
+  .sidePanel {
+    align-items: center;
+    min-width: 0;
+    text-align: center;
+  }
+
+  .sideScore {
+    justify-content: center;
+  }
+
+  .sideActions {
+    align-items: center;
+  }
+
+  @keyframes panelIn {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 16px, 0);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+
+/* ── Hareket azaltma ── */
+@media (prefers-reduced-motion: reduce) {
+  .phoneWrap,
+  .sidePanel {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .phone,
+  .stage:hover .phone {
+    transform: none;
+    transition: none;
+  }
+}

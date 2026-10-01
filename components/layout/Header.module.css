@@ -1,0 +1,400 @@
+/* ============================================================
+   HEADER STYLES
+   ============================================================ */
+
+.header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: var(--z-header);
+  background-color: var(--color-bg);
+  transition: box-shadow var(--transition-normal);
+}
+
+.header.scrolled {
+  box-shadow: var(--shadow-sm);
+}
+
+/* ---- Utility Bar ---- */
+.utilityBar {
+  background-color: var(--color-primary);
+  padding-block: 6px;
+}
+
+.utilityInner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);
+  max-width: var(--container-max);
+  margin-inline: auto;
+  padding-inline: var(--container-padding);
+}
+
+.utilityText {
+  font-size: var(--text-xs);
+  color: rgba(245, 241, 232, 0.85);
+  letter-spacing: 0.02em;
+}
+
+.utilityPhone {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  color: var(--color-bg);
+  letter-spacing: 0.04em;
+  transition: color var(--transition-fast);
+}
+
+.utilityText,
+.utilityPhone {
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  /* Dar ekranda tek satır: yer adı gizlenir, saat + telefon kalır */
+  .utilityPlace {
+    display: none;
+  }
+}
+
+.utilityPhone:hover {
+  color: var(--color-brass-light);
+}
+
+/* ---- Main Bar ---- */
+.mainBar {
+  /* 11px + 58px logo + 11px = önceki yükseklik (spacer ile uyumlu) */
+  padding-block: 11px;
+}
+
+.mainInner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  max-width: var(--container-max);
+  margin-inline: auto;
+  padding-inline: var(--container-padding);
+}
+
+/* ---- Logo ---- */
+.logo {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+/* Şeffaf logo (açık zemin için koyu altın ton) — slogan satırı yok, küçük boyutta okunur */
+.logoImg {
+  display: block;
+  height: 58px;
+  width: auto;
+}
+
+@media (max-width: 767px) {
+  .logoImg {
+    height: 44px;
+  }
+}
+
+/* ---- Desktop Search ---- */
+.searchWrap {
+  flex: 1;
+  max-width: 480px;
+  margin-inline: auto;
+}
+
+/* ---- Actions ---- */
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
+}
+
+.actionBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.actionBtn:hover {
+  background-color: var(--color-bg-soft);
+  color: var(--color-primary);
+}
+
+.cartBtn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.cartBtn:hover {
+  background-color: var(--color-primary-10);
+  color: var(--color-primary);
+}
+
+.cartBadge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 18px;
+  height: 18px;
+  padding-inline: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--color-primary);
+  color: var(--color-text-inverse);
+  font-size: 10px;
+  font-weight: var(--weight-bold);
+  border-radius: var(--radius-full);
+  line-height: 1;
+  pointer-events: none;
+}
+
+/* ---- Category Nav ---- */
+.categoryNav {
+  border-top: 1px solid var(--color-border-light);
+}
+
+.categoryInner {
+  max-width: var(--container-max);
+  margin-inline: auto;
+  padding-inline: var(--container-padding);
+}
+
+.categoryList {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  /* Dar tablet genişliğinde taşarsa yatay kaydırılır (sarmaz) */
+  overflow-x: auto;
+  scrollbar-width: none;
+  white-space: nowrap;
+}
+
+.categoryList::-webkit-scrollbar {
+  display: none;
+}
+
+.categoryLink {
+  display: block;
+  padding: 10px var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-secondary);
+  letter-spacing: 0.01em;
+  border-bottom: 2px solid transparent;
+  transition:
+    color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.categoryLink:hover {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+
+/* ---- Hamburger ---- */
+.hamburger {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  width: 44px;
+  height: 44px;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  background: none;
+  border: none;
+  transition: background-color var(--transition-fast);
+}
+
+.hamburger:hover {
+  background-color: var(--color-bg-soft);
+}
+
+.hamburgerLine {
+  display: block;
+  width: 20px;
+  height: 2px;
+  background-color: var(--color-text);
+  border-radius: 2px;
+  transition:
+    transform var(--duration-normal) var(--ease-in-out),
+    opacity var(--duration-normal) var(--ease-in-out);
+  transform-origin: center;
+}
+
+.hamburgerLine.open:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
+}
+
+.hamburgerLine.open:nth-child(2) {
+  opacity: 0;
+  transform: scaleX(0);
+}
+
+.hamburgerLine.open:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
+}
+
+/* ---- Mobile Nav Overlay ---- */
+.mobileNav {
+  position: fixed;
+  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: calc(var(--z-header) - 1);
+  background-color: var(--color-bg);
+  padding-top: calc(var(--header-h) + var(--space-4)); /* sabit başlığın altından başla */
+  padding-inline: var(--container-padding);
+  padding-bottom: max(var(--space-8), env(safe-area-inset-bottom));
+  transform: translateX(-100%);
+  transition: transform var(--duration-normal) var(--ease-in-out);
+  overflow-y: auto;
+}
+
+.mobileNav.mobileNavOpen {
+  transform: translateX(0);
+}
+
+.mobileNavList {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.mobileNavItem {
+  opacity: 0;
+  transform: translateX(-12px);
+}
+
+.mobileNavOpen .mobileNavItem {
+  opacity: 1;
+  transform: translateX(0);
+  transition:
+    opacity var(--duration-slow) var(--ease-out),
+    transform var(--duration-slow) var(--ease-out);
+}
+
+.mobileNavLink {
+  display: block;
+  padding: 16px 0;
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-medium);
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-border-light);
+  letter-spacing: -0.01em;
+  transition: color var(--transition-fast);
+}
+
+.mobileNavLink:hover {
+  color: var(--color-primary);
+}
+
+.mobileNavDivider {
+  height: var(--space-4);
+}
+
+.mobileNavFooter {
+  margin-top: var(--space-10);
+}
+
+.mobileNavAddress {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  line-height: var(--leading-relaxed);
+}
+
+/* ---- Backdrop ---- */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-header) - 2);
+  background-color: rgba(38, 35, 31, 0.4);
+  animation: fadeIn 200ms ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ---- Mobile Search ---- */
+.mobileSearch {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-header) + 1);
+  background-color: var(--color-bg);
+  padding-top: var(--space-4);
+  padding-inline: var(--container-padding);
+  safe-area-inset-top: env(safe-area-inset-top);
+  animation: slideDown 200ms var(--ease-out);
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.mobileSearchInner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-top: max(var(--space-4), env(safe-area-inset-top));
+}
+
+.mobileSearchClose {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-md);
+  color: var(--color-text-muted);
+  background: none;
+  border: none;
+  border-radius: var(--radius-md);
+}
+
+.mobileSearchClose:hover {
+  background-color: var(--color-bg-soft);
+  color: var(--color-text);
+}
+
+/* ---- Spacer ---- */
+.spacer {
+  /* Gerçek başlık yüksekliği (Header bileşeni ölçer) — eskiden sabit 140/92 px'ti ve başlığın 13 px altında kalıyordu */
+  height: var(--header-h);
+}
+
+@media (max-width: 767px) {
+  .mainBar {
+    padding-block: 6px;
+  }
+}
+
+/* Dar masaüstü/tablet: kategori bağlantıları sıkılaşır (temel kuraldan SONRA olmalı) */
+@media (max-width: 1100px) {
+  .categoryLink {
+    padding-inline: var(--space-3);
+  }
+}

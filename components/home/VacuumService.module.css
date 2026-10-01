@@ -1,0 +1,340 @@
+/* ============================================================
+   VAKUMLU PAKETLEME HİZMETİ — koyu bant (sayfa ritmini kırar, hizmeti öne çıkarır)
+   ============================================================ */
+
+.section {
+  padding-block: var(--section-md);
+  background: radial-gradient(120% 90% at 85% 8%, #2b2216 0%, #17130d 55%, #100d09 100%);
+  color: var(--color-text-inverse);
+}
+
+.container {
+  max-width: var(--container-max);
+  margin-inline: auto;
+  padding-inline: var(--container-padding);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  grid-template-areas:
+    "head photo"
+    "benefits photo"
+    "cta photo";
+  column-gap: clamp(2rem, 5vw, 5rem);
+  row-gap: var(--space-8);
+  align-content: center;
+}
+
+/* ---- Başlık bloğu ---- */
+.head {
+  grid-area: head;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.label {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-gold-light);
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: var(--text-4xl);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
+  letter-spacing: -0.02em;
+  color: #f5f1e8;
+  margin: 0;
+  text-wrap: balance;
+}
+
+.titleAccent {
+  color: var(--color-gold-light);
+  background: linear-gradient(180deg, #e9d08a 0%, #c9a84c 55%, #a8842a 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.rule {
+  display: block;
+  width: 72px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--color-gold-light), transparent);
+}
+
+.lead {
+  font-size: var(--text-md);
+  line-height: var(--leading-relaxed);
+  color: rgba(245, 241, 232, 0.78);
+  max-width: 52ch;
+  margin: 0;
+}
+
+/* Kapsam notu: hizmet yalnızca siyah zeytin için */
+.scope {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 8px 14px;
+  border: 1px solid rgba(201, 168, 76, 0.55);
+  border-radius: var(--radius-full);
+  background-color: rgba(201, 168, 76, 0.1);
+  color: #f5f1e8;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  line-height: 1.4;
+}
+
+.scope svg {
+  flex-shrink: 0;
+  color: var(--color-gold-light);
+}
+
+/* ---- Fotoğraf ---- */
+.photo {
+  grid-area: photo;
+  align-self: center;
+  position: relative;
+  margin: 0;
+  aspect-ratio: 1400 / 1094;
+  border-radius: var(--radius-2xl);
+  overflow: hidden;
+  background-color: #ffffff;
+  box-shadow:
+    0 0 0 1px rgba(201, 168, 76, 0.4),
+    0 28px 64px rgba(0, 0, 0, 0.5);
+}
+
+.photoImg {
+  transition: transform var(--duration-slower) var(--ease-out);
+}
+
+.photo:hover .photoImg {
+  transform: scale(1.02);
+}
+
+/* ---- Faydalar ---- */
+.benefits {
+  grid-area: benefits;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.benefit {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding-left: var(--space-4);
+  border-left: 1px solid rgba(201, 168, 76, 0.28);
+}
+
+.benefit:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.benefitIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(201, 168, 76, 0.7);
+  color: var(--color-gold-light);
+  background-color: rgba(201, 168, 76, 0.08);
+  flex-shrink: 0;
+}
+
+.benefitText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.benefitTitle {
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  color: #f5f1e8;
+  line-height: var(--leading-snug);
+}
+
+.benefitDesc {
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: rgba(245, 241, 232, 0.68);
+}
+
+/* ---- Çağrı (iletişim) ---- */
+.cta {
+  grid-area: cta;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.ctaHint {
+  font-size: var(--text-sm);
+  color: rgba(245, 241, 232, 0.78);
+  margin: 0;
+}
+
+.ctaRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.btnPrimary,
+.btnOutline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 48px;
+  padding: 0 var(--space-6);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.btnPrimary {
+  background-color: #f5f1e8;
+  color: #1a1a1a;
+  border: 1px solid #f5f1e8;
+}
+
+.btnPrimary:hover {
+  background-color: #ffffff;
+  border-color: #ffffff;
+}
+
+.btnOutline {
+  background-color: transparent;
+  color: #f5f1e8;
+  border: 1px solid rgba(245, 241, 232, 0.4);
+}
+
+.btnOutline:hover {
+  background-color: rgba(245, 241, 232, 0.1);
+  border-color: rgba(245, 241, 232, 0.7);
+}
+
+.btnPrimary:active,
+.btnOutline:active {
+  transform: scale(0.98);
+}
+
+.textLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-gold-light);
+  letter-spacing: 0.02em;
+  border-bottom: 1px solid rgba(201, 168, 76, 0.45);
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.textLink::after {
+  content: "→";
+  margin-left: 0.4em;
+  transition: transform var(--transition-fast);
+}
+
+.textLink:hover {
+  color: #e9d08a;
+  border-color: #e9d08a;
+}
+
+.textLink:hover::after {
+  transform: translateX(3px);
+}
+
+/* Koyu zeminde varsayılan (siyah) odak halkası görünmez */
+.btnPrimary:focus-visible,
+.btnOutline:focus-visible,
+.textLink:focus-visible {
+  outline: 2px solid var(--color-gold-light);
+  outline-offset: 3px;
+}
+
+/* ---- Tablet ---- */
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "head"
+      "photo"
+      "benefits"
+      "cta";
+    row-gap: var(--space-8);
+  }
+
+  .lead {
+    max-width: 60ch;
+  }
+}
+
+/* ---- Mobil ---- */
+@media (max-width: 640px) {
+  .title {
+    font-size: var(--text-3xl);
+  }
+
+  .photo {
+    border-radius: var(--radius-xl);
+  }
+
+  .benefits {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-5);
+  }
+
+  .benefit {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-4);
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .ctaRow {
+    width: 100%;
+  }
+
+  .btnPrimary,
+  .btnOutline {
+    flex: 1 1 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .photoImg,
+  .textLink::after {
+    transition: none;
+  }
+
+  .photo:hover .photoImg,
+  .textLink:hover::after {
+    transform: none;
+  }
+}

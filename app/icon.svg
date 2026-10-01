@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Çiftçi Ece favicon: tek zeytin yaprağı + tek zeytin.
+       Renkler masaüstü imleci (İMLEÇ.png) ile aynı paletten alındı. -->
+  <defs>
+    <linearGradient id="leaf" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7f9d4f"/>
+      <stop offset="1" stop-color="#3d5a20"/>
+    </linearGradient>
+    <radialGradient id="olive" cx="0.36" cy="0.32" r="0.75">
+      <stop offset="0" stop-color="#6b3a55"/>
+      <stop offset="0.55" stop-color="#34182a"/>
+      <stop offset="1" stop-color="#1c0c16"/>
+    </radialGradient>
+    <style>
+      @media (prefers-color-scheme: dark) {
+        .olive-edge { stroke: #b58aa5; stroke-opacity: .55; }
+      }
+    </style>
+  </defs>
+  <!-- sap -->
+  <path d="M42 37 C39 33 36 30 32 27" fill="none" stroke="#7a6a2c" stroke-width="3" stroke-linecap="round"/>
+  <!-- yaprak -->
+  <path d="M34 28.5 C29 11 16 2.5 2 2.5 C3 18 14 30.5 34 28.5 Z" fill="url(#leaf)"/>
+  <path d="M33 27.5 C24 18 14 9.5 4.5 4.5" fill="none" stroke="#c3cc82" stroke-width="1.4" stroke-linecap="round" opacity=".75"/>
+  <!-- zeytin -->
+  <ellipse class="olive-edge" cx="47" cy="47.5" rx="12.5" ry="15" transform="rotate(-32 47 47.5)" fill="url(#olive)" stroke="none" stroke-width="1.5"/>
+  <ellipse cx="42" cy="41.5" rx="3.2" ry="4.6" transform="rotate(-32 42 41.5)" fill="#fff" opacity=".22"/>
+</svg>

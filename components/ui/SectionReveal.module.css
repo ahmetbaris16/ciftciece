@@ -1,0 +1,52 @@
+/* ============================================================
+   SectionReveal — scroll-triggered animation
+   ============================================================ */
+
+/* Base hidden state */
+.reveal {
+  /* transitions apply only when going from hidden → visible */
+  transition:
+    opacity 0.65s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ── Variant initial states ── */
+.fade-up {
+  opacity: 0;
+  transform: translateY(32px);
+}
+
+.fade-in {
+  opacity: 0;
+  transform: none;
+}
+
+.fade-left {
+  opacity: 0;
+  transform: translateX(32px);
+}
+
+.fade-right {
+  opacity: 0;
+  transform: translateX(-32px);
+}
+
+/* ── Visible state ── */
+.visible {
+  opacity: 1 !important;
+  transform: none !important;
+}
+
+/* ── prefers-reduced-motion: no animation ── */
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    transition: none;
+  }
+  .fade-up,
+  .fade-in,
+  .fade-left,
+  .fade-right {
+    opacity: 1;
+    transform: none;
+  }
+}

@@ -1,0 +1,168 @@
+.section {
+  padding-block: var(--section-md);
+}
+
+.container {
+  max-width: var(--container-max);
+  margin-inline: auto;
+  padding-inline: var(--container-padding);
+}
+
+.header {
+  margin-bottom: clamp(1.5rem, 3vw, 2.5rem);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-4);
+}
+
+.card {
+  position: relative;
+  display: block;
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  aspect-ratio: 4 / 5;
+  text-decoration: none;
+  background-color: var(--color-bg-soft);
+}
+
+/* "Tüm Ürünler" kartı — görselsiz, marka koyu zemini */
+.allCard {
+  background-color: var(--color-primary);
+  background-image: radial-gradient(120% 90% at 100% 0%, rgba(184, 149, 42, 0.22), transparent 60%);
+}
+
+.allCard .cardCta {
+  opacity: 1;
+  transform: none;
+}
+
+.imageWrap {
+  position: absolute;
+  inset: 0;
+}
+
+.image {
+  transition: transform var(--duration-slower) var(--ease-out);
+}
+
+.card:hover .image {
+  transform: scale(1.04);
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    transparent 30%,
+    rgba(12, 10, 8, 0.55) 60%,
+    rgba(12, 10, 8, 0.88) 100%
+  );
+  transition: opacity var(--transition-normal);
+}
+
+.card:hover .overlay {
+  opacity: 0.9;
+}
+
+.cardContent {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: var(--space-4) var(--space-5) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.cardName {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+  color: var(--color-bg);
+  line-height: var(--leading-tight);
+  letter-spacing: -0.01em;
+}
+
+.cardDesc {
+  font-size: var(--text-xs);
+  color: rgba(245, 241, 232, 0.82);
+  margin: 0;
+  line-height: 1.35;
+}
+
+.cardCta {
+  display: block;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-brass-light);
+  margin-top: var(--space-2);
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity var(--transition-normal),
+    transform var(--transition-normal);
+}
+
+.card:hover .cardCta {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Focus visible state */
+.card:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+}
+
+/* ---- Tablet ---- */
+@media (max-width: 1024px) {
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-3);
+  }
+
+  .card {
+    aspect-ratio: 4 / 3;
+  }
+}
+
+/* ---- Mobile ---- */
+@media (max-width: 640px) {
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-3);
+  }
+
+  .card {
+    aspect-ratio: 3 / 4;
+    border-radius: var(--radius-lg);
+  }
+
+  .cardName {
+    font-size: var(--text-lg);
+  }
+
+  /* Always show CTA on mobile (no hover) */
+  .cardCta {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .image,
+  .cardCta,
+  .overlay {
+    transition: none;
+  }
+
+  .card:hover .image {
+    transform: none;
+  }
+}

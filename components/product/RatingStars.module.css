@@ -1,0 +1,27 @@
+.stars {
+  position: relative;
+  display: inline-flex;
+  vertical-align: middle;
+  line-height: 0;
+  flex-shrink: 0;
+}
+
+.base,
+.fill {
+  display: inline-flex;
+  gap: var(--star-gap, 2px);
+}
+
+.base {
+  color: #dcd4c3;
+}
+
+.fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  overflow: hidden;
+  color: var(--color-gold);
+  white-space: nowrap;
+}

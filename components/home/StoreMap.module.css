@@ -1,0 +1,195 @@
+.wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: #e8e4dc;
+}
+
+/* Leaflet/Map container */
+.mapContainer {
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+/* Override Leaflet's default font to match design system */
+.mapContainer :global(.leaflet-container) {
+  font-family: inherit;
+}
+
+/* Skeleton while loading */
+.skeleton {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, #e8e4dc 0%, #d4c9b4 50%, #e8e4dc 100%);
+  background-size: 200% 200%;
+  animation: shimmer 2s ease infinite;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.skeletonInner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+@keyframes shimmer {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Custom marker */
+/* Leaflet ikon kabını mutlak konumlar (translate3d ile yerleştirir); relative olursa
+   birden fazla işaretçide ikonlar alt alta dizilip kayar. */
+.marker {
+  position: absolute;
+}
+
+.markerPin {
+  width: 40px;
+  height: 40px;
+  background: #0f0f0f;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.45);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  border: 2px solid #B8952A;
+}
+
+.markerPin svg {
+  transform: rotate(45deg);
+}
+
+.marker:hover .markerPin {
+  transform: rotate(-45deg) scale(1.12);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.5);
+}
+
+.markerPulse {
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 12px;
+  height: 12px;
+  background: #B8952A;
+  border-radius: 50%;
+  opacity: 0.4;
+  animation: pulse 2s ease-out infinite;
+}
+
+@keyframes pulse {
+  0% { transform: translateX(-50%) scale(1); opacity: 0.4; }
+  70% { transform: translateX(-50%) scale(2.5); opacity: 0; }
+  100% { transform: translateX(-50%) scale(1); opacity: 0; }
+}
+
+/* Popup */
+.popup {
+  font-family: var(--font-body, sans-serif);
+  font-size: 13px;
+  line-height: 1.5;
+  color: #1a1a1a;
+  padding: 2px 4px;
+}
+
+/* Fallback butonları (harita yüklenemezse) */
+.directionsBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.125rem;
+  background: var(--color-primary, #4a7c59);
+  color: white;
+  border-radius: 2rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: 0 3px 12px rgba(0,0,0,0.25);
+  white-space: nowrap;
+  transition: background 0.18s ease, transform 0.1s ease;
+}
+
+.directionsBtn:hover {
+  background: #3a6147;
+  transform: translateY(-1px);
+}
+
+.gmapsBtn {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.625rem 1rem;
+  background: rgba(255,255,255,0.92);
+  color: #333;
+  border-radius: 2rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-decoration: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  white-space: nowrap;
+  transition: background 0.18s ease;
+}
+
+.gmapsBtn:hover {
+  background: white;
+}
+
+/* Fallback */
+.fallback {
+  width: 100%;
+  height: 100%;
+  background: var(--color-bg-soft, #f5f3ef);
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.fallbackInner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  text-align: center;
+  color: var(--color-text-secondary, #6b7280);
+}
+
+.fallbackInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.9375rem;
+}
+
+.fallbackInfo strong {
+  color: var(--color-text, #1a1a1a);
+  font-size: 1.0625rem;
+}
+
+.fallbackBtns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton,
+  .markerPulse {
+    animation: none;
+  }
+}

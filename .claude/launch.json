@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Ciftciece Mock (veritabanı olmadan)",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [".claude/dev-mock.cjs"],
+      "port": 3100,
+      "url": "http://localhost:3100"
+    }
+  ]
+}

@@ -1,0 +1,607 @@
+/* ============================================================
+   HERO — kampanya vitrini (1–4 slayt), ilk ekranı kaplar
+   Performans: slayt geçişi yalnız opacity/transform; blur/backdrop-filter yok.
+   Yükseklik = ekran − sabit başlık (--header-h, Header bileşeni ölçer).
+   ============================================================ */
+
+.hero {
+  --hero-h: calc(100vh - var(--header-h));
+  position: relative;
+  height: var(--hero-h);
+  min-height: 440px;
+  max-height: 1000px; /* çok büyük ekranlarda hero ekranı aşmasın */
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  background-color: #1b1813; /* görsel gelmeden önceki zemin */
+  isolation: isolate;
+}
+
+@supports (height: 100svh) {
+  .hero {
+    --hero-h: calc(100svh - var(--header-h));
+  }
+}
+
+.isCarousel {
+  touch-action: pan-y; /* yatay swipe bizde, dikey kaydırma tarayıcıda */
+  overscroll-behavior-x: contain; /* yatay kaydırma tarayıcıda "geri git" olmasın */
+}
+
+/* ---- Görsel katmanı ---- */
+.parallax {
+  position: absolute;
+  inset: -8px; /* parallax kayması kenar boşluğu göstermesin */
+  will-change: transform;
+}
+
+/* Geçiş = gerçek crossfade: gelen slayt üstte 0→1 belirir, çıkan slayt gelen tam görünene kadar
+   opak kalır ve sonra anında kapanır. (İkisi birden solarsa ortada arka plan görünür, ekran kararır.) */
+.media {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0;
+  transform: scale(1.06);
+  transition:
+    opacity 0s linear 1.2s,
+    transform 0s linear 1.2s;
+}
+
+.mediaActive {
+  z-index: 1;
+  opacity: 1;
+  transform: scale(1);
+  transition:
+    opacity 1.2s var(--ease-in-out),
+    transform 8s linear;
+}
+
+.image {
+  object-fit: cover;
+  object-position: var(--pos, center);
+}
+
+/* Metin tarafı koyu, görsel tarafı açık */
+.overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    rgba(15, 12, 10, 0.8) 0%,
+    rgba(20, 18, 14, 0.58) 42%,
+    rgba(20, 18, 14, 0.18) 72%,
+    rgba(20, 18, 14, 0.05) 100%
+  );
+  z-index: 3; /* görsellerin (sürüklerken belirenin de) üstünde; geçiş süresiyle aynı hızda açılır/kapanır */
+  transition: opacity 1.2s var(--ease-in-out);
+}
+
+/* Metin sağdaysa karartma da sağdan gelir */
+.textRight .overlay {
+  background: linear-gradient(
+    255deg,
+    rgba(15, 12, 10, 0.82) 0%,
+    rgba(20, 18, 14, 0.6) 40%,
+    rgba(20, 18, 14, 0.18) 70%,
+    rgba(20, 18, 14, 0.05) 100%
+  );
+}
+
+.artworkActive .overlay {
+  opacity: 0; /* afişin kendi renkleri korunur */
+}
+
+/* ---- İçerik ---- */
+.content {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  align-self: stretch; /* afiş slaytı CTA'yı alta alabilsin */
+  display: grid; /* slaytlar üst üste */
+  grid-template-rows: 1fr;
+}
+
+.slide {
+  grid-area: 1 / 1;
+  align-self: center;
+  visibility: hidden;
+  opacity: 0;
+  transition:
+    opacity 0.5s var(--ease-out),
+    visibility 0s linear 0.5s;
+}
+
+.slideActive {
+  visibility: visible;
+  opacity: 1;
+  transition:
+    opacity 0.7s var(--ease-out) 0.25s,
+    visibility 0s;
+}
+
+.contentInner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-width: 560px;
+  margin-left: max(var(--container-padding), calc((100vw - 1280px) / 2 + var(--container-padding)));
+  padding-right: var(--container-padding);
+}
+
+/* Metin bloğu sağda (görselin öznesi solda) */
+.slideRight .contentInner {
+  margin-left: auto;
+  margin-right: max(var(--container-padding), calc((100vw - 1280px) / 2 + var(--container-padding)));
+  padding-right: 0;
+}
+
+.slide .contentInner > * {
+  transform: translateY(10px);
+  transition: transform 0.7s var(--ease-out) 0.25s;
+}
+
+.slideActive .contentInner > * {
+  transform: none;
+}
+
+/* ---- Elle geçiş: kısa ve hızlı (kullanıcı beklemesin) ---- */
+.manual .media {
+  transition:
+    opacity 0s linear 0.45s,
+    transform 0s linear 0.45s;
+}
+
+.manual .mediaActive {
+  transition:
+    opacity 0.45s var(--ease-out),
+    transform 8s linear;
+}
+
+.manual .overlay {
+  transition-duration: 0.45s;
+}
+
+.manual .slide {
+  transition:
+    opacity 0.2s var(--ease-out),
+    visibility 0s linear 0.2s,
+    translate 0.2s var(--ease-out);
+}
+
+.manual .slideActive {
+  transition:
+    opacity 0.4s var(--ease-out) 0.08s,
+    visibility 0s,
+    translate 0.3s var(--ease-out);
+}
+
+.manual .slide .contentInner > * {
+  transition: transform 0.4s var(--ease-out) 0.08s;
+}
+
+/* ---- Sürükleme: metin parmağı izler, sıradaki görsel sürükledikçe belirir ----
+   --drag-x / --peek (0–1) değerlerini HeroCarousel doğrudan yazar. */
+.dragging {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.isCarousel .mediaPeek {
+  z-index: 2;
+  opacity: var(--peek, 0);
+  transition: none;
+}
+
+.dragging .slideActive {
+  translate: var(--drag-x, 0) 0;
+  opacity: calc(1 - var(--peek, 0) * 0.85);
+  transition: none;
+}
+
+/* Yetersiz sürükleme: yerine geri oturur (süre = SETTLE_MS) */
+.settling .mediaPeek {
+  transition: opacity 0.3s var(--ease-out);
+}
+
+.settling .slideActive {
+  transition:
+    opacity 0.3s var(--ease-out),
+    translate 0.3s var(--ease-out),
+    visibility 0s;
+}
+
+.eyebrow {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-gold-light);
+  margin: 0;
+}
+
+/* Başlık — tek renk */
+.headline {
+  font-family: var(--font-display);
+  font-size: clamp(1.9rem, 3.2vw, 3rem);
+  font-weight: var(--weight-semibold);
+  color: #f5f1e8;
+  line-height: 1.16;
+  letter-spacing: -0.02em;
+  margin: 0;
+  text-wrap: balance;
+}
+
+.subtext {
+  font-size: clamp(0.9rem, 1.1vw, 1.0625rem);
+  color: rgba(245, 241, 232, 0.8);
+  line-height: 1.65;
+  max-width: 44ch;
+  margin: 0;
+}
+
+/* ---- Sıkmalı şişe: başlığın altındaki zeytinyağı akışı ----
+   Slayt etkinleşince çizgi soldan sağa kendini çizer (sıkılan şişeden akan ince yağ gibi),
+   ardından ucunda bir damla belirir. Slayt her geri geldiğinde yeniden oynar. */
+.drizzle {
+  display: block;
+  width: clamp(150px, 15vw, 220px);
+  height: auto;
+  margin-top: calc(-1 * var(--space-2));
+  overflow: visible;
+}
+
+/* Dinlenme hâli çizili: slayt kapanırken çizgi metinle birlikte solar (anında kaybolmaz).
+   Etkinleşince "both" dolgusu gecikme boyunca başlangıç karesini (çizilmemiş) uygular. */
+.drizzlePath {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+}
+
+.slideActive .drizzlePath {
+  animation: drizzleDraw 1.5s cubic-bezier(0.45, 0, 0.25, 1) 0.6s both;
+}
+
+.drizzleDrop {
+  transform-box: fill-box;
+  transform-origin: 50% 0%;
+}
+
+.slideActive .drizzleDrop {
+  animation: drizzleDrop 0.8s var(--ease-out) 1.95s both;
+}
+
+@keyframes drizzleDraw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes drizzleDrop {
+  0% {
+    opacity: 0;
+    transform: translateY(-5px) scale(0.35);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(2px) scale(1.08);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Etiketten doğrulanan kısa bilgiler (ör. "Soğuk sıkım sızma") */
+.highlights {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.highlight {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px;
+  border: 1px solid rgba(245, 241, 232, 0.26);
+  border-radius: var(--radius-full);
+  background-color: rgba(15, 12, 10, 0.3);
+  color: rgba(245, 241, 232, 0.92);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+}
+
+.highlight::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--color-gold-light);
+  flex-shrink: 0;
+}
+
+/* Kapsam notu (ör. "Yalnızca siyah zeytin için geçerlidir") */
+.note {
+  align-self: flex-start;
+  margin: 0;
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  background-color: rgba(23, 19, 13, 0.82);
+  color: #f5f1e8;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.03em;
+  line-height: 1.4;
+}
+
+.ctas {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+  margin-top: var(--space-1);
+}
+
+.ctaPrimary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 var(--space-6);
+  border-radius: var(--radius-md);
+  background-color: #f5f1e8;
+  color: #1a1a1a;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.02em;
+  transition: background-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.ctaPrimary:hover {
+  background-color: #ffffff;
+}
+
+.ctaPrimary:active {
+  transform: scale(0.98);
+}
+
+.ctaSecondary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: rgba(245, 241, 232, 0.88);
+  letter-spacing: 0.02em;
+  border-bottom: 1px solid rgba(245, 241, 232, 0.35);
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+  white-space: nowrap;
+}
+
+.ctaSecondary::after {
+  content: "→";
+  margin-left: 0.4em;
+  transition: transform var(--transition-fast);
+}
+
+.ctaSecondary:hover {
+  color: #f5f1e8;
+  border-color: var(--color-gold-light);
+}
+
+.ctaSecondary:hover::after {
+  transform: translateX(3px);
+}
+
+.ctaPrimary:focus-visible,
+.ctaSecondary:focus-visible {
+  outline: 2px solid var(--color-gold-light);
+  outline-offset: 3px;
+}
+
+/* ---- Afiş (metni görselin içinde) slaytı ---- */
+.mediaArtwork {
+  transform: none; /* afiş yakınlaşmaz, kenarları kesilmez */
+}
+
+.slideArtwork {
+  align-self: end;
+  padding-bottom: var(--space-8);
+}
+
+.slideArtwork .contentInner {
+  margin-inline: auto;
+  align-items: center;
+  padding-right: 0;
+}
+
+.slideArtwork .note {
+  align-self: center;
+}
+
+/* Başlık ve metin afişte zaten yazılı — masaüstünde sadece ekran okuyucular için (mobilde görünür) */
+.slideArtwork .eyebrow,
+.slideArtwork .headline,
+.slideArtwork .subtext {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.slideArtwork .ctaPrimary {
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+/* ---- Açık zeminli afiş (tone: "light") ---- */
+.slideToneLight .eyebrow {
+  color: var(--color-gold-dark);
+}
+
+.slideToneLight .headline {
+  color: #1a1a1a;
+}
+
+.slideToneLight .subtext {
+  color: rgba(26, 26, 26, 0.78);
+}
+
+.slideToneLight .ctaPrimary {
+  background-color: #17130d;
+  color: #f5f1e8;
+}
+
+.slideToneLight .ctaPrimary:hover {
+  background-color: #000000;
+}
+
+.slideToneLight .ctaPrimary:focus-visible {
+  outline-color: #17130d;
+}
+
+.slideToneLight.slideArtwork .ctaPrimary {
+  box-shadow: 0 6px 18px rgba(20, 16, 10, 0.28);
+}
+
+/* ---- Mobil: görsel üstte, metin altta ---- */
+@media (max-width: 767px) {
+  .hero {
+    min-height: 520px;
+    max-height: none;
+    align-items: stretch;
+  }
+
+  .parallax {
+    inset: 0;
+  }
+
+  /* Fotoğraf slaytı: görsel hero'nun üst %56'sı; altı koyu zemine erir, metin orada durur */
+  .media:not(.mediaArtwork) {
+    bottom: auto;
+    height: 56%;
+  }
+
+  .image {
+    object-position: var(--pos-m, var(--pos, center));
+  }
+
+  .overlay,
+  .textRight .overlay {
+    background: linear-gradient(
+      180deg,
+      rgba(27, 24, 19, 0) 0%,
+      rgba(27, 24, 19, 0) 34%,
+      #1b1813 56%
+    );
+  }
+
+  .slide {
+    align-self: end;
+  }
+
+  .contentInner {
+    margin-left: 0;
+    max-width: 100%;
+    padding-inline: var(--container-padding);
+    padding-bottom: var(--space-8);
+    gap: var(--space-4);
+  }
+
+  .slideRight .contentInner {
+    margin-inline: 0;
+    padding-right: var(--container-padding);
+  }
+
+  .headline {
+    font-size: clamp(1.65rem, 7vw, 2.2rem);
+  }
+
+  .subtext {
+    font-size: var(--text-sm);
+    max-width: 40ch;
+  }
+
+  /* Afiş: üstte afiş (küçük ekranda genişliğe sığar), altında canlı metin + düğme; grup dikey ortalanır */
+  .mediaArtwork,
+  .slideArtwork {
+    --stack-text-h: 240px; /* afişin altındaki metin ve düğme bloğunun tahmini yüksekliği (vakum 256, Dağlı ~210) */
+    --stack-top: max(
+      var(--space-3),
+      calc((var(--hero-h) - 100vw / var(--art-ratio, 1.7778) - var(--stack-text-h)) / 2)
+    );
+  }
+
+  .mediaArtwork .image {
+    object-position: 50% var(--stack-top);
+  }
+
+  .slideArtwork {
+    align-self: start;
+    padding-top: calc(var(--stack-top) + 100vw / var(--art-ratio, 1.7778) + var(--space-4));
+    padding-bottom: 0;
+  }
+
+  .slideArtwork .contentInner {
+    padding-bottom: 0;
+    text-align: center;
+  }
+
+  .slideArtwork .eyebrow,
+  .slideArtwork .headline,
+  .slideArtwork .subtext {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip-path: none;
+    white-space: normal;
+  }
+
+  .slideArtwork .subtext {
+    max-width: 34ch;
+  }
+}
+
+@media (max-width: 390px) {
+  .headline {
+    font-size: 1.55rem;
+  }
+}
+
+/* ---- Hareket azaltma ---- */
+@media (prefers-reduced-motion: reduce) {
+  .media,
+  .slide,
+  .slideActive,
+  .slide .contentInner > *,
+  .manual .media,
+  .manual .mediaActive,
+  .manual .slide,
+  .manual .slideActive,
+  .manual .slide .contentInner > *,
+  .settling .mediaPeek,
+  .settling .slideActive {
+    transition: none;
+  }
+
+  .media {
+    transform: none;
+  }
+
+  /* Yağ çizgisi hazır çizili durur */
+  .slideActive .drizzlePath,
+  .slideActive .drizzleDrop {
+    animation: none;
+  }
+}

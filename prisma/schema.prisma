@@ -1,0 +1,400 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// KULLANICI & AUTH
+// ============================================================
+
+model User {
+  id            String    @id @default(cuid())
+  // Müşteri kaydı/girişi e-postayı küçük harfe çevirerek kullanır
+  email         String    @unique
+  name          String?
+  phone         String?
+  passwordHash  String?
+  role          Role      @default(CUSTOMER)
+  orders        Order[]
+  addresses     Address[]
+  reviews       ProductReview[]
+  passwordResetTokens PasswordResetToken[]
+  // "Şifremi unuttum" ile şifre yenilenince: bu andan önce açılmış oturumlar geçersiz sayılır
+  passwordResetAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("users")
+}
+
+enum Role {
+  CUSTOMER
+  STAFF
+  ADMIN
+}
+
+model Address {
+  id         String  @id @default(cuid())
+  userId     String
+  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  firstName  String
+  lastName   String
+  phone      String
+  city       String
+  district   String
+  postalCode String?
+  address    String
+  isDefault  Boolean @default(false)
+
+  @@map("addresses")
+}
+
+// ============================================================
+// ÜRÜNLER & KATEGORİLER
+// ============================================================
+
+model Category {
+  id          String    @id @default(cuid())
+  name        String
+  slug        String    @unique
+  description String?
+  imageUrl    String?
+  sortOrder   Int       @default(0)
+  isPublished Boolean   @default(true)
+  products    Product[]
+  createdAt   DateTime  @default(now())
+
+  @@map("categories")
+}
+
+model Product {
+  id          String           @id @default(cuid())
+  name        String
+  slug        String           @unique
+  description String?
+  categoryId  String
+  category    Category         @relation(fields: [categoryId], references: [id])
+  images      ProductImage[]
+  variants    ProductVariant[]
+  reviews     ProductReview[]
+  isPublished Boolean          @default(false)
+  isFeatured  Boolean          @default(false)
+  sortOrder   Int              @default(0)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@map("products")
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  altText   String?
+  sortOrder Int     @default(0)
+
+  @@map("product_images")
+}
+
+model ProductVariant {
+  id          String      @id @default(cuid())
+  productId   String
+  product     Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name        String      // "500g", "1kg", "5L", "2L"
+  sku         String?     @unique
+  // Fiyat KURUŞ cinsinden integer — Float KULLANMA
+  priceKurus  Int         // 0 = admin panelinden girilmemiş (TODO)
+  isAvailable Boolean     @default(true)
+  sortOrder   Int         @default(0)
+  inventory   Inventory?
+  cartItems   CartItem[]
+  orderItems  OrderItem[]
+
+  @@map("product_variants")
+}
+
+model Inventory {
+  id        String         @id @default(cuid())
+  variantId String         @unique
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  quantity  Int            @default(0)
+  updatedAt DateTime       @updatedAt
+
+  @@map("inventory")
+}
+
+// ============================================================
+// SEPET
+// ============================================================
+
+model Cart {
+  id        String     @id @default(cuid())
+  sessionId String?    @unique  // Guest cart
+  userId    String?    // Logged-in user cart
+  items     CartItem[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@map("carts")
+}
+
+model CartItem {
+  id        String         @id @default(cuid())
+  cartId    String
+  cart      Cart           @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  variantId String
+  variant   ProductVariant @relation(fields: [variantId], references: [id])
+  quantity  Int            @default(1)
+  addedAt   DateTime       @default(now())
+
+  @@unique([cartId, variantId])
+  @@map("cart_items")
+}
+
+// ============================================================
+// SİPARİŞ
+// ============================================================
+
+model Order {
+  id              String      @id @default(cuid())
+  // URL'e konan güvenli referans — sequential ID değil
+  reference       String      @unique @default(cuid())
+  userId          String?
+  user            User?       @relation(fields: [userId], references: [id])
+  // Guest checkout bilgileri
+  guestEmail      String?
+  guestName       String?
+  guestPhone      String?
+  status          OrderStatus @default(PENDING)
+  items           OrderItem[]
+  payment         Payment?
+  // Teslimat adresi JSON snapshot (adres silinse bile bozulmasın)
+  shippingAddress Json
+  // Fiyatlar KURUŞ cinsinden
+  subtotalKurus   Int
+  shippingKurus   Int
+  discountKurus   Int         @default(0)
+  totalKurus      Int
+  // Ödeme yöntemi: kart (iyzico), havale/EFT, kapıda ödeme
+  paymentMethod   PaymentMethod @default(CARD)
+  // Ödeme yöntemine bağlı ek ücret (kapıda ödeme hizmet bedeli); totalKurus'a dahildir
+  paymentFeeKurus Int         @default(0)
+  // Ödenmezse bu andan sonra otomatik iptal + stok iadesi (kart: ~1 sa, havale: ayardaki süre; kapıda ödeme: yok)
+  paymentDueAt    DateTime?
+  notes           String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@map("orders")
+}
+
+enum PaymentMethod {
+  CARD             // Kredi/banka kartı — ödeme sağlayıcısı (iyzico) üzerinden, taksit seçenekli
+  BANK_TRANSFER    // Havale/EFT — satıcı hesabına; admin "ödeme alındı" ile onaylar
+  CASH_ON_DELIVERY // Kapıda ödeme — kargo görevlisine teslimatta
+}
+
+enum OrderStatus {
+  PENDING      // Ödeme bekleniyor
+  PAID         // Ödeme alındı
+  PROCESSING   // Hazırlanıyor
+  SHIPPED      // Kargoya verildi
+  DELIVERED    // Teslim edildi
+  CANCELLED    // İptal edildi
+  REFUNDED     // İade edildi
+}
+
+model OrderItem {
+  id              String         @id @default(cuid())
+  orderId         String
+  order           Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variantId       String
+  variant         ProductVariant @relation(fields: [variantId], references: [id])
+  // SNAPSHOT — ürün sonradan değişse de sipariş tarihi bilgisi korunur
+  snapshotName    String         // Ürün adı (sipariş anında)
+  snapshotVariant String         // Varyant adı (sipariş anında)
+  snapshotPrice   Int            // Birim fiyat kuruş (sipariş anında)
+  quantity        Int
+
+  @@map("order_items")
+}
+
+// ============================================================
+// ÖDEME
+// ============================================================
+
+model Payment {
+  id            String        @id @default(cuid())
+  orderId       String        @unique
+  order         Order         @relation(fields: [orderId], references: [id])
+  provider      String        // "iyzico"
+  // Provider'ın kendi ödeme token/referansı
+  providerRef   String?
+  // 3DS conversation ID (iyzico'ya özgü)
+  conversationId String?      @unique
+  status        PaymentStatus @default(PENDING)
+  // Fiyat KURUŞ — provider'dan gelen tutarla karşılaştırılır
+  amountKurus   Int
+  currency      String        @default("TRY")
+  events        PaymentEvent[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@map("payments")
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+model PaymentEvent {
+  id          String   @id @default(cuid())
+  paymentId   String
+  payment     Payment  @relation(fields: [paymentId], references: [id])
+  // Idempotency: aynı provider event ID'si tekrar işlenmez
+  providerEventId String? @unique
+  eventType   String   // "payment.success", "payment.failed", "refund.success"
+  payload     Json
+  processedAt DateTime @default(now())
+
+  @@map("payment_events")
+}
+
+// ============================================================
+// MÜŞTERİ YORUMLARI
+// ============================================================
+
+model Review {
+  id           String   @id @default(cuid())
+  authorName   String
+  authorAvatar String?  // URL veya initials için null
+  rating       Int      // 1-5
+  text         String
+  date         DateTime
+  source       String?  // "google", "manual"
+  sourceUrl    String?
+  isPublished  Boolean  @default(false)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  @@map("reviews")
+}
+
+// ============================================================
+// ÜRÜN DEĞERLENDİRMELERİ (üye müşteriler yazar, admin onaylar)
+// ============================================================
+// Ana sayfadaki "Review" modeli mağaza geneli (Google) yorumlarıdır; bu model ürün sayfasındadır.
+// Müşteri başına ürün başına tek değerlendirme: yeniden gönderilirse güncellenir ve tekrar onaya düşer.
+
+model ProductReview {
+  id                 String       @id @default(cuid())
+  productId          String
+  product            Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId             String
+  user               User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating             Int          // 1-5
+  title              String?
+  text               String
+  status             ReviewStatus @default(PENDING)
+  // Gönderim anında: müşterinin ödenmiş siparişlerinde bu ürün var mı ("Satın aldı" rozeti)
+  isVerifiedPurchase Boolean      @default(false)
+  // Reddedilme sebebi vb. — yalnız admin görür
+  adminNote          String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  approvedAt         DateTime?
+
+  @@unique([productId, userId])
+  @@index([productId, status])
+  @@index([status, createdAt])
+  @@map("product_reviews")
+}
+
+enum ReviewStatus {
+  PENDING   // Onay bekliyor
+  APPROVED  // Yayında
+  REJECTED  // Reddedildi
+}
+
+// ============================================================
+// KUPON
+// ============================================================
+
+model Coupon {
+  id              String     @id @default(cuid())
+  code            String     @unique
+  type            CouponType
+  // Kupon değeri: PERCENTAGE için 0-100, FIXED_AMOUNT için kuruş
+  value           Int
+  minOrderKurus   Int?       // Minimum sepet tutarı
+  usageLimit      Int?       // Toplam kullanım limiti
+  usageCount      Int        @default(0)
+  isActive        Boolean    @default(true)
+  expiresAt       DateTime?
+  createdAt       DateTime   @default(now())
+
+  @@map("coupons")
+}
+
+enum CouponType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+// ============================================================
+// SİTE AYARLARI
+// ============================================================
+
+model SiteSetting {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
+
+  @@map("site_settings")
+}
+
+// ============================================================
+// AUDIT LOG
+// ============================================================
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
+  details   Json?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@map("audit_logs")
+}
+
+// ============================================================
+// ŞİFRE SIFIRLAMA ("Şifremi unuttum")
+// ============================================================
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Bağlantıdaki token'ın SHA-256 özeti — token'ın kendisi saklanmaz
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}

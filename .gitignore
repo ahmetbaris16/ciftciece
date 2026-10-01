@@ -1,0 +1,85 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+node_modules/
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production / derleme çıktıları
+build/
+dist/
+
+# misc
+.DS_Store
+Thumbs.db
+*.log
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files — .env ve .env.* (.env.local, .env.production, .env.example dahil)
+.env
+.env.*
+.env*
+
+# Gizli anahtar / sertifika içerebilecek dosyalar (iyzico, Yurtiçi Kargo, vb.)
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.secret
+*.secrets
+*.secret.*
+secrets/
+.secrets/
+credentials*.json
+*credentials*.json
+*iyzico*.json
+*iyzico*.env
+*iyzipay*.json
+*yurtici*.json
+*yurtici*.env
+*kargo*.json
+*kargo*.env
+*.local.json
+*.local.js
+*.local.ts
+.claude/settings.local.json
+
+# Yüklenen dosyalar (müşteri/admin yüklemeleri — repo'ya girmez)
+uploads/
+upload/
+/public/uploads/
+/public/upload/
+
+# Veritabanı dökümleri (kişisel veri içerir)
+*.dump
+*.backup
+*.sql.gz
+/db-yedek/
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# geliştirme deposu (veritabanısız modda üyelik/yorum denemeleri)
+/.mock-data/
