@@ -13,7 +13,7 @@ import { POST as webhook } from "@/app/api/payment/webhook/iyzico/route";
 import { releaseExpiredOrders } from "@/lib/repositories/order.repository";
 import { startCardPayment, handleCardCallback } from "@/lib/payment/card";
 import { reconcileOrderWithProvider } from "@/lib/payment/reconcile";
-import { iyzicoWebhookSignature } from "@/lib/payment/webhook/iyzico";
+import { ingestIyzicoWebhook, iyzicoWebhookSignature, processWebhookEvent } from "@/lib/payment/webhook/iyzico";
 import { setupTestDb } from "./helpers/db";
 import { FakeIyzico, TEST_SECRET_KEY } from "./helpers/fake-iyzico";
 import { createTestOrder, makeOverdue, orderState } from "./helpers/orders";
@@ -205,4 +205,26 @@ test("JSON olmayan ya da çok büyük gövde işlenmez", async () => {
   const big = JSON.stringify({ token: "x", pad: "a".repeat(20_000) });
   assert.equal((await post(big, "abc")).status, 413);
   assert.equal(await prisma.paymentEvent.count({ where: { ...INBOX, status: "REJECTED" } }), 1);
+});
+
+test("ilk teslim işlenirken gelen ikinci teslim olayı yeniden işlemez (gerçek HTTP denemesinde görülen yarış)", async () => {
+  const { order, attempt, token } = await cardOrderWithForm();
+  fake.pay(token);
+  const ev = fake.webhook(token);
+
+  // 1. teslim: kaydedildi, işleme henüz başlamadı/sürüyor (route'ta after() ile yanıttan sonra)
+  const first = await ingestIyzicoWebhook(ev.body, ev.signature, TEST_SECRET_KEY);
+  assert.equal(first.kind === "accepted" && first.needsProcessing, true);
+  // 2. teslim aynı anda: yeni satır yok ve yeniden işleme istenmez
+  const second = await ingestIyzicoWebhook(ev.body, ev.signature, TEST_SECRET_KEY);
+  assert.equal(second.kind === "accepted" && second.duplicate, true);
+  assert.equal(second.kind === "accepted" && second.needsProcessing, false);
+
+  assert.equal(first.kind === "accepted" && (await processWebhookEvent(first.eventId)).outcome, "paid");
+  assert.equal((await orderState(order.id)).status, "PAID");
+  assert.equal(await prisma.paymentEvent.count({ where: { attemptId: attempt.id, eventType: { startsWith: "verify." } } }), 1);
+  const inbox = await prisma.paymentEvent.findFirstOrThrow({ where: INBOX });
+  assert.equal(inbox.outcome, "paid");
+  // İşlenmiş olayı tekrar işlemek etkisiz
+  assert.equal(first.kind === "accepted" && (await processWebhookEvent(first.eventId)).outcome, "skipped");
 });

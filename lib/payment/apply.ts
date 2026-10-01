@@ -261,8 +261,9 @@ export async function applyProviderResult(input: ApplyInput): Promise<ApplyResul
         },
       });
       if (input.inboxEventId) {
-        await tx.paymentEvent.update({
-          where: { id: input.inboxEventId },
+        // Daha önce kapanmış satırın sonucu ezilmez (eşzamanlı iki işleme: ilk sonucu koru)
+        await tx.paymentEvent.updateMany({
+          where: { id: input.inboxEventId, status: { in: ["RECEIVED", "FAILED"] } },
           data: { status: "PROCESSED", outcome, orderId: order.id, attemptId: attempt.id, handledAt: new Date(), error: null },
         });
       }

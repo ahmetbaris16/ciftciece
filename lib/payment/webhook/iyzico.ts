@@ -151,7 +151,10 @@ export async function ingestIyzicoWebhook(
       : { kind: "rejected", eventId: event.id, duplicate: false, reason: reason ?? "" };
   } catch (err) {
     if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002")) throw err;
-    // Aynı olay daha önce geldi: yeni satır yok. Önceki işleme yarım kaldıysa yeniden işlenebilir.
+    // Aynı olay daha önce geldi: yeni satır yok. Yalnız önceki işleme BAŞARISIZ olduysa (FAILED) yeniden
+    // işlenir. RECEIVED satır büyük olasılıkla şu an işleniyordur (ilk teslimin yanıt sonrası işi);
+    // ikinci kez işlemek iyzico'ya gereksiz sorgu demektir. Takılı kalan RECEIVED satır siparişin
+    // otomatik iptalini engeller ve elle sorgu ile kapanır.
     const existing = await prisma.paymentEvent.findUnique({
       where: { provider_eventKey: { provider: "iyzico", eventKey } },
       select: { id: true, status: true },
@@ -161,7 +164,7 @@ export async function ingestIyzicoWebhook(
       kind: "accepted",
       eventId: existing?.id ?? "",
       duplicate: true,
-      needsProcessing: existing?.status === "RECEIVED" || existing?.status === "FAILED",
+      needsProcessing: existing?.status === "FAILED",
     };
   }
 }
