@@ -212,6 +212,7 @@ model Order {
   paymentEvents   PaymentEvent[]
   paymentAlerts   PaymentAlert[]
   consents        OrderConsent[]
+  emails          EmailMessage[]
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
@@ -593,4 +594,54 @@ model OutboxEvent {
 
   @@index([publishedAt, availableAt])
   @@map("outbox_events")
+}
+
+// ============================================================
+// E-POSTA KUYRUĞU VE KAYDI
+// ============================================================
+// Her satır gönderilecek (ya da gönderilmiş) bir e-postadır. Sipariş olayları outbox_events'e işlemle
+// birlikte yazılır; dağıtıcı (lib/notifications/dispatcher.ts) olayı e-postalara çevirir, gönderici
+// (sender.ts) SMTP ile yollar ve sonucu buraya yazar. E-posta sipariş kaydını asla geri almaz: gönderilemezse
+// satır kuyrukta kalır, yeniden denenir, admin panelinde görünür.
+// dedupeKey UNIQUE: aynı olaydan aynı e-posta ikinci kez oluşmaz. Şifre sıfırlama bağlantısı gibi gizli
+// içerik bu tabloya yazılmaz (doğrudan gönderilir).
+model EmailMessage {
+  id                String      @id @default(cuid())
+  // Şablon türü (lib/email/kinds.ts), ör. ORDER_RECEIVED, ORDER_SHIPPED, STORE_NEW_ORDER
+  kind              String      @db.VarChar(60)
+  dedupeKey         String      @unique @db.VarChar(191)
+  orderId           String?
+  order             Order?      @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  // "customer" | "store"
+  audience          String      @db.VarChar(20)
+  toAddress         String      @db.VarChar(254)
+  replyTo           String?     @db.VarChar(254)
+  subject           String      @db.VarChar(300)
+  html              String      @db.MediumText
+  text              String      @db.MediumText
+  status            EmailStatus @default(QUEUED)
+  attempts          Int         @default(0)
+  // Gönderici bu andan sonra dener (yeniden deneme gecikmesi)
+  availableAt       DateTime    @default(now())
+  // Gönderim sürerken başka işlem almasın; süre geçerse (süreç çöktü) yeniden denenir
+  lockedUntil       DateTime?
+  // Bu andan sonra gönderilmez (ör. son ödeme zamanı geçmiş havale hatırlatması)
+  expiresAt         DateTime?
+  sentAt            DateTime?
+  providerMessageId String?     @db.VarChar(300)
+  lastError         String?     @db.Text
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  @@index([status, availableAt])
+  @@index([orderId])
+  @@map("email_messages")
+}
+
+enum EmailStatus {
+  QUEUED    // Gönderilecek
+  SENDING   // Gönderiliyor (lockedUntil'e kadar)
+  SENT      // SMTP sunucusu kabul etti
+  FAILED    // Deneme hakkı bitti ya da kalıcı hata — admin yeniden kuyruğa alabilir
+  CANCELLED // Gönderilmeyecek (süresi geçti, admin iptal etti)
 }

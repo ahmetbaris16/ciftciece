@@ -9,6 +9,8 @@
  * Saf fonksiyon: ortam değişkenlerini alır, hata ve uyarı listesi döner (tests/runtime-check.test.ts).
  */
 
+import { emailConfigWarnings } from "@/lib/email/config";
+
 export interface ConfigCheckResult {
   errors: string[];
   warnings: string[];
@@ -86,6 +88,17 @@ export function checkProductionConfig(env: EnvVars): ConfigCheckResult {
     }
   } else {
     errors.push(`Bilinmeyen PAYMENT_PROVIDER: "${provider}".`);
+  }
+
+  // E-posta (sipariş teyidi yasal zorunluluk): eksikse site açılır ama e-postalar kuyrukta bekler
+  warnings.push(...emailConfigWarnings({ ...env, NODE_ENV: "production" }));
+
+  // Zamanlanmış işler (süresi dolan siparişler, e-posta yeniden denemeleri)
+  const cron = env.CRON_SECRET?.trim() ?? "";
+  if (!cron) {
+    warnings.push("CRON_SECRET tanımlı değil: zamanlanmış iş adresi (/api/cron/run) kapalı; hPanel Cron Jobs kurulamaz.");
+  } else if (cron.length < 24 || PLACEHOLDER.test(cron)) {
+    errors.push("CRON_SECRET zayıf ya da yer tutucu: en az 24 karakter rastgele değer olmalı.");
   }
 
   if (env.ADMIN_PASSWORD) {

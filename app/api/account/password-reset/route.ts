@@ -11,7 +11,9 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { findUserByEmail } from "@/lib/account/customer.repository";
 import { createPasswordResetToken, RESET_TOKEN_TTL_MINUTES } from "@/lib/account/password-reset";
-import { emailDelivery, sendEmail, simpleEmailHtml } from "@/lib/email/mailer";
+import { emailDelivery, sendEmail } from "@/lib/email/mailer";
+import { passwordResetEmail } from "@/lib/email/templates/account";
+import { getBusinessInfo } from "@/lib/business/business.repository";
 import { clientIp, rateLimit } from "@/lib/security/rate-limit";
 import { isSameOrigin } from "@/lib/security/same-origin";
 import { ACCOUNT_MESSAGES, PasswordResetRequestSchema, accountFieldErrors } from "@/lib/validation/account";
@@ -50,28 +52,14 @@ export async function POST(request: NextRequest) {
       if (!user || user.role !== "CUSTOMER") return; // yanıt aynı; e-posta gitmez
       const token = await createPasswordResetToken(user.id);
       const url = `${origin}/sifre-sifirla?token=${encodeURIComponent(token)}`;
-      const name = user.name?.split(" ")[0] || "Merhaba";
-      await sendEmail({
-        to: user.email,
-        subject: "Çiftçi Ece — şifre yenileme bağlantınız",
-        text: [
-          `${name},`,
-          "Çiftçi Ece üyeliğiniz için şifre yenileme isteği aldık. Yeni şifrenizi belirlemek için bu bağlantıyı açın:",
-          url,
-          `Bağlantı ${RESET_TOKEN_TTL_MINUTES} dakika geçerlidir ve bir kez kullanılabilir.`,
-          "Bu isteği siz yapmadıysanız bu e-postayı yok sayın; şifreniz değişmez.",
-        ].join("\n\n"),
-        html: simpleEmailHtml({
-          title: "Şifrenizi yenileyin",
-          paragraphs: [
-            `${name},`,
-            "Çiftçi Ece üyeliğiniz için şifre yenileme isteği aldık. Yeni şifrenizi belirlemek için aşağıdaki düğmeye tıklayın.",
-            `Bağlantı ${RESET_TOKEN_TTL_MINUTES} dakika geçerlidir ve bir kez kullanılabilir.`,
-          ],
-          button: { label: "Yeni şifre belirle", url },
-          footer: "Bu isteği siz yapmadıysanız bu e-postayı yok sayın; şifreniz değişmez.",
-        }),
+      const mail = passwordResetEmail({
+        business: await getBusinessInfo(),
+        firstName: user.name?.split(" ")[0] || "",
+        url,
+        ttlMinutes: RESET_TOKEN_TTL_MINUTES,
       });
+      // Bağlantı gizli: kuyruğa (veritabanına) yazılmaz, doğrudan gönderilir
+      await sendEmail({ to: user.email, subject: mail.subject, html: mail.html, text: mail.text });
     } catch (err) {
       console.error("[/api/account/password-reset] bağlantı gönderilemedi:", err);
     }

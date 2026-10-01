@@ -1,6 +1,6 @@
 /**
  * Şifremi Unuttum — /sifremi-unuttum
- * E-posta gönderimi yapılandırılmamışsa (canlıda RESEND_API_KEY/EMAIL_FROM yok) form yerine
+ * E-posta gönderimi yapılandırılmamışsa (canlıda SMTP_HOST/SMTP_USER/SMTP_PASS yok) form yerine
  * WhatsApp/telefon yolu gösterilir; "gönderdik" deyip hiçbir şey göndermemek yok.
  */
 
