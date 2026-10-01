@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "db:sync-catalog": "tsx prisma/sync-catalog.ts"
+    "db:sync-catalog": "tsx prisma/sync-catalog.ts",
+    "test:db": "tsx scripts/test-db.ts",
+    "test": "node --env-file-if-exists=.env --import tsx --import ./tests/helpers/env.ts --test --test-concurrency=1 \"tests/**/*.test.ts\""
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",
