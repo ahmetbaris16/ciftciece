@@ -10,6 +10,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { Product, Category } from "@/types";
 import { formatPriceRaw } from "@/types";
+import { decimalToKurus } from "@/lib/payment/money";
 
 interface Props {
   product: Product;
@@ -178,8 +179,9 @@ export default function ProductEditForm({ product, categories }: Props) {
               </div>
               <div style={styles.field}>
                 <label style={styles.labelSmall}>Fiyat (₺)</label>
-                <input style={styles.input} type="number" step="0.01" value={formatPriceRaw(v.priceKurus)}
-                  onChange={(e) => updateVariant(i, "priceKurus", Math.round(parseFloat(e.target.value || "0") * 100))} />
+                {/* Kuruş tam sayı: en fazla 2 ondalık; geçersiz giriş (ör. 3 ondalık) önceki değeri korur (F-01) */}
+                <input style={styles.input} type="number" step="0.01" min="0" value={formatPriceRaw(v.priceKurus)}
+                  onChange={(e) => updateVariant(i, "priceKurus", decimalToKurus(e.target.value || "0") ?? v.priceKurus)} />
               </div>
               <div style={styles.field}>
                 <label style={styles.labelSmall}>Stok</label>

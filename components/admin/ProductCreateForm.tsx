@@ -7,6 +7,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { Category } from "@/types";
+import { decimalToKurus } from "@/lib/payment/money";
 
 interface Props {
   categories: Category[];
@@ -71,16 +72,22 @@ export default function ProductCreateForm({ categories }: Props) {
     setSaving(true);
     setMessage("");
 
-    const apiVariants = variants
-      .filter((v) => v.name.trim())
-      .map((v, i) => ({
-        name: v.name,
-        sku: v.sku || undefined,
-        priceKurus: Math.round(parseFloat(v.priceTL || "0") * 100),
-        isAvailable: true,
-        sortOrder: i,
-        stockQuantity: v.stockQuantity,
-      }));
+    // TL → kuruş tam sayı aritmetiğiyle (F-01): en fazla 2 ondalık; aşan giriş sessizce yuvarlanmaz
+    const named = variants.filter((v) => v.name.trim());
+    const badPrice = named.find((v) => decimalToKurus(v.priceTL || "0") === null);
+    if (badPrice) {
+      setMessage(`Hata: "${badPrice.name}" fiyatı geçersiz — en fazla 2 ondalık basamak (ör. 289.90)`);
+      setSaving(false);
+      return;
+    }
+    const apiVariants = named.map((v, i) => ({
+      name: v.name,
+      sku: v.sku || undefined,
+      priceKurus: decimalToKurus(v.priceTL || "0")!,
+      isAvailable: true,
+      sortOrder: i,
+      stockQuantity: v.stockQuantity,
+    }));
 
     if (apiVariants.length === 0) {
       setMessage("En az 1 varyant ekleyin");
