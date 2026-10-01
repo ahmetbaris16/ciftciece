@@ -8,6 +8,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { Category } from "@/types";
 import { decimalToKurus } from "@/lib/payment/money";
+import { VAT_RATE_CHOICES, vatPercentToBps } from "@/lib/catalog/vat";
 
 interface Props {
   categories: Category[];
@@ -28,6 +29,8 @@ export default function ProductCreateForm({ categories }: Props) {
   const [categoryId, setCategoryId] = useState(categories[0]?.id ?? "");
   const [isPublished, setIsPublished] = useState(false);
   const [isFeatured, setIsFeatured] = useState(false);
+  // KDV oranı (%); "" = girilmemiş
+  const [vatPercent, setVatPercent] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -102,6 +105,7 @@ export default function ProductCreateForm({ categories }: Props) {
         body: JSON.stringify({
           name, slug, description: description || undefined,
           categoryId, isPublished, isFeatured, sortOrder: 0,
+          vatRateBps: vatPercentToBps(vatPercent),
           variants: apiVariants,
         }),
       });
@@ -156,6 +160,13 @@ export default function ProductCreateForm({ categories }: Props) {
             <select style={styles.input} value={categoryId} onChange={(e) => setCategoryId(e.target.value)} required>
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            <label style={styles.label}>KDV oranı</label>
+            <select style={styles.input} value={vatPercent} onChange={(e) => setVatPercent(e.target.value)}>
+              <option value="">Girilmemiş</option>
+              {VAT_RATE_CHOICES.map((r) => (
+                <option key={r} value={String(r)}>%{r}</option>
               ))}
             </select>
           </div>

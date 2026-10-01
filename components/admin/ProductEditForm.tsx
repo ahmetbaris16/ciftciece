@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation";
 import type { Product, Category } from "@/types";
 import { formatPriceRaw } from "@/types";
 import { decimalToKurus } from "@/lib/payment/money";
+import { VAT_RATE_CHOICES, vatBpsToPercent, vatPercentToBps } from "@/lib/catalog/vat";
 
 interface Props {
   product: Product;
@@ -25,6 +26,8 @@ export default function ProductEditForm({ product, categories }: Props) {
   const [categoryId, setCategoryId] = useState(product.categoryId);
   const [isPublished, setIsPublished] = useState(product.isPublished);
   const [isFeatured, setIsFeatured] = useState(product.isFeatured);
+  // KDV oranı (%); "" = girilmemiş (siparişe boş kopyalanır)
+  const [vatPercent, setVatPercent] = useState(vatBpsToPercent(product.vatRateBps));
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -55,6 +58,7 @@ export default function ProductEditForm({ product, categories }: Props) {
         body: JSON.stringify({
           name, slug, description: description || null,
           categoryId, isPublished, isFeatured,
+          vatRateBps: vatPercentToBps(vatPercent),
         }),
       });
 
@@ -150,6 +154,13 @@ export default function ProductEditForm({ product, categories }: Props) {
             <select style={styles.input} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            <label style={styles.label}>KDV oranı</label>
+            <select style={styles.input} value={vatPercent} onChange={(e) => setVatPercent(e.target.value)}>
+              <option value="">Girilmemiş</option>
+              {VAT_RATE_CHOICES.map((r) => (
+                <option key={r} value={String(r)}>%{r}</option>
               ))}
             </select>
           </div>

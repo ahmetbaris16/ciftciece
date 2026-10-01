@@ -42,6 +42,8 @@ const CreateProductSchema = z.object({
   isPublished: z.boolean().default(false),
   isFeatured: z.boolean().default(false),
   sortOrder: z.number().int().min(0).default(0),
+  // KDV oranı baz puan (100 = %1); boş = girilmemiş (Y-12)
+  vatRateBps: z.number().int().min(0).max(10_000).nullable().optional(),
   variants: z.array(z.object({
     name: z.string().min(1).max(100),
     sku: z.string().max(50).optional(),
@@ -92,6 +94,7 @@ export async function POST(request: NextRequest) {
         isPublished: data.isPublished,
         isFeatured: data.isFeatured,
         sortOrder: data.sortOrder,
+        vatRateBps: data.vatRateBps ?? null,
         variants: {
           create: data.variants.map((v) => ({
             name: v.name,

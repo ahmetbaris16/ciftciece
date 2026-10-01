@@ -22,6 +22,8 @@ const UpdateProductSchema = z.object({
   isPublished: z.boolean().optional(),
   isFeatured: z.boolean().optional(),
   sortOrder: z.number().int().min(0).optional(),
+  // KDV oranı baz puan (100 = %1); null = girilmemiş (Y-12). DB'de 0–10000 CHECK kısıtı var.
+  vatRateBps: z.number().int().min(0).max(10_000).nullable().optional(),
 });
 
 interface RouteContext {

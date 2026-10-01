@@ -62,6 +62,7 @@ function mapProduct(p: NonNullable<PrismaProductFull>): Product {
     isPublished: p.isPublished,
     isFeatured: p.isFeatured,
     sortOrder: p.sortOrder,
+    vatRateBps: p.vatRateBps,
   };
 }
 
