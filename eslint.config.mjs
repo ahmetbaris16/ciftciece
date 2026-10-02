@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Yerel araçlar (Claude önizleme başlatıcısı, CommonJS) — uygulama kodu değil
+    ".claude/**",
   ]),
 ]);
 
