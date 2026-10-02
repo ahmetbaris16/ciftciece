@@ -16,6 +16,8 @@ import { releaseExpiredOrders, updateOrderStatus } from "@/lib/repositories/orde
 import { createCustomerRequest, recordRefund, shipOrder } from "@/lib/orders/lifecycle";
 import { enqueueTransferReminders } from "@/lib/orders/reminders";
 import { writeOutbox } from "@/lib/outbox";
+import { customMessageDraft } from "@/lib/notifications/order-rules";
+import { enqueueEmail } from "@/lib/notifications/queue";
 import { resetTransportCache } from "@/lib/email/transport";
 import { enableBankTransfer, setupTestDb } from "./helpers/db";
 import { createTestOrder, makeOverdue } from "./helpers/orders";
@@ -159,4 +161,28 @@ test("iletişim mesajı işletmeye gider, yanıtla adresi müşteri; müşteri a
   assert.equal(e.replyTo, "ayse@ornek.test");
   assert.ok(!e.html.includes("<script>"), "HTML kaçışlanmalı");
   assert.ok(e.html.includes("&lt;script&gt;"));
+});
+
+test("admin mesajı: aynı anahtarla bir kez kuyruğa girer; müşteriye kaçışlanmış, sipariş bağlantılı gider", async () => {
+  const { order } = await createTestOrder({ method: "BANK_TRANSFER", dueInMinutes: 60 });
+  await flush();
+  smtp.received.length = 0;
+  const message = "Merhaba <b>kalın</b>\nZeytinler bu hafta hasat edildi.";
+  const draft = await customMessageDraft(order.id, "Ürün bilgisi", message, "nonce-12345678");
+  assert.ok(draft);
+  assert.equal(await enqueueEmail(prisma, draft), true);
+  // Çift tıklama / yeniden deneme: aynı anahtar ikinci e-posta oluşturmaz
+  const again = await customMessageDraft(order.id, "Ürün bilgisi", message, "nonce-12345678");
+  assert.equal(await enqueueEmail(prisma, again!), false);
+  await sendDueEmails();
+
+  assert.equal(smtp.received.length, 1);
+  const raw = smtp.received[0].raw;
+  assert.match(subjectOf(raw), new RegExp(`Ürün bilgisi — #${order.reference}`));
+  const html = partOf(raw, "text/html");
+  assert.ok(!html.includes("<b>kalın</b>"), "HTML kaçışlanmalı");
+  assert.ok(html.includes(`/siparis/${order.reference}`));
+  const row = await prisma.emailMessage.findFirstOrThrow({ where: { orderId: order.id, kind: "CUSTOM_MESSAGE" } });
+  assert.equal(row.status, "SENT");
+  assert.equal(row.replyTo, "bilgi@ornek-magaza.test");
 });

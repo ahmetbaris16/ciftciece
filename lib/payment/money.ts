@@ -34,3 +34,21 @@ export function decimalToKurus(value: unknown): number | null {
   const kurus = Number(match[1]) * 100 + Number(fraction.padEnd(2, "0").slice(0, 2));
   return Number.isSafeInteger(kurus) ? kurus : null;
 }
+
+/**
+ * Admin'in yazdığı TL tutarı → kuruş: "1.234,50", "1234,5", "1234.50", "₺ 250", "250 TL". Nokta tek başına
+ * ve ardından tam üç hane geliyorsa binlik ayırıcıdır ("1.234" = 1234 TL). Geçersiz ya da kuruştan küçük
+ * kesirli değer → null. Float kullanılmaz.
+ */
+export function parseTlInput(input: string): number | null {
+  let t = input.replace(/\s|₺|tl$/gi, "");
+  if (t === "") return null;
+  if (t.includes(",")) {
+    if (!/^\d{1,3}(\.\d{3})*,\d*$|^\d+,\d*$/.test(t)) return null;
+    t = t.replace(/\./g, "").replace(",", ".");
+  } else if (/^\d{1,3}(\.\d{3})+$/.test(t)) {
+    t = t.replace(/\./g, "");
+  }
+  if (t.endsWith(".")) t = t.slice(0, -1);
+  return decimalToKurus(t);
+}

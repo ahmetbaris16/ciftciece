@@ -1,0 +1,143 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.label {
+  font-size: 0.8125rem;
+  color: rgba(232, 228, 217, 0.7);
+}
+
+.input,
+.select,
+.textarea {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  color: #e8e4d9;
+  font: inherit;
+  font-size: 0.9375rem;
+}
+
+.select option {
+  background: #1d2219;
+}
+
+.textarea {
+  min-height: 110px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.input:focus-visible,
+.select:focus-visible,
+.textarea:focus-visible,
+.primary:focus-visible,
+.secondary:focus-visible,
+.danger:focus-visible {
+  outline: 2px solid #c4d68e;
+  outline-offset: 1px;
+}
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: #e8e4d9;
+  line-height: 1.45;
+}
+
+.check input {
+  margin-top: 0.2rem;
+  accent-color: #c4d68e;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.primary,
+.secondary,
+.danger {
+  padding: 0.55rem 0.95rem;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primary {
+  border: 0;
+  background: #c4d68e;
+  color: #15180f;
+}
+
+.secondary {
+  border: 1px solid rgba(196, 214, 142, 0.5);
+  background: transparent;
+  color: #c4d68e;
+}
+
+.danger {
+  border: 1px solid rgba(243, 160, 160, 0.45);
+  background: transparent;
+  color: #f3a0a0;
+}
+
+.primary:disabled,
+.secondary:disabled,
+.danger:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: rgba(232, 228, 217, 0.55);
+}
+
+.error {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #f3a0a0;
+}
+
+.ok {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #9fd39f;
+}
+
+.link {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: #c4d68e;
+  font: inherit;
+  font-size: 0.8125rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
