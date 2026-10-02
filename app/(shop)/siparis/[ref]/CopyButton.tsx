@@ -3,7 +3,7 @@
 /** Tek tıkla panoya kopyala (IBAN, sipariş no, tutar) — kopyalandığında kısa onay gösterir */
 
 import { useState } from "react";
-import styles from "./page.module.css";
+import styles from "./order.module.css";
 
 export default function CopyButton({ value, label }: { value: string; label: string }) {
   const [done, setDone] = useState(false);

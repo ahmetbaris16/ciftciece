@@ -1,46 +1,48 @@
 /**
- * Sipariş Onay Sayfası
- * /siparis/[ref]
+ * Sipariş sayfası — /siparis/[ref]
  *
- * DB'den sipariş referansı ile gerçek sipariş verisi çeker.
- * - Kart: ödeme tamamlandıktan sonra /api/payment/verify buraya yönlendirir.
- * - Havale/EFT: sipariş verilince buraya gelinir; IBAN, tutar, açıklama (sipariş no) ve son ödeme zamanı gösterilir.
- * - Kapıda ödeme: sipariş kesinleşmiştir; teslimatta ödenecek tutar gösterilir.
+ * Müşterinin siparişle ilgili her şeyi gördüğü tek sayfa: durum ve adımlar, zaman çizelgesi (müşteriye görünen
+ * geçmiş), havale bilgileri, ödemesi yarım kalan kartta "Ödemeyi tamamla", kargo takip numarası, ürünler ve
+ * tutarlar, teslimat/fatura bilgisi, fatura numarası, iadeler, iptal/iade talebi ve siparişe özel sözleşmeler.
+ * Sipariş numarası (tahmin edilemez referans) sayfanın anahtarıdır; arama motorlarına kapalıdır.
  */
 
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getOrderByReference } from "@/lib/repositories";
 import { formatPrice } from "@/types";
-import { getPaymentSettings } from "@/lib/payment/settings.repository";
-import { PAYMENT_METHOD_LABELS, formatIban, hasBankDetails } from "@/lib/payment/methods";
+import { loadCustomerOrderView, progressIndex } from "@/lib/orders/customer-view";
+import { addressText, billingText, formatIban } from "@/lib/notifications/order-data";
+import { PAYMENT_METHOD_LABELS } from "@/lib/payment/methods";
 import { RECIPIENT_PAYS_NOTE } from "@/lib/shipping/quote";
-import { STORE } from "@/lib/config/store";
+import { distanceSalesSections, preInformationSections } from "@/lib/legal/content";
+import { formatPhoneTr } from "@/lib/business/info";
+import LegalSections from "@/components/legal/LegalSections";
 import ClearCartOnPaid from "./ClearCartOnPaid";
 import CopyButton from "./CopyButton";
-import styles from "./page.module.css";
+import PayNowButton from "./PayNowButton";
+import OrderRequests from "./OrderRequests";
+import styles from "./order.module.css";
 
-const PAID_STATUSES = ["PAID", "PROCESSING", "SHIPPED", "DELIVERED"];
+export const metadata: Metadata = {
+  title: "Siparişiniz",
+  robots: { index: false, follow: false },
+};
+
+export const dynamic = "force-dynamic";
+
+const PAID = ["PAID", "PROCESSING", "SHIPPED", "DELIVERED"];
+const STEPS = ["Sipariş alındı", "Ödeme", "Hazırlanıyor", "Kargoda", "Teslim edildi"];
 
 const dateTimeTr = (d: Date) =>
   new Intl.DateTimeFormat("tr-TR", { dateStyle: "long", timeStyle: "short", timeZone: "Europe/Istanbul" }).format(d);
+const dateTr = (d: Date) => new Intl.DateTimeFormat("tr-TR", { dateStyle: "long", timeZone: "Europe/Istanbul" }).format(d);
 
-const STATUS_COPY: Record<string, { title: string; message: string }> = {
-  PENDING: {
-    title: "Ödemeniz bekleniyor",
-    message:
-      "Siparişiniz oluşturuldu ancak ödeme henüz tamamlanmadı. Sepetiniz duruyor; ödeme sayfasından tekrar deneyebilirsiniz.",
-  },
-  CANCELLED: {
-    title: "Sipariş iptal edildi",
-    message:
-      "Bu sipariş iptal edildi. Ödeme yaptıysanız ya da bir sorun olduğunu düşünüyorsanız bizi arayın: 0532 682 53 72",
-  },
-  REFUNDED: {
-    title: "Sipariş iade edildi",
-    message: "Bu siparişin ödemesi iade edildi.",
-  },
+const REFUND_TR: Record<string, string> = {
+  CARD_PROVIDER: "Karta iade",
+  BANK_TRANSFER: "Banka hesabına iade",
+  CASH: "Elden iade",
+  OTHER: "İade",
 };
 
 interface Props {
@@ -48,278 +50,378 @@ interface Props {
   searchParams: Promise<{ odeme?: string | string[] }>;
 }
 
-export const metadata: Metadata = {
-  title: "Siparişiniz Alındı",
-  robots: { index: false, follow: false },
-};
-
-export default async function SiparisOnayPage({ params, searchParams }: Props) {
+export default async function SiparisPage({ params, searchParams }: Props) {
   const { ref } = await params;
   const { odeme } = await searchParams;
+  const view = await loadCustomerOrderView(ref);
+  if (!view) notFound();
 
-  // DB'den siparişi çek
-  const order = await getOrderByReference(ref);
-
-  if (!order) {
-    // Sipariş yoksa 404 — URL tahmin edilmiş olabilir
-    notFound();
-  }
-
-  const addressInfo = order.shippingAddress;
-  const isPaid = PAID_STATUSES.includes(order.status);
-  const isCod = order.paymentMethod === "CASH_ON_DELIVERY";
-  const awaitingTransfer = order.paymentMethod === "BANK_TRANSFER" && order.status === "PENDING";
+  const d = view.data;
+  const isPaid = PAID.includes(d.status);
+  const isCod = d.paymentMethod === "CASH_ON_DELIVERY";
+  const awaitingTransfer = d.paymentMethod === "BANK_TRANSFER" && d.status === "PENDING";
+  const cardPending = d.paymentMethod === "CARD" && d.status === "PENDING";
+  const reviewing = cardPending && view.needsAttention;
+  const verifying = cardPending && !reviewing && odeme === "dogrulaniyor";
+  const closed = d.status === "CANCELLED" || d.status === "REFUNDED";
   // Sipariş kesinleşti (ödendi / havale bekliyor / kapıda ödeme) → sepet temizlenir
   const placed = isPaid || awaitingTransfer;
-  const bank = awaitingTransfer ? (await getPaymentSettings()).bankTransfer : null;
-  const bankReady = bank ? hasBankDetails(bank) : false;
-  const whatsappReceipt = `https://wa.me/${STORE.contact.whatsapp}?text=${encodeURIComponent(
-    `Merhaba, #${order.reference} numaralı siparişimin havale/EFT ödemesini yaptım. Dekontu gönderiyorum.`
-  )}`;
-  const recipientPays = addressInfo?.shippingMode === "recipient";
-  const copy = STATUS_COPY[order.status];
-  // Kart dönüşünde sonuç sağlayıcıdan doğrulanamadıysa (ya da ödeme incelemedeyse) müşteri tekrar ödemesin
-  const cardPending = order.status === "PENDING" && order.paymentMethod === "CARD";
-  const reviewing = cardPending && order.needsAttention;
-  const verifying = cardPending && !reviewing && odeme === "dogrulaniyor";
+  const step = progressIndex(d.status);
+  const phone = formatPhoneTr(d.business.phone);
+  const whatsapp = d.business.whatsapp
+    ? `https://wa.me/${d.business.whatsapp}?text=${encodeURIComponent(`Merhaba, #${d.reference} numaralı siparişim hakkında yazıyorum.`)}`
+    : null;
+  const whatsappReceipt = d.business.whatsapp
+    ? `https://wa.me/${d.business.whatsapp}?text=${encodeURIComponent(`Merhaba, #${d.reference} numaralı siparişimin havale/EFT ödemesini yaptım. Dekontu gönderiyorum.`)}`
+    : null;
 
-  const title = reviewing
-    ? "Ödemeniz kontrol ediliyor"
-    : verifying
-      ? "Ödemeniz doğrulanıyor"
-      : awaitingTransfer
-    ? "Siparişiniz alındı — ödemeniz bekleniyor"
-    : isPaid
-      ? "Siparişiniz alındı"
-      : copy?.title ?? "Sipariş durumu";
-  const message = reviewing
-    ? `Ödemenizle ilgili bir kontrol yapıyoruz. Lütfen tekrar ödeme yapmayın; size ulaşacağız. Sorunuz için: ${STORE.contact.phoneFormatted}`
-    : verifying
-      ? `Ödeme sonucunuzu ödeme kuruluşundan teyit ediyoruz. Lütfen tekrar ödeme yapmayın; birkaç dakika sonra bu sayfayı yenileyin. Sorunuz için: ${STORE.contact.phoneFormatted}`
-      : awaitingTransfer
-    ? `Siparişinizi ayırdık. Aşağıdaki hesaba ${formatPrice(order.totalKurus)} gönderin; açıklamaya sipariş numaranızı yazın. Ödemeniz hesabımıza geçince siparişiniz hazırlanır.`
-    : isCod && isPaid
-      ? `Siparişiniz kesinleşti ve hazırlanıyor. Ödemeyi (${formatPrice(order.totalKurus)}) teslimatta kargo görevlisine yapacaksınız. Kargoya verildiğinde telefonunuza bilgi gelecek.`
-      : isPaid
-        ? "Ödemeniz alındı. Siparişiniz hazırlanıp kargoya verildiğinde telefonunuza bilgi gelecek. Sipariş numaranızı saklayın."
-        : copy?.message;
+  let title: string;
+  let message: string;
+  if (reviewing) {
+    title = "Ödemeniz kontrol ediliyor";
+    message = `Ödemenizle ilgili bir kontrol yapıyoruz. Lütfen tekrar ödeme yapmayın; size ulaşacağız. Sorunuz için: ${phone}`;
+  } else if (verifying) {
+    title = "Ödemeniz doğrulanıyor";
+    message = `Ödeme sonucunuzu bankadan teyit ediyoruz. Lütfen tekrar ödeme yapmayın; birkaç dakika sonra bu sayfayı yenileyin. Sorunuz için: ${phone}`;
+  } else if (cardPending) {
+    title = "Ödemeniz tamamlanmadı";
+    message = "Siparişiniz oluşturuldu ve ürünleriniz kısa bir süre için ayrıldı, ancak kart ödemesi tamamlanmadı. Aşağıdan ödemeyi tamamlayabilirsiniz.";
+  } else if (awaitingTransfer) {
+    title = "Siparişiniz alındı — ödemenizi bekliyoruz";
+    message = `Ürünlerinizi sizin için ayırdık. Aşağıdaki hesaba ${formatPrice(d.totalKurus)} gönderin ve açıklamaya sipariş numaranızı yazın. Ödemeniz hesabımıza geçince siparişiniz hazırlanır ve size e-posta gönderilir.`;
+  } else if (d.status === "CANCELLED") {
+    title = "Sipariş iptal edildi";
+    message = d.refunds.length
+      ? "Bu sipariş iptal edildi ve ödemeniz iade edildi (aşağıda)."
+      : `Bu sipariş iptal edildi. Ödeme yaptıysanız ya da bir sorun olduğunu düşünüyorsanız bize ulaşın: ${phone}`;
+  } else if (d.status === "REFUNDED") {
+    title = "Sipariş iade edildi";
+    message = "Bu siparişin ödemesi iade edildi (aşağıda).";
+  } else if (d.status === "DELIVERED") {
+    title = "Siparişiniz teslim edildi";
+    message = "Afiyet olsun! Bir sorun varsa aşağıdaki “İade / iptal” bölümünden bize bildirebilirsiniz.";
+  } else if (d.status === "SHIPPED") {
+    title = "Siparişiniz kargoda";
+    message = "Siparişiniz yola çıktı. Takip numaranızı aşağıda bulabilirsiniz.";
+  } else if (isCod) {
+    title = "Siparişiniz alındı";
+    message = `Siparişiniz kesinleşti ve hazırlanıyor. Ödemeyi (${formatPrice(d.totalKurus)}) teslimatta kargo görevlisine yapacaksınız.`;
+  } else {
+    title = "Siparişiniz alındı";
+    message = "Ödemeniz alındı, teşekkür ederiz. Siparişiniz hazırlanıp kargoya verildiğinde takip numarasını e-postayla göndereceğiz.";
+  }
 
   return (
     <div className={styles.page}>
+      {placed && <ClearCartOnPaid />}
       <div className={styles.container}>
-        <div className={styles.card}>
-          {placed && <ClearCartOnPaid />}
-          {placed && (
-            <div className={styles.iconWrap}>
-              <CheckCircleIcon />
-            </div>
-          )}
+        <header className={styles.hero}>
+          <span className={`${styles.heroIcon} ${closed ? styles.heroIconMuted : reviewing || cardPending ? styles.heroIconWarn : ""}`} aria-hidden="true">
+            {closed ? <XIcon /> : reviewing || verifying || cardPending ? <ClockIcon /> : <CheckIcon />}
+          </span>
           <h1 className={styles.title}>{title}</h1>
-          <p className={styles.ref}>
-            Sipariş No: <strong>#{order.reference}</strong>
+          <p className={styles.refLine}>
+            Sipariş no <strong className={styles.mono}>{d.reference}</strong>
+            <CopyButton value={d.reference} label="Sipariş numarası" />
           </p>
+          <p className={styles.date}>{dateTimeTr(d.createdAt)}</p>
           <p className={styles.message}>{message}</p>
-
-          {awaitingTransfer && (
-            <section className={styles.bankBox} aria-labelledby="bank-title">
-              <h2 id="bank-title" className={styles.bankTitle}>
-                Havale / EFT bilgileri
-              </h2>
-              {bank && bankReady ? (
-                <dl className={styles.bankList}>
-                  <div className={styles.bankRow}>
-                    <dt>Banka</dt>
-                    <dd>{bank.bankName}</dd>
-                  </div>
-                  <div className={styles.bankRow}>
-                    <dt>Alıcı</dt>
-                    <dd>{bank.accountHolder}</dd>
-                  </div>
-                  <div className={styles.bankRow}>
-                    <dt>IBAN</dt>
-                    <dd className={styles.bankValue}>
-                      <span className={styles.mono}>{formatIban(bank.iban)}</span>
-                      <CopyButton value={bank.iban} label="IBAN" />
-                    </dd>
-                  </div>
-                  <div className={styles.bankRow}>
-                    <dt>Tutar</dt>
-                    <dd className={styles.bankValue}>
-                      <strong>{formatPrice(order.totalKurus)}</strong>
-                      <CopyButton value={(order.totalKurus / 100).toFixed(2).replace(".", ",")} label="Tutar" />
-                    </dd>
-                  </div>
-                  <div className={styles.bankRow}>
-                    <dt>Açıklama</dt>
-                    <dd className={styles.bankValue}>
-                      <span className={styles.mono}>{order.reference}</span>
-                      <CopyButton value={order.reference} label="Sipariş numarası" />
-                    </dd>
-                  </div>
-                </dl>
-              ) : (
-                <p className={styles.bankNote}>
-                  Hesap bilgilerimiz şu anda gösterilemiyor. Lütfen {STORE.contact.phoneFormatted} numarasından bize ulaşın.
-                </p>
-              )}
-              {order.paymentDueAt && (
-                <p className={styles.bankNote}>
-                  Son ödeme: <strong>{dateTimeTr(order.paymentDueAt)}</strong>. Bu zamana kadar ödeme gelmezse sipariş
-                  kendiliğinden iptal olur.
-                </p>
-              )}
-              <p className={styles.bankNote}>
-                Ödemeyi yaptıktan sonra dekontu{" "}
-                <a href={whatsappReceipt} target="_blank" rel="noopener noreferrer">
-                  WhatsApp&apos;tan gönderirseniz
-                </a>{" "}
-                siparişiniz daha hızlı hazırlanır.
-              </p>
-            </section>
+          {d.customerEmail && !closed && (
+            <p className={styles.muted}>Her adımda {d.customerEmail} adresine e-posta gönderiyoruz.</p>
           )}
+        </header>
 
-          {cardPending && !reviewing && !verifying && (
-            <p>
-              <Link href="/odeme" className={styles.continueBtn}>Ödemeye dön</Link>
-            </p>
-          )}
-
-          {/* Sipariş Özeti */}
-          <div className={styles.orderSummary}>
-            <h2 className={styles.orderSummaryTitle}>Sipariş Detayları</h2>
-            <ul className={styles.itemList}>
-              {order.items.map((item) => (
-                <li key={item.id} className={styles.itemRow}>
-                  <div className={styles.itemInfo}>
-                    <span className={styles.itemName}>{item.snapshotName}</span>
-                    <span className={styles.itemVariant}>
-                      {item.snapshotVariant} × {item.quantity}
-                    </span>
-                  </div>
-                  <span className={styles.itemPrice}>
-                    {formatPrice(item.snapshotPrice * item.quantity - item.discountKurus)}
-                  </span>
+        {step >= 0 && !reviewing && (
+          <ol className={styles.progress} aria-label="Sipariş adımları">
+            {STEPS.map((label, i) => {
+              const done = i < step;
+              const active = i === step;
+              return (
+                <li key={label} className={`${done ? styles.pDone : ""} ${active ? styles.pActive : ""}`}>
+                  <span className={styles.pDot}>{done ? <CheckSmall /> : i + 1}</span>
+                  <span className={styles.pLabel}>{i === 1 && isCod ? "Kapıda ödeme" : label}</span>
                 </li>
-              ))}
-            </ul>
-            <div className={styles.itemRow}>
-              <span className={styles.itemVariant}>
-                Kargo{addressInfo?.carrier ? ` (${addressInfo.carrier.name})` : ""}
-              </span>
-              <span className={styles.itemPrice}>
-                {recipientPays ? "Teslimatta ödenir" : order.shippingKurus > 0 ? formatPrice(order.shippingKurus) : "Ücretsiz"}
-              </span>
-            </div>
-            {order.paymentFeeKurus > 0 && (
-              <div className={styles.itemRow}>
-                <span className={styles.itemVariant}>Kapıda ödeme bedeli</span>
-                <span className={styles.itemPrice}>{formatPrice(order.paymentFeeKurus)}</span>
-              </div>
+              );
+            })}
+          </ol>
+        )}
+
+        <div className={styles.layout}>
+          <div className={styles.main}>
+            {awaitingTransfer && (
+              <section className={`${styles.card} ${styles.highlight}`} aria-labelledby="bank-title">
+                <h2 id="bank-title" className={styles.cardTitle}>
+                  Havale / EFT bilgileri
+                </h2>
+                {d.bank ? (
+                  <dl className={styles.kv}>
+                    <div>
+                      <dt>Banka</dt>
+                      <dd>{d.bank.bankName}</dd>
+                    </div>
+                    <div>
+                      <dt>Alıcı</dt>
+                      <dd>{d.bank.accountHolder}</dd>
+                    </div>
+                    <div>
+                      <dt>IBAN</dt>
+                      <dd className={styles.kvCopy}>
+                        <span className={styles.mono}>{formatIban(d.bank.iban)}</span>
+                        <CopyButton value={d.bank.iban} label="IBAN" />
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Tutar</dt>
+                      <dd className={styles.kvCopy}>
+                        <strong>{formatPrice(d.totalKurus)}</strong>
+                        <CopyButton value={(d.totalKurus / 100).toFixed(2).replace(".", ",")} label="Tutar" />
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Açıklama</dt>
+                      <dd className={styles.kvCopy}>
+                        <span className={styles.mono}>{d.reference}</span>
+                        <CopyButton value={d.reference} label="Sipariş numarası" />
+                      </dd>
+                    </div>
+                  </dl>
+                ) : (
+                  <p className={styles.muted}>Hesap bilgilerimiz şu anda gösterilemiyor. Lütfen {phone} numarasından bize ulaşın.</p>
+                )}
+                {d.paymentDueAt && (
+                  <p className={styles.noteBox}>
+                    Son ödeme: <strong>{dateTimeTr(d.paymentDueAt)}</strong>. Bu zamana kadar ödeme gelmezse sipariş kendiliğinden
+                    iptal olur.
+                  </p>
+                )}
+                {whatsappReceipt && (
+                  <p className={styles.muted}>
+                    Ödemeyi yaptıktan sonra dekontu{" "}
+                    <a href={whatsappReceipt} target="_blank" rel="noopener noreferrer">
+                      WhatsApp&apos;tan gönderirseniz
+                    </a>{" "}
+                    siparişiniz daha hızlı hazırlanır.
+                  </p>
+                )}
+              </section>
             )}
-            <div className={styles.itemRow}>
-              <span className={styles.itemVariant}>Ödeme yöntemi</span>
-              <span className={styles.itemPrice}>{PAYMENT_METHOD_LABELS[order.paymentMethod]}</span>
-            </div>
-            <div className={styles.totalRow}>
-              <span>{isCod ? "Teslimatta ödenecek" : "Toplam"}</span>
-              <span>{formatPrice(order.totalKurus)}</span>
-            </div>
-            {recipientPays && <p className={styles.bankNote}>{RECIPIENT_PAYS_NOTE}</p>}
+
+            {cardPending && !reviewing && !verifying && (
+              <section className={`${styles.card} ${styles.highlight}`} aria-label="Ödemeyi tamamla">
+                <PayNowButton orderId={d.id} amountText={formatPrice(d.totalKurus)} />
+                {d.paymentDueAt && (
+                  <p className={styles.muted}>Ürünleriniz {dateTimeTr(d.paymentDueAt)} tarihine kadar ayrılı; sonra sipariş kendiliğinden iptal olur.</p>
+                )}
+              </section>
+            )}
+
+            {d.shipments.length > 0 && (
+              <section className={styles.card} aria-labelledby="ship-title">
+                <h2 id="ship-title" className={styles.cardTitle}>
+                  Kargo
+                </h2>
+                {d.shipments.map((s) => (
+                  <div key={s.id} className={styles.shipment}>
+                    <div>
+                      <p className={styles.shipCarrier}>{s.carrier}</p>
+                      <p className={styles.kvCopy}>
+                        Takip no <strong className={styles.mono}>{s.trackingNumber}</strong>
+                        <CopyButton value={s.trackingNumber} label="Takip numarası" />
+                      </p>
+                      <p className={styles.muted}>{dateTimeTr(s.shippedAt)} kargoya verildi</p>
+                    </div>
+                    {s.link && (
+                      <a className={styles.secondaryBtn} href={s.link} target="_blank" rel="noopener noreferrer">
+                        Kargoyu takip et
+                      </a>
+                    )}
+                  </div>
+                ))}
+                <p className={styles.muted}>Takip sayfası numarayı kendiliğinden göstermezse takip numarasını sayfadaki kutuya yazın.</p>
+              </section>
+            )}
+
+            {view.timeline.length > 0 && (
+              <section className={styles.card} aria-labelledby="timeline-title">
+                <h2 id="timeline-title" className={styles.cardTitle}>
+                  Sipariş geçmişi
+                </h2>
+                <ol className={styles.timeline}>
+                  {[...view.timeline].reverse().map((e, i) => (
+                    <li key={`${e.at.toISOString()}-${i}`}>
+                      <time dateTime={e.at.toISOString()}>{dateTimeTr(e.at)}</time>
+                      <span>{e.message}</span>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            )}
+
+            <section className={styles.card} aria-labelledby="items-title">
+              <h2 id="items-title" className={styles.cardTitle}>
+                Ürünler
+              </h2>
+              <ul className={styles.items}>
+                {d.items.map((i, idx) => (
+                  <li key={idx}>
+                    <span>
+                      <span className={styles.itemName}>{i.name}</span>
+                      <span className={styles.itemVariant}>
+                        {i.variant} × {i.quantity}
+                      </span>
+                    </span>
+                    <span className={styles.itemPrice}>{formatPrice(i.lineTotalKurus)}</span>
+                  </li>
+                ))}
+              </ul>
+              <dl className={styles.totals}>
+                <div>
+                  <dt>Ürünler</dt>
+                  <dd>{formatPrice(d.subtotalKurus)}</dd>
+                </div>
+                <div>
+                  <dt>Kargo ({d.carrierName})</dt>
+                  <dd>{d.recipientPaysShipping ? "Teslimatta ödenir" : d.shippingKurus > 0 ? formatPrice(d.shippingKurus) : "Ücretsiz"}</dd>
+                </div>
+                {d.paymentFeeKurus > 0 && (
+                  <div>
+                    <dt>Kapıda ödeme bedeli</dt>
+                    <dd>{formatPrice(d.paymentFeeKurus)}</dd>
+                  </div>
+                )}
+                <div>
+                  <dt>Ödeme yöntemi</dt>
+                  <dd>{PAYMENT_METHOD_LABELS[d.paymentMethod]}</dd>
+                </div>
+                <div className={styles.grand}>
+                  <dt>{isCod && !isPaid ? "Teslimatta ödenecek" : "Toplam (KDV dahil)"}</dt>
+                  <dd>{formatPrice(d.totalKurus)}</dd>
+                </div>
+              </dl>
+              {d.recipientPaysShipping && <p className={styles.muted}>{RECIPIENT_PAYS_NOTE}</p>}
+            </section>
+
+            <OrderRequests
+              reference={d.reference}
+              canCancelNow={view.options.canCancelNow && !view.needsAttention}
+              canRequestCancel={view.options.canRequestCancel}
+              canRequestReturn={view.options.canRequestReturn}
+              openRequests={view.openRequests.map((r) => ({ type: r.type, createdAt: r.createdAt.toISOString() }))}
+            />
+
+            <section className={styles.card} aria-labelledby="docs-title">
+              <h2 id="docs-title" className={styles.cardTitle}>
+                Sözleşmeleriniz
+              </h2>
+              <p className={styles.muted}>Siparişinizde onayladığınız metinler (bir kopyası sipariş e-postanızda da var).</p>
+              <details className={styles.doc}>
+                <summary>Ön Bilgilendirme Formu</summary>
+                <div className={styles.docBody}>
+                  <LegalSections sections={preInformationSections(d.business, view.legal)} compact />
+                </div>
+              </details>
+              <details className={styles.doc}>
+                <summary>Mesafeli Satış Sözleşmesi</summary>
+                <div className={styles.docBody}>
+                  <LegalSections sections={distanceSalesSections(d.business, view.legal)} compact />
+                </div>
+              </details>
+            </section>
           </div>
 
-          {/* Teslimat adresi */}
-          {addressInfo && (
-            <div className={styles.addressBox}>
-              <MapPinIcon />
-              <div>
-                <p className={styles.addressTitle}>Teslimat Adresi</p>
-                <p className={styles.addressText}>
-                  {addressInfo.firstName} {addressInfo.lastName}
+          <aside className={styles.side}>
+            <section className={styles.card} aria-labelledby="delivery-title">
+              <h2 id="delivery-title" className={styles.cardTitle}>
+                Teslimat
+              </h2>
+              <p className={styles.sideText}>{addressText(d.address)}</p>
+              <h3 className={styles.sideTitle}>Fatura</h3>
+              <p className={styles.sideText}>{billingText(d.billing, d.customerName)}</p>
+              {view.invoiceNumber && (
+                <p className={styles.sideText}>
+                  Fatura no <strong className={styles.mono}>{view.invoiceNumber}</strong>
+                  {view.invoiceIssuedAt && <> · {dateTr(view.invoiceIssuedAt)}</>}
                 </p>
-                <p className={styles.addressText}>{addressInfo.address}</p>
-                <p className={styles.addressText}>
-                  {addressInfo.district}, {addressInfo.city}
-                  {addressInfo.postalCode ? ` ${addressInfo.postalCode}` : ""}
-                </p>
+              )}
+              {d.customerNote && (
+                <>
+                  <h3 className={styles.sideTitle}>Notunuz</h3>
+                  <p className={styles.sideText}>{d.customerNote}</p>
+                </>
+              )}
+            </section>
+
+            {d.refunds.length > 0 && (
+              <section className={styles.card} aria-labelledby="refund-title">
+                <h2 id="refund-title" className={styles.cardTitle}>
+                  İadeler
+                </h2>
+                {d.refunds.map((r) => (
+                  <p key={r.id} className={styles.sideText}>
+                    <strong>{formatPrice(r.amountKurus)}</strong> — {REFUND_TR[r.method] ?? "İade"}, {dateTr(r.createdAt)}
+                  </p>
+                ))}
+                <p className={styles.muted}>Kart iadelerinin ekstreye yansıması bankanıza göre birkaç iş günü sürebilir.</p>
+              </section>
+            )}
+
+            <section className={styles.card} aria-labelledby="help-title">
+              <h2 id="help-title" className={styles.cardTitle}>
+                Yardım
+              </h2>
+              <p className={styles.sideText}>Siparişinizle ilgili her konuda bize ulaşabilirsiniz.</p>
+              <div className={styles.helpLinks}>
+                <a href={`tel:${d.business.phone}`}>{phone}</a>
+                {whatsapp && (
+                  <a href={whatsapp} target="_blank" rel="noopener noreferrer">
+                    WhatsApp
+                  </a>
+                )}
+                <Link href={`/iletisim?konu=${encodeURIComponent("Siparişim hakkında")}&siparis=${encodeURIComponent(d.reference)}`}>
+                  Mesaj gönder
+                </Link>
               </div>
-            </div>
-          )}
+            </section>
 
-          <div className={styles.actions}>
-            <Link href="/urunler" className={styles.continueBtn}>
-              Alışverişe Devam Et
+            <Link href="/urunler" className={styles.continueLink}>
+              Alışverişe devam et
             </Link>
-          </div>
-
-          <div className={styles.storeNote}>
-            <StoreIcon />
-            <div>
-              <p className={styles.storeNoteTitle}>Mağaza Bilgisi</p>
-              <p className={styles.storeNoteText}>
-                Muradiye, Zeytinciler Çarşısı, Orhangazi/Bursa
-              </p>
-            </div>
-          </div>
+          </aside>
         </div>
       </div>
     </div>
   );
 }
 
-function CheckCircleIcon() {
+function CheckIcon() {
   return (
-    <svg
-      width="64"
-      height="64"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-      <polyline points="22 4 12 14.01 9 11.01" />
+    <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
     </svg>
   );
 }
 
-function StoreIcon() {
+function CheckSmall() {
   return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-      <polyline points="9 22 9 12 15 12 15 22" />
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="20 6 9 17 4 12" />
     </svg>
   );
 }
 
-function MapPinIcon() {
+function ClockIcon() {
   return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      style={{ flexShrink: 0, marginTop: 2 }}
-    >
-      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-      <circle cx="12" cy="10" r="3" />
+    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </svg>
+  );
+}
+
+function XIcon() {
+  return (
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 6 6 18M6 6l12 12" />
     </svg>
   );
 }
