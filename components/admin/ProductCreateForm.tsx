@@ -117,7 +117,9 @@ export default function ProductCreateForm({ categories }: Props) {
         return;
       }
 
-      router.push("/admin/urunler");
+      // Fotoğraflar ürün kaydından sonra eklenir: düzenleme sayfasına geç
+      const createdId = (data as { product?: { id?: string } }).product?.id;
+      router.push(createdId ? `/admin/urunler/${createdId}?yeni=1` : "/admin/urunler");
       router.refresh();
     } catch {
       setMessage("Bir hata oluştu");

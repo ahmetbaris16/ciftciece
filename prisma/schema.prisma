@@ -111,6 +111,26 @@ model ProductImage {
   @@map("product_images")
 }
 
+// Admin'den yüklenen görseller veritabanında saklanır (Y-18): Hostinger'da yüklenen dosyaların yeniden
+// yayında kalıp kalmadığı belirsiz. Görsel tarayıcıda küçültülüp (en uzun kenar 1600 px) yüklenir; sunucu
+// türünü dosya imzasından doğrular, en fazla 2 MB kabul eder. Adresi: /gorsel/<id>.<uzantı> (değişmez,
+// uzun süre önbelleklenir). product_images.url bu adresi tutar.
+model UploadedImage {
+  id          String   @id @default(cuid())
+  // image/webp | image/jpeg | image/png
+  contentType String   @db.VarChar(40)
+  data        Bytes    @db.MediumBlob
+  byteSize    Int
+  width       Int?
+  height      Int?
+  sha256      String   @db.Char(64)
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@index([sha256])
+  @@map("uploaded_images")
+}
+
 model ProductVariant {
   id          String      @id @default(cuid())
   productId   String
