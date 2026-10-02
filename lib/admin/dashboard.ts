@@ -13,6 +13,10 @@ import { isBankTransferReady } from "@/lib/payment/methods";
 import { isTestProvider, paymentProviderStatus } from "@/lib/payment/provider";
 import { emailMode } from "@/lib/email/config";
 import { getShippingSettings } from "@/lib/shipping/shipping.repository";
+import { lastCronRun } from "@/lib/cron/heartbeat";
+
+const dateTimeTr = (d: Date) =>
+  new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Istanbul" }).format(d);
 
 export interface AdminBadges {
   /** Ödeme tarafında karar bekleyen (Dikkat) */
@@ -81,13 +85,16 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const { today, month } = istanbulStarts();
   // Ciro sipariş durumundan değil, alınmış ödemeden sayılır: kapıda ödemeli sipariş teslimde tahsil edilene kadar
   // ödenmiş sayılmaz; bankanın test ortamındaki ödemeler gerçek para değildir.
-  const [todayOrders, paidAttempts, refundAgg, shipped, low] = await Promise.all([
+  const [todayOrders, paidAttempts, refunds, shipped, low] = await Promise.all([
     prisma.order.count({ where: { createdAt: { gte: today }, status: { not: "CANCELLED" } } }),
     prisma.paymentAttempt.findMany({
       where: { status: "SUCCEEDED", verifiedAt: { gte: month } },
       select: { provider: true, amountKurus: true, paidAmountKurus: true, chargedAmountKurus: true },
     }),
-    prisma.refund.aggregate({ where: { createdAt: { gte: month } }, _sum: { amountKurus: true } }),
+    prisma.refund.findMany({
+      where: { createdAt: { gte: month } },
+      select: { amountKurus: true, order: { select: { paymentAttempts: { where: { status: "SUCCEEDED" }, select: { provider: true } } } } },
+    }),
     prisma.order.count({ where: { status: "SHIPPED" } }),
     prisma.inventory.findMany({
       where: { quantity: { lte: 3 }, variant: { isAvailable: true, product: { isPublished: true } } },
@@ -101,7 +108,10 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     todayOrders,
     monthRevenueKurus: real.reduce((sum, a) => sum + (a.chargedAmountKurus ?? a.paidAmountKurus ?? a.amountKurus), 0),
     monthPaidOrders: real.length,
-    monthRefundKurus: refundAgg._sum.amountKurus ?? 0,
+    // Test ortamında ödenmiş siparişin "iadesi" gerçek para değildir
+    monthRefundKurus: refunds
+      .filter((r) => r.order.paymentAttempts.some((a) => !isTestProvider(a.provider)))
+      .reduce((sum, r) => sum + r.amountKurus, 0),
     shipped,
     lowStock: low.map((l) => ({ productName: l.variant.product.name, variantName: l.variant.name, quantity: l.quantity })),
   };
@@ -118,7 +128,15 @@ export interface CheckItem {
 
 /** Yayın ve banka (sanal POS) incelemesi kontrol listesi */
 export async function getLaunchChecklist(): Promise<CheckItem[]> {
-  const [business, payment, shipping] = await Promise.all([getBusinessInfo(), getPaymentSettings(), getShippingSettings()]);
+  const [business, payment, shipping, cron] = await Promise.all([
+    getBusinessInfo(),
+    getPaymentSettings(),
+    getShippingSettings(),
+    USE_DB ? lastCronRun().catch(() => null) : Promise.resolve(null),
+  ]);
+  const cronKey = (process.env.CRON_SECRET?.trim().length ?? 0) >= 24;
+  const cronAgeMin = cron ? Math.floor((Date.now() - cron.at.getTime()) / 60_000) : null;
+  const cronFresh = cronAgeMin !== null && cronAgeMin <= 15;
   const missing = missingBusinessFields(business);
   const provider = paymentProviderStatus();
   const mail = emailMode();
@@ -160,17 +178,20 @@ export async function getLaunchChecklist(): Promise<CheckItem[]> {
       state: mail === "smtp" ? "ok" : "todo",
       detail:
         mail === "smtp"
-          ? "Hostinger e-postası bağlı; sipariş e-postaları gidiyor. Ayarlar → E-postalar'dan deneme gönderebilirsiniz."
+          ? "Hostinger e-postası bağlı; sipariş e-postaları gidiyor. E-postalar sayfasından deneme gönderebilirsiniz."
           : "SMTP ayarları girilmedi: sipariş e-postaları kuyrukta bekliyor (yasal sipariş teyidi gitmiyor).",
       href: "/admin/epostalar",
     },
     {
       label: "Zamanlanmış iş (cron)",
-      state: (process.env.CRON_SECRET?.trim().length ?? 0) >= 24 ? "manual" : "todo",
-      detail:
-        (process.env.CRON_SECRET?.trim().length ?? 0) >= 24
-          ? "Anahtar tanımlı. hPanel → Cron Jobs'ta 5 dakikalık görevin kurulduğunu kontrol edin."
-          : "CRON_SECRET tanımlı değil: süresi dolan siparişler ve e-posta yeniden denemeleri yalnız site trafiğiyle çalışır.",
+      state: cronKey && cronFresh ? "ok" : "todo",
+      detail: !cronKey
+        ? "CRON_SECRET tanımlı değil: süresi dolan siparişler ve e-posta yeniden denemeleri yalnız site trafiğiyle çalışır."
+        : cronFresh
+          ? `Çalışıyor: son çalışma ${cronAgeMin === 0 ? "az önce" : `${cronAgeMin} dk önce`}${cron?.ok ? "" : " (bir iş hata verdi; çalışma günlüğüne bakın)"}.`
+          : cron
+            ? `Son çalışma ${dateTimeTr(cron.at)}: 15 dakikadan eski. hPanel → Cron Jobs'taki 5 dakikalık görevi kontrol edin.`
+            : "Henüz hiç çalışmadı: hPanel → Cron Jobs'ta 5 dakikalık görevi kurun (docs/YAYIN.md).",
     },
     {
       label: "Kargo tarifesi",

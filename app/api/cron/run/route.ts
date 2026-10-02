@@ -10,6 +10,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { runCronJobs } from "@/lib/cron/jobs";
+import { recordCronRun } from "@/lib/cron/heartbeat";
 import { USE_DB } from "@/lib/data/source";
 
 export const dynamic = "force-dynamic";
@@ -42,6 +43,8 @@ async function handle(request: NextRequest) {
   const started = Date.now();
   const jobs = await runCronJobs();
   const ok = jobs.every((j) => j.ok);
+  // Panelde "son çalışma" görünsün; kayıt hatası cron yanıtını bozmaz
+  await recordCronRun(ok).catch((err) => console.error("[cron] son çalışma kaydedilemedi:", err));
   return NextResponse.json(
     { ok, ms: Date.now() - started, jobs },
     { status: ok ? 200 : 500, headers: { "Cache-Control": "no-store" } }

@@ -137,7 +137,9 @@ export default async function AdminSiparisDetay({ params }: Props) {
 
         <header className={s.head}>
           <div>
-            <h1 className={s.title}>Sipariş #{order.reference}</h1>
+            <h1 className={s.title}>
+              Sipariş <span className={s.ref}>#{order.reference}</span>
+            </h1>
             <p className={s.meta}>
               {dateTimeTr(order.createdAt)} · {PAYMENT_METHOD_LABELS[order.paymentMethod]} · {formatPrice(order.totalKurus)}
             </p>

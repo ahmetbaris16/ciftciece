@@ -32,6 +32,14 @@
   word-break: break-all;
 }
 
+/* Sipariş no başlık yazı tipinde 0 ile o karışıyor: eşit aralıklı */
+.ref {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78em;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
 .meta {
   margin: 0.25rem 0 0;
   font-size: 0.875rem;

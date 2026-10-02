@@ -16,6 +16,8 @@ import { saveBusinessInfo } from "@/lib/business/business.repository";
 import { parseBusinessInfo } from "@/lib/business/info";
 import { writeOutbox } from "@/lib/outbox";
 import { GET as cronGet } from "@/app/api/cron/run/route";
+import { lastCronRun } from "@/lib/cron/heartbeat";
+import { getLaunchChecklist } from "@/lib/admin/dashboard";
 import { setupTestDb } from "./helpers/db";
 import { FakeSmtpServer, partOf, subjectOf } from "./helpers/fake-smtp";
 
@@ -222,6 +224,10 @@ test("cron ucu: anahtar yoksa 503, yanlışsa 401, doğruysa işleri çalıştı
   process.env.CRON_SECRET = "c".repeat(32);
   const wrong = await cronGet(new NextRequest("http://localhost/api/cron/run", { headers: { authorization: "Bearer yanlis" } }));
   assert.equal(wrong.status, 401);
+  assert.equal(await lastCronRun(), null, "yetkisiz çağrı son çalışma yazmaz");
+  const before = (await getLaunchChecklist()).find((c) => c.label.startsWith("Zamanlanmış"));
+  assert.equal(before?.state, "todo");
+  assert.match(before?.detail ?? "", /hiç çalışmadı/);
   await enqueueEmail(prisma, draft("ayse@ornek.test", "k7"));
   const ok = await cronGet(
     new NextRequest("http://localhost/api/cron/run", { headers: { authorization: `Bearer ${"c".repeat(32)}` } })
@@ -234,4 +240,10 @@ test("cron ucu: anahtar yoksa 503, yanlışsa 401, doğruysa işleri çalıştı
   // Sorgu parametresiyle de çalışır
   const viaQuery = await cronGet(new NextRequest(`http://localhost/api/cron/run?key=${"c".repeat(32)}`));
   assert.equal(viaQuery.status, 200);
+  // Panel: son çalışma kaydedildi, kontrol listesinde "çalışıyor"
+  const last = await lastCronRun();
+  assert.ok(last && Date.now() - last.at.getTime() < 60_000 && last.ok);
+  const item = (await getLaunchChecklist()).find((c) => c.label.startsWith("Zamanlanmış"));
+  assert.equal(item?.state, "ok");
+  assert.match(item?.detail ?? "", /Çalışıyor/);
 });
