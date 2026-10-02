@@ -19,6 +19,7 @@ export {
 
 export {
   getVariantById,
+  getCartVariants,
   type VariantLookupResult,
 } from "./variant.repository";
 

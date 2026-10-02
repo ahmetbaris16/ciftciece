@@ -44,6 +44,7 @@ import { PROVINCES_SORTED } from "@/lib/geo/provinces";
 import { formatPhoneTr, type BusinessInfo } from "@/lib/business/info";
 import LegalSections from "@/components/legal/LegalSections";
 import PaymentMarks from "@/components/payment/PaymentMarks";
+import CartChanges from "@/components/cart/CartChanges";
 import styles from "./checkout.module.css";
 
 type Step = "iletisim" | "teslimat" | "odeme";
@@ -78,6 +79,8 @@ interface BillingState {
 
 const CONTACT_FIELDS: CheckoutField[] = ["firstName", "lastName", "email", "phone"];
 const PAYMENT_FIELDS: CheckoutField[] = ["paymentMethod", "acceptTerms"];
+// Bu hatalarda sepet sunucudakiyle uyuşmuyor: sepet eşitlenir, değişen kalemler müşteriye söylenir
+const CART_MISMATCH_CODES = new Set(["PRODUCT_UNAVAILABLE", "STOCK", "EMPTY"]);
 
 const PAYMENT_RETURN_ERRORS: Record<string, string> = {
   payment_failed: "Ödeme tamamlanmadı: banka işlemi onaylamadı. Kart bilgilerinizi kontrol edip tekrar deneyebilir ya da başka bir ödeme yöntemi seçebilirsiniz.",
@@ -89,7 +92,7 @@ const PAYMENT_RETURN_ERRORS: Record<string, string> = {
 };
 
 export default function CheckoutClient({ business, cardProvider }: { business: BusinessInfo; cardProvider: string }) {
-  const { cart, isHydrated } = useCart();
+  const { cart, isHydrated, syncCart } = useCart();
   const router = useRouter();
   const searchParams = useSearchParams();
   const errorParam = searchParams.get("error");
@@ -146,6 +149,11 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
       })
       .catch((err) => console.error("[checkout] Üye bilgileri alınamadı:", err));
   }, [isCustomer]);
+
+  // Ödeme sayfası açılınca sepet güncel fiyat/stokla eşitlenir (özet ve sözleşme doğru tutarı göstersin)
+  useEffect(() => {
+    if (isHydrated) void syncCart();
+  }, [isHydrated, syncCart]);
 
   // Adım değişince formun başına dön (mobilde özellikle); ilk açılışta kaydırılmaz
   const firstRender = useRef(true);
@@ -282,6 +290,7 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
             forgetCheckoutKey();
             setPendingOrder(null);
           }
+          if (CART_MISMATCH_CODES.has(data?.code)) await syncCart();
           const fieldErrors = (data?.fieldErrors ?? {}) as Partial<Record<CheckoutField, string>>;
           const keys = Object.keys(fieldErrors) as CheckoutField[];
           if (keys.length > 0) {
@@ -347,6 +356,7 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
     return (
       <div className={styles.page}>
         <div className={styles.state}>
+          <CartChanges />
           <p role={returnError ? "alert" : undefined}>{returnError ?? "Sepetiniz boş. Ödemeye geçmek için sepetinize ürün ekleyin."}</p>
           <Link href="/urunler" className={styles.primaryBtn}>
             Ürünlere göz atın
@@ -431,6 +441,7 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
 
         <div className={styles.layout}>
           <div className={styles.main} ref={formTopRef}>
+            <CartChanges />
             <ol className={styles.steps} aria-label="Ödeme adımları">
               {STEPS.map((s, i) => {
                 const done = i < stepIndex;

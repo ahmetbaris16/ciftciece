@@ -18,6 +18,7 @@ import { useShippingQuote } from "@/lib/shipping/useShippingQuote";
 import { RECIPIENT_PAYS_NOTE, SHIPPING_BASIS_NOTE } from "@/lib/shipping/quote";
 import FreeShippingProgress from "@/components/cart/FreeShippingProgress";
 import CartSuggestions from "@/components/cart/CartSuggestions";
+import CartChanges from "@/components/cart/CartChanges";
 import styles from "./page.module.css";
 
 // Not: Client component olduğu için metadata export burada çalışmaz.
@@ -60,6 +61,7 @@ export default function SepetPage() {
     <div className={styles.page}>
       <div className={styles.container}>
         <h1 className={styles.title}>Sepetim</h1>
+        <CartChanges />
 
         {isEmpty ? (
           <div className={styles.empty}>

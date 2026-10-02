@@ -9,6 +9,7 @@
 
 import { prisma } from "@/lib/db/prisma";
 import { USE_DB, loadMock as getMock } from "@/lib/data/source";
+import type { CartVariantSnapshot } from "@/lib/cart/sync";
 import type { Product, ProductVariant } from "@/types";
 
 export interface VariantLookupResult {
@@ -94,4 +95,65 @@ export async function getVariantById(variantId: string): Promise<VariantLookupRe
   };
 
   return { product, variant: mappedVariant };
+}
+
+/** Sepet eşitleme için tek sorguda hafif okuma: varyant id → güncel bilgi. Bulunamayan id haritada olmaz. */
+export async function getCartVariants(variantIds: string[]): Promise<Map<string, CartVariantSnapshot>> {
+  const result = new Map<string, CartVariantSnapshot>();
+  if (variantIds.length === 0) return result;
+
+  if (!USE_DB) {
+    const mock = await getMock();
+    for (const id of variantIds) {
+      const found = mock.getVariantById(id);
+      if (!found) continue;
+      const image = found.product.images[0];
+      result.set(id, {
+        productSlug: found.product.slug,
+        productName: found.product.name,
+        variantName: found.variant.name,
+        priceKurus: found.variant.priceKurus,
+        stockQuantity: found.variant.stockQuantity ?? 0,
+        isAvailable: found.variant.isAvailable,
+        productPublished: found.product.isPublished,
+        imageUrl: image?.url ?? null,
+        imageAlt: image?.altText ?? null,
+      });
+    }
+    return result;
+  }
+
+  const rows = await prisma.productVariant.findMany({
+    where: { id: { in: variantIds } },
+    select: {
+      id: true,
+      name: true,
+      priceKurus: true,
+      isAvailable: true,
+      inventory: { select: { quantity: true } },
+      product: {
+        select: {
+          name: true,
+          slug: true,
+          isPublished: true,
+          images: { orderBy: { sortOrder: "asc" }, take: 1, select: { url: true, altText: true } },
+        },
+      },
+    },
+  });
+  for (const r of rows) {
+    const image = r.product.images[0];
+    result.set(r.id, {
+      productSlug: r.product.slug,
+      productName: r.product.name,
+      variantName: r.name,
+      priceKurus: r.priceKurus,
+      stockQuantity: r.inventory?.quantity ?? 0,
+      isAvailable: r.isAvailable,
+      productPublished: r.product.isPublished,
+      imageUrl: image?.url ?? null,
+      imageAlt: image?.altText ?? null,
+    });
+  }
+  return result;
 }
