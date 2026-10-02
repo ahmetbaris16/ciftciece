@@ -2,10 +2,12 @@
  * Çiftçi Ece — NextAuth Configuration
  *
  * İki ayrı credentials sağlayıcısı, tek JWT oturumu:
- * - "credentials" → yönetim paneli (/admin/giris). Yalnız ADMIN ve STAFF. Oturum 8 saat.
+ * - "credentials" → yönetim paneli (/admin/giris): kullanıcı adı (ya da e-posta) + şifre. Yalnız ADMIN ve STAFF.
+ *                   Oturum 8 saat.
  * - "customer"    → mağaza üyeleri (/giris, /uye-ol). Yalnız CUSTOMER. Oturum 30 gün.
  * Müşteri hesabıyla panele, yönetici hesabıyla mağaza girişine izin verilmez (roller karışmaz).
- * Session'da user id, rol ve ad taşınır.
+ * Şifre değişince (müşteri: "şifremi unuttum", yönetici: panel → Ayarlar → Yönetici hesabı) önceki oturumlar en geç
+ * 5 dakikada düşer. Session'da user id, rol ve ad taşınır.
  */
 
 import type { NextAuthOptions, Session } from "next-auth";
@@ -13,6 +15,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { prisma } from "@/lib/db/prisma";
 import { findUserByEmail, getUserById } from "@/lib/account/customer.repository";
 import { verifyPassword } from "@/lib/auth/password";
+import { adminLoginLookup } from "@/lib/auth/admin-account";
 import { clientIp, rateLimit } from "@/lib/security/rate-limit";
 import { normalizeEmail } from "@/lib/validation/account";
 
@@ -29,8 +32,8 @@ const USE_DB = !!process.env.DATABASE_URL;
 
 const ADMIN_SESSION_SECONDS = 8 * 60 * 60; // 8 saat
 const CUSTOMER_SESSION_SECONDS = 30 * 24 * 60 * 60; // 30 gün
-/** Müşteri oturumunun hâlâ geçerli olduğu (şifre sıfırlanmadı, hesap duruyor) bu aralıkla yeniden denetlenir */
-const CUSTOMER_RECHECK_SECONDS = 5 * 60;
+/** Oturumun hâlâ geçerli olduğu (şifre değişmedi, hesap duruyor) bu aralıkla yeniden denetlenir */
+const ACCOUNT_RECHECK_SECONDS = 5 * 60;
 
 /** Müşteri girişinde hız sınırı aşılınca signIn() bu kodu `error` olarak döndürür */
 export const LOGIN_RATE_LIMITED = "RATE_LIMITED";
@@ -41,32 +44,34 @@ export const authOptions: NextAuthOptions = {
       id: "credentials",
       name: "Yönetici",
       credentials: {
-        email: { label: "E-posta", type: "email" },
+        login: { label: "Kullanıcı adı veya e-posta", type: "text" },
         password: { label: "Şifre", type: "password" },
       },
       async authorize(credentials, req) {
-        if (!credentials?.email || !credentials?.password || credentials.password.length > 200) {
+        // "email" alanı eski giriş formundan (bu sürümden önce) gelir
+        const c = (credentials ?? {}) as Record<string, string | undefined>;
+        const login = (c.login ?? c.email ?? "").trim();
+        const password = c.password ?? "";
+        if (!login || login.length > 254 || !password || password.length > 200) {
           return null;
         }
 
-        // Kaba kuvvete karşı (Y-04): IP başına 10, e-posta başına 5 deneme / 15 dk — müşteri girişinden sıkı.
-        // Sınır her denemede sayılır (başarılı giriş dahil); aşılınca şifreye bakılmaz.
+        // Kaba kuvvete karşı (Y-04): IP başına 10, hesap (kullanıcı adı/e-posta) başına 5 deneme / 15 dk — müşteri
+        // girişinden sıkı. Sınır her denemede sayılır (başarılı giriş dahil); aşılınca şifreye bakılmaz.
         const ip = clientIp(req?.headers);
-        const emailKey = normalizeEmail(credentials.email);
-        if (!rateLimit(`admin-login-ip:${ip}`, 10, 15 * 60_000) || !rateLimit(`admin-login-email:${emailKey}`, 5, 15 * 60_000)) {
+        const lookup = adminLoginLookup(login);
+        const loginKey = "email" in lookup ? lookup.email : lookup.username;
+        if (!rateLimit(`admin-login-ip:${ip}`, 10, 15 * 60_000) || !rateLimit(`admin-login-id:${loginKey}`, 5, 15 * 60_000)) {
           throw new Error(LOGIN_RATE_LIMITED);
         }
 
-        // Development mock (DB yokken). .env'deki ADMIN_EMAIL henüz "TODO" ise varsayılan kullanılır
-        // (giriş formu e-posta biçimi ister; "TODO" ile form hiç gönderilemiyordu).
+        // Development mock (DB yokken): kullanıcı adı "admin" ya da varsayılan e-posta. .env'deki ADMIN_EMAIL
+        // henüz "TODO" ise varsayılan e-posta kullanılır.
         if (!USE_DB) {
           const envEmail = process.env.ADMIN_EMAIL?.trim();
-          const mockEmail = envEmail && envEmail !== "TODO" ? envEmail : "admin@ciftciece.com";
+          const mockEmail = normalizeEmail(envEmail && envEmail !== "TODO" ? envEmail : "admin@ciftciece.com");
           const mockPassword = process.env.ADMIN_PASSWORD || "Admin123!";
-          if (
-            credentials.email === mockEmail &&
-            credentials.password === mockPassword
-          ) {
+          if ((loginKey === mockEmail || loginKey === "admin") && password === mockPassword) {
             return {
               id: MOCK_ADMIN.id,
               email: MOCK_ADMIN.email,
@@ -77,13 +82,11 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        // Production — Prisma
-        const user = await prisma.user.findUnique({
-          where: { email: emailKey },
-        });
+        // Production — Prisma (kullanıcı adı ya da e-posta; ikisi de tekil)
+        const user = await prisma.user.findUnique({ where: lookup });
 
-        // Hesap yoksa da şifre karşılaştırması yapılır (yanıt süresi yönetici e-postasının varlığını ele vermesin)
-        const isValid = await verifyPassword(credentials.password, user?.passwordHash);
+        // Hesap yoksa da şifre karşılaştırması yapılır (yanıt süresi yönetici hesabının varlığını ele vermesin)
+        const isValid = await verifyPassword(password, user?.passwordHash);
         if (!user || !isValid) {
           return null;
         }
@@ -143,12 +146,14 @@ export const authOptions: NextAuthOptions = {
         if (typeof name === "string" && name.trim()) token.name = name.trim().slice(0, 120);
       }
 
-      // "Şifremi unuttum" ile şifre yenilendiyse ondan önce açılmış müşteri oturumları kapanır
+      // Şifre yenilendiyse (müşteri: "şifremi unuttum", yönetici: panelden) ondan önce açılmış oturumlar kapanır
       // (her istekte değil, 5 dakikada bir denetlenir; veritabanı geçici yanıt vermezse oturum düşürülmez).
-      if (token.role === "CUSTOMER" && typeof token.id === "string") {
+      // Veritabanısız geliştirme kipindeki örnek yönetici hesabı denetlenmez.
+      const recheck = token.role === "CUSTOMER" || ((token.role === "ADMIN" || token.role === "STAFF") && token.id !== MOCK_ADMIN.id);
+      if (recheck && typeof token.id === "string") {
         const now = Math.floor(Date.now() / 1000);
         const checkedAt = typeof token.checkedAt === "number" ? token.checkedAt : 0;
-        if (now - checkedAt > CUSTOMER_RECHECK_SECONDS) {
+        if (now - checkedAt > ACCOUNT_RECHECK_SECONDS) {
           const account = await getUserById(token.id).catch((err) => {
             console.error("[auth] Oturum denetimi yapılamadı:", err);
             return undefined;

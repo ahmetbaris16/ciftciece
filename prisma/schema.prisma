@@ -22,6 +22,8 @@ model User {
   id            String    @id @default(cuid())
   // Müşteri kaydı/girişi e-postayı küçük harfe çevirerek kullanır
   email         String    @unique @db.VarChar(254)
+  // Yönetici girişi için kullanıcı adı (küçük harf, a-z 0-9 . _ -); müşteride boş. Panelde e-posta da kabul edilir.
+  username      String?   @unique @db.VarChar(40)
   name          String?
   phone         String?
   passwordHash  String?

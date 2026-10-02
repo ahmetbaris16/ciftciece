@@ -14,13 +14,17 @@ import { getPaymentSettings } from "@/lib/payment/settings.repository";
 import { paymentProviderStatus } from "@/lib/payment/provider";
 import BusinessInfoForm from "@/components/admin/BusinessInfoForm";
 import { getBusinessInfo } from "@/lib/business/business.repository";
+import AdminAccountForm from "@/components/admin/AdminAccountForm";
+import { ADMIN_PASSWORD_RULE, USERNAME_RULE, getAdminAccount } from "@/lib/auth/admin-account";
+import { USE_DB } from "@/lib/data/source";
 
 export default async function AdminAyarlarPage() {
   const user = await requireAdmin();
-  const [shippingSettings, paymentSettings, business] = await Promise.all([
+  const [shippingSettings, paymentSettings, business, account] = await Promise.all([
     getShippingSettings(),
     getPaymentSettings(),
     getBusinessInfo(),
+    USE_DB ? getAdminAccount(user.id) : Promise.resolve(null),
   ]);
 
   return (
@@ -28,7 +32,7 @@ export default async function AdminAyarlarPage() {
       <div style={{ padding: "2rem", maxWidth: "900px" }}>
         <h1 style={styles.heading}>Ayarlar</h1>
         <p style={styles.subheading}>
-          İşletme bilgileri, kargo ve ödeme. Değişiklikler siteye hemen yansır.
+          İşletme bilgileri, kargo, ödeme ve yönetici hesabınız. Değişiklikler siteye hemen yansır.
         </p>
 
         {/* İşletme (satıcı) bilgileri — DB'den düzenlenebilir */}
@@ -47,6 +51,18 @@ export default async function AdminAyarlarPage() {
         <section style={styles.section} id="odeme">
           <h2 style={styles.sectionTitle}>💳 Ödeme</h2>
           <PaymentSettingsForm initial={paymentSettings} provider={paymentProviderStatus()} />
+        </section>
+
+        {/* Yönetici hesabı — kullanıcı adı, e-posta, şifre */}
+        <section style={styles.section} id="hesap">
+          <h2 style={styles.sectionTitle}>👤 Yönetici Hesabı</h2>
+          {account ? (
+            <AdminAccountForm initial={account} usernameRule={USERNAME_RULE} passwordRule={ADMIN_PASSWORD_RULE} />
+          ) : (
+            <p style={styles.subheading}>
+              {USE_DB ? "Hesap bilgileri okunamadı." : "Veritabanısız deneme kipinde hesap bilgileri değiştirilemez."}
+            </p>
+          )}
         </section>
 
         {/* Sistem */}

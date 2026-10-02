@@ -99,6 +99,9 @@ export default function AdminShell({ user, activeSection, children }: AdminShell
 
         <div className={styles.footer}>
           <span className={styles.email}>{user.email}</span>
+          <Link href="/admin/ayarlar#hesap" className={styles.siteLink}>
+            Hesabım
+          </Link>
           <button type="button" onClick={logout} className={styles.logout}>
             Çıkış yap
           </button>

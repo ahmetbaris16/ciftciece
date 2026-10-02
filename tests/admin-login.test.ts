@@ -1,7 +1,7 @@
 /**
- * Yönetici girişi (Y-04): kaba kuvvete karşı deneme sınırı; müşteri hesabı panele giremez.
- * Testlerde (NODE_ENV production değil) sınırlar 10 kat gevşektir (lib/security/rate-limit.ts):
- * e-posta başına 5 × 10 = 50 deneme.
+ * Yönetici girişi (Y-04): kullanıcı adı ya da e-postayla; kaba kuvvete karşı deneme sınırı; müşteri hesabı panele
+ * giremez. Testlerde (NODE_ENV production değil) sınırlar 10 kat gevşektir (lib/security/rate-limit.ts):
+ * hesap başına 5 × 10 = 50 deneme.
  */
 
 import { test } from "node:test";
@@ -35,6 +35,19 @@ test("doğru şifreyle yönetici girer; e-posta büyük harfle yazılsa da bulun
   assert.equal(await adminAuthorize({ email: "yonetici@example.test", password: "yanlis" }, req("203.0.113.1")), null);
   assert.equal(await adminAuthorize({ email: "musteri@example.test", password: PASSWORD }, req("203.0.113.1")), null);
   assert.equal(await adminAuthorize({ email: "olmayan@example.test", password: PASSWORD }, req("203.0.113.1")), null);
+});
+
+test("kullanıcı adıyla giriş: büyük/küçük harf fark etmez; e-posta da çalışır; müşterinin kullanıcı adı yok", async () => {
+  await prisma.user.create({
+    data: { email: "ece@example.test", username: "ece.yonetici", name: "Ece", role: "ADMIN", passwordHash: await hash(PASSWORD, 4) },
+  });
+  const byName = (await adminAuthorize({ login: "Ece.Yonetici", password: PASSWORD }, req("203.0.113.9"))) as { role: string } | null;
+  assert.equal(byName?.role, "ADMIN");
+  const byEmail = (await adminAuthorize({ login: "ece@example.test", password: PASSWORD }, req("203.0.113.9"))) as { role: string } | null;
+  assert.equal(byEmail?.role, "ADMIN");
+  assert.equal(await adminAuthorize({ login: "ece.yonetici", password: "yanlis-sifre" }, req("203.0.113.9")), null);
+  assert.equal(await adminAuthorize({ login: "olmayan.kullanici", password: PASSWORD }, req("203.0.113.9")), null);
+  assert.equal(await adminAuthorize({ login: "", password: PASSWORD }, req("203.0.113.9")), null);
 });
 
 test("aynı e-postaya çok deneme: sınır aşılınca doğru şifreyle bile girilemez", async () => {

@@ -1,25 +1,28 @@
 "use client";
 
 /**
- * Admin Login Form
+ * Yönetici giriş formu: kullanıcı adı (ya da e-posta) + şifre.
  *
- * useSearchParams kullanan client component.
- * Suspense boundary ile sarılarak page.tsx'den çağrılır.
+ * useSearchParams kullanan client component; page.tsx'te Suspense ile sarılır.
+ * ?sifre=degisti → şifre panelden değiştirildi, yeni şifreyle giriş istenir.
  */
 
 import { signIn } from "next-auth/react";
 import { useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
+const WRONG = "Kullanıcı adı ya da şifre hatalı.";
+
 export default function AdminLoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const error = searchParams.get("error");
-  
-  const [email, setEmail] = useState("");
+  const passwordChanged = searchParams.get("sifre") === "degisti";
+
+  const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [loginError, setLoginError] = useState(error ? "Geçersiz e-posta veya şifre" : "");
+  const [loginError, setLoginError] = useState(error ? WRONG : "");
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -28,18 +31,14 @@ export default function AdminLoginForm() {
 
     try {
       const result = await signIn("credentials", {
-        email,
+        login: login.trim(),
         password,
         redirect: false,
       });
 
       if (result?.error) {
         // "RATE_LIMITED": lib/auth/auth-options.ts → LOGIN_RATE_LIMITED
-        setLoginError(
-          result.error === "RATE_LIMITED"
-            ? "Çok fazla deneme yapıldı. 15 dakika sonra tekrar deneyin."
-            : "Geçersiz e-posta veya şifre"
-        );
+        setLoginError(result.error === "RATE_LIMITED" ? "Çok fazla deneme yapıldı. 15 dakika sonra tekrar deneyin." : WRONG);
         setIsLoading(false);
         return;
       }
@@ -54,27 +53,37 @@ export default function AdminLoginForm() {
 
   return (
     <form onSubmit={handleSubmit} style={styles.form}>
+      {passwordChanged && !loginError && (
+        <div style={styles.info} role="status">
+          Şifreniz değişti. Yeni şifrenizle giriş yapın.
+        </div>
+      )}
       {loginError && (
-        <div style={styles.error}>
+        <div style={styles.error} role="alert">
           {loginError}
         </div>
       )}
 
       <div style={styles.field}>
-        <label htmlFor="admin-email" style={styles.label}>
-          E-posta
+        <label htmlFor="admin-login" style={styles.label}>
+          Kullanıcı adı
         </label>
         <input
-          id="admin-email"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          id="admin-login"
+          type="text"
+          value={login}
+          onChange={(e) => setLogin(e.target.value)}
           required
           autoFocus
-          autoComplete="email"
+          autoComplete="username"
+          autoCapitalize="none"
+          spellCheck={false}
           style={styles.input}
-          placeholder="admin@ciftciece.com"
+          aria-describedby="admin-login-hint"
         />
+        <span id="admin-login-hint" style={styles.hint}>
+          E-posta adresinizle de girebilirsiniz.
+        </span>
       </div>
 
       <div style={styles.field}>
@@ -89,7 +98,6 @@ export default function AdminLoginForm() {
           required
           autoComplete="current-password"
           style={styles.input}
-          placeholder="••••••••"
         />
       </div>
 
@@ -123,6 +131,15 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "0.875rem",
     textAlign: "center" as const,
   },
+  info: {
+    padding: "0.75rem 1rem",
+    background: "rgba(159,211,159,0.12)",
+    border: "1px solid rgba(159,211,159,0.3)",
+    borderRadius: "8px",
+    color: "#c8e6c8",
+    fontSize: "0.875rem",
+    textAlign: "center" as const,
+  },
   field: {
     display: "flex",
     flexDirection: "column" as const,
@@ -133,6 +150,10 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 500,
     color: "rgba(232,228,217,0.7)",
   },
+  hint: {
+    fontSize: "0.75rem",
+    color: "rgba(232,228,217,0.45)",
+  },
   input: {
     padding: "0.75rem 1rem",
     background: "rgba(255,255,255,0.07)",
@@ -140,7 +161,6 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: "8px",
     color: "#e8e4d9",
     fontSize: "0.9375rem",
-    outline: "none",
     transition: "border-color 0.2s",
   },
   button: {
