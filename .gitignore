@@ -32,10 +32,11 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files — .env ve .env.* (.env.local, .env.production, .env.example dahil)
+# env files — .env ve .env.* (.env.local, .env.production …). Yalnız gerçek değer içermeyen örnek dosya depoda (F-03)
 .env
 .env.*
 .env*
+!.env.example
 
 # Gizli anahtar / sertifika içerebilecek dosyalar (iyzico, Yurtiçi Kargo, vb.)
 *.pem
