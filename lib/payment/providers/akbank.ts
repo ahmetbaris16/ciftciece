@@ -327,7 +327,13 @@ export class AkbankProvider implements PaymentProvider {
       paymentStatus,
       errorCode: paymentStatus === "FAILURE" ? asText(tx?.responseCode) : undefined,
       errorMessage,
-      paymentId: approved ? (asText(approved.rrn) ?? asText(approved.authCode)) : undefined,
+      // Kayıttaki banka işlem no'su "<Akbank sipariş no>:<RRN>": RRN tek başına benzersiz olmayabilir (test ortamı
+      // sabit/tekrarlanan değer dönebilir; yıllar içinde tekrar edebilir). payment_attempts'taki (sağlayıcı, işlem no)
+      // tekilliği bir çakışmada doğrulanmış ödemenin işlenmesini engellerdi. Akbank sipariş no'su = bizim deneme
+      // no'muz (benzersiz); sorgu zaten bu no ile yapılır.
+      paymentId: approved
+        ? `${returnedOrderId ?? akbankOrderId}:${asText(approved.rrn) ?? asText(approved.authCode) ?? "onay"}`
+        : undefined,
       // Sepet no denetimi: Akbank sipariş no'su denemeyle eşleşiyorsa deneme bizim siparişimize aittir
       basketId: returnedOrderId === akbankOrderId ? input.orderId : returnedOrderId ? `akbank:${returnedOrderId}` : undefined,
       conversationId: returnedOrderId,

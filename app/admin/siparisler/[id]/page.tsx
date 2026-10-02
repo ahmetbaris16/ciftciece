@@ -374,7 +374,9 @@ export default async function AdminSiparisDetay({ params }: Props) {
                         <p className={s.muted}>
                           Açıldı {dateTimeTr(a.createdAt)}
                           {a.verifiedAt && <> · doğrulandı {dateTimeTr(a.verifiedAt)}</>}
-                          {a.providerPaymentId && <> · banka işlem no {a.providerPaymentId}</>}
+                          {a.providerPaymentId && (
+                            <> · banka işlem no {a.provider.startsWith("akbank") ? a.providerPaymentId.split(":").pop() : a.providerPaymentId}</>
+                          )}
                         </p>
                         {a.method === "CARD" && (a.paidAmountKurus !== null || a.chargedAmountKurus !== null) && (
                           <p className={s.muted}>

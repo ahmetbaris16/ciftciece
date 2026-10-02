@@ -108,7 +108,9 @@ test("başarılı ödeme: dönüş imzası geçerli, sonuç sunucudan sorgulanı
   const a = await prisma.paymentAttempt.findUniqueOrThrow({ where: { id: attempt.id } });
   assert.equal(a.status, "SUCCEEDED");
   assert.equal(a.paidAmountKurus, 23_900);
-  assert.match(a.providerPaymentId ?? "", /^6\d+/);
+  // Banka işlem no'su: "<Akbank sipariş no = deneme no>:<RRN>"
+  assert.ok(a.providerPaymentId?.startsWith(`${attempt.id}:`), "işlem no deneme no'suyla başlar");
+  assert.match(a.providerPaymentId ?? "", /:6\d{11}$/);
   assert.ok(fake.calls.some((c) => c.body.txnCode === "1010"), "sunucudan sipariş sorgusu yapıldı");
   const cb = await prisma.paymentEvent.findFirstOrThrow({ where: { attemptId: attempt.id, source: "CALLBACK" } });
   assert.equal((cb.payload as Record<string, unknown>).hashValid, true);
@@ -240,4 +242,15 @@ test("durumlar: demo (anahtar yok) → kart 'yakında'; test → müşteriye kap
     process.env.AKBANK_ENV = "test";
     process.env.AKBANK_SECRET_KEY = AKBANK_TEST_ENV.AKBANK_SECRET_KEY;
   }
+});
+
+test("banka aynı RRN'i iki farklı ödemede dönerse ikisi de işlenir (işlem no deneme no'suyla benzersiz)", async () => {
+  const first = await startAkbank();
+  const second = await startAkbank();
+  fake.pay(first.attempt.id, { amount: "239.00", rrn: "000000000001" });
+  fake.pay(second.attempt.id, { amount: "239.00", rrn: "000000000001" });
+  assert.equal((await verifyAttempt(first.attempt.id, { source: "QUERY" })).outcome, "paid");
+  assert.equal((await verifyAttempt(second.attempt.id, { source: "QUERY" })).outcome, "paid");
+  assert.equal((await orderState(first.order.id)).status, "PAID");
+  assert.equal((await orderState(second.order.id)).status, "PAID");
 });
