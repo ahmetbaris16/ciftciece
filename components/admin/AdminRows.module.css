@@ -1,0 +1,96 @@
+/* Admin liste satırları (siparişler, müşteriler): geniş ekranda üç sütun, telefonda iki kat */
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
+  grid-template-areas: "main amount side";
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.875rem 1rem;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: #e8e4d9;
+  text-decoration: none;
+}
+
+.row:hover {
+  border-color: rgba(196, 214, 142, 0.3);
+}
+
+.row:focus-visible {
+  outline: 2px solid #c4d68e;
+  outline-offset: 1px;
+}
+
+.main {
+  grid-area: main;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.amount {
+  grid-area: amount;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: 0.9375rem;
+}
+
+.side {
+  grid-area: side;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-end;
+  align-items: flex-end;
+  flex-direction: column;
+  text-align: right;
+  font-size: 0.875rem;
+}
+
+.name {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta {
+  font-size: 0.75rem;
+  color: rgba(232, 228, 217, 0.5);
+  /* Uzun sipariş no / e-posta satıra sığmazsa bölünür; normal kelimeler bölünmez */
+  overflow-wrap: anywhere;
+}
+
+.pill {
+  padding: 0.125rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "main side"
+      "amount side";
+    row-gap: 0.4rem;
+    align-items: start;
+  }
+}

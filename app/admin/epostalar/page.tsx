@@ -87,7 +87,7 @@ export default async function AdminEpostalarPage({ searchParams }: { searchParam
         <section style={st.card}>
           {mode === "smtp" && smtp ? (
             <p style={{ ...st.status, color: "#9fd39f" }}>
-              Gönderim açık · {smtp.fromName} &lt;{smtp.fromAddress}&gt; · {smtp.host}:{smtp.port} {smtp.secure ? "(SSL)" : "(STARTTLS)"}
+              Gönderim açık · {smtp.fromName} &lt;{smtp.fromAddress}&gt; · {smtp.host}:{smtp.port} {smtp.secure ? "(SSL)" : smtp.requireTLS ? "(STARTTLS)" : "(şifresiz)"}
             </p>
           ) : mode === "dev-outbox" ? (
             <p style={{ ...st.status, color: "#9ec5f0" }}>

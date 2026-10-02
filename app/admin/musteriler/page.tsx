@@ -9,6 +9,7 @@ import AdminShell from "@/components/admin/AdminShell";
 import { listCustomers } from "@/lib/admin/customers";
 import { formatPrice } from "@/types";
 import { formatPhoneTr } from "@/lib/business/info";
+import rows_ from "@/components/admin/AdminRows.module.css";
 
 export const dynamic = "force-dynamic";
 
@@ -52,28 +53,28 @@ export default async function AdminMusterilerPage({ searchParams }: { searchPara
         {rows.length === 0 ? (
           <p style={st.empty}>{q ? "Aramaya uyan müşteri yok." : "Henüz sipariş veren müşteri yok."}</p>
         ) : (
-          <ul style={st.list}>
+          <ul className={rows_.list}>
             {rows.map((c) => (
               <li key={c.email}>
-                <Link href={`/admin/siparisler?q=${encodeURIComponent(c.email)}`} style={st.row}>
-                  <span style={st.colMain}>
-                    <span style={st.name}>
+                <Link href={`/admin/siparisler?q=${encodeURIComponent(c.email)}`} className={rows_.row}>
+                  <span className={rows_.main}>
+                    <span className={rows_.name}>
                       {c.name ?? "—"}
                       {c.member && <span style={st.member}>Üye</span>}
                     </span>
-                    <span style={st.meta}>
+                    <span className={rows_.meta}>
                       {c.email}
                       {c.phone ? ` · ${formatPhoneTr(c.phone)}` : ""}
                     </span>
                   </span>
-                  <span style={st.colStats}>
+                  <span className={rows_.amount}>
                     <strong>{formatPrice(c.paidKurus)}</strong>
-                    <span style={st.meta}>
+                    <span className={rows_.meta}>
                       {c.paidOrders} ödenmiş / {c.orders} sipariş
                     </span>
                   </span>
-                  <span style={st.colDate}>
-                    <span style={st.meta}>Son sipariş</span>
+                  <span className={rows_.side}>
+                    <span className={rows_.meta}>Son sipariş</span>
                     <span>{dateTr(c.lastOrderAt)}</span>
                   </span>
                 </Link>
@@ -121,25 +122,8 @@ const st: Record<string, React.CSSProperties> = {
   btn: { padding: "0.625rem 1rem", borderRadius: 8, border: 0, background: "#c4d68e", color: "#15180f", fontWeight: 600 },
   clear: { color: "rgba(232,228,217,0.6)", fontSize: "0.8125rem" },
   empty: { padding: "3rem 0", textAlign: "center", color: "rgba(232,228,217,0.45)" },
-  list: { listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 6 },
-  row: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1.6fr) minmax(0, 1fr) auto",
-    gap: "0.75rem",
-    alignItems: "center",
-    padding: "0.8rem 1rem",
-    borderRadius: 10,
-    background: "rgba(255,255,255,0.03)",
-    border: "1px solid rgba(255,255,255,0.06)",
-    color: "#e8e4d9",
-    textDecoration: "none",
-  },
-  colMain: { display: "flex", flexDirection: "column", minWidth: 0 },
-  name: { fontWeight: 600, display: "flex", alignItems: "center", gap: "0.4rem" },
   member: { padding: "0.05rem 0.4rem", borderRadius: 4, fontSize: "0.6875rem", fontWeight: 700, background: "rgba(196,214,142,0.15)", color: "#c4d68e" },
   meta: { fontSize: "0.75rem", color: "rgba(232,228,217,0.5)", wordBreak: "break-all" },
-  colStats: { display: "flex", flexDirection: "column", minWidth: 0 },
-  colDate: { display: "flex", flexDirection: "column", alignItems: "flex-end", fontSize: "0.875rem", whiteSpace: "nowrap" },
   pager: { display: "flex", justifyContent: "center", alignItems: "center", gap: "1rem", marginTop: "1.25rem" },
   pageLink: {
     padding: "0.375rem 0.75rem",

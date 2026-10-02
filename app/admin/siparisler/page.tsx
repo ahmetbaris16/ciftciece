@@ -10,6 +10,7 @@ import AdminShell from "@/components/admin/AdminShell";
 import { formatPrice } from "@/types";
 import { PAYMENT_METHOD_LABELS } from "@/lib/payment/methods";
 import { ORDER_FILTERS, parseFilter, searchOrdersForAdmin, type OrderFilter } from "@/lib/admin/orders";
+import rows_ from "@/components/admin/AdminRows.module.css";
 
 export const dynamic = "force-dynamic";
 
@@ -81,7 +82,7 @@ export default async function AdminSiparislerPage({ searchParams }: Props) {
         {rows.length === 0 ? (
           <p style={st.empty}>{q || filter !== "tum" ? "Bu ölçütlere uyan sipariş yok." : "Henüz sipariş yok."}</p>
         ) : (
-          <ul style={st.list}>
+          <ul className={rows_.list}>
             {rows.map((o) => {
               const status =
                 o.status === "PENDING" && o.paymentMethod === "BANK_TRANSFER"
@@ -89,24 +90,34 @@ export default async function AdminSiparislerPage({ searchParams }: Props) {
                   : STATUS[o.status] ?? { label: o.status, color: "#999" };
               return (
                 <li key={o.id}>
-                  <Link href={`/admin/siparisler/${o.id}`} style={st.row}>
-                    <span style={st.colMain}>
-                      <span style={st.name}>{o.name}</span>
-                      <span style={st.meta}>
+                  <Link href={`/admin/siparisler/${o.id}`} className={rows_.row}>
+                    <span className={rows_.main}>
+                      <span className={rows_.name}>{o.name}</span>
+                      <span className={rows_.meta}>
                         #{o.reference} · {dateTimeTr(o.createdAt)}
                       </span>
                     </span>
-                    <span style={st.colAmount}>
+                    <span className={rows_.amount}>
                       <strong>{formatPrice(o.totalKurus)}</strong>
-                      <span style={st.meta}>
+                      <span className={rows_.meta}>
                         {PAYMENT_METHOD_LABELS[o.paymentMethod as keyof typeof PAYMENT_METHOD_LABELS]}
                         {o.recipientPays ? " · alıcı ödemeli kargo" : ""}
                       </span>
                     </span>
-                    <span style={st.colStatus}>
-                      <span style={{ ...st.pill, background: `${status.color}20`, color: status.color }}>{status.label}</span>
-                      {o.needsAttention && <span style={{ ...st.pill, background: "#fb923c30", color: "#fb923c" }}>Dikkat</span>}
-                      {o.openRequests > 0 && <span style={{ ...st.pill, background: "#9ec5f025", color: "#9ec5f0" }}>Talep</span>}
+                    <span className={rows_.side}>
+                      <span className={rows_.pill} style={{ background: `${status.color}20`, color: status.color }}>
+                        {status.label}
+                      </span>
+                      {o.needsAttention && (
+                        <span className={rows_.pill} style={{ background: "#fb923c30", color: "#fb923c" }}>
+                          Dikkat
+                        </span>
+                      )}
+                      {o.openRequests > 0 && (
+                        <span className={rows_.pill} style={{ background: "#9ec5f025", color: "#9ec5f0" }}>
+                          Talep
+                        </span>
+                      )}
                     </span>
                   </Link>
                 </li>
@@ -164,24 +175,6 @@ const st: Record<string, React.CSSProperties> = {
   },
   filterOn: { background: "rgba(196,214,142,0.15)", borderColor: "rgba(196,214,142,0.4)", color: "#e8e4d9" },
   empty: { padding: "3rem 0", textAlign: "center", color: "rgba(232,228,217,0.45)" },
-  list: { listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 6 },
-  row: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1.4fr) minmax(0, 1fr) auto",
-    gap: "0.75rem",
-    alignItems: "center",
-    padding: "0.875rem 1rem",
-    borderRadius: 10,
-    background: "rgba(255,255,255,0.03)",
-    border: "1px solid rgba(255,255,255,0.06)",
-    color: "#e8e4d9",
-    textDecoration: "none",
-  },
-  colMain: { display: "flex", flexDirection: "column", minWidth: 0 },
-  name: { fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   meta: { fontSize: "0.75rem", color: "rgba(232,228,217,0.45)", wordBreak: "break-all" },
-  colAmount: { display: "flex", flexDirection: "column", minWidth: 0, fontSize: "0.9375rem" },
-  colStatus: { display: "flex", flexWrap: "wrap", gap: 4, justifyContent: "flex-end" },
-  pill: { padding: "0.125rem 0.5rem", borderRadius: 4, fontSize: "0.75rem", fontWeight: 600, whiteSpace: "nowrap" },
   pager: { display: "flex", justifyContent: "center", alignItems: "center", gap: "1rem", marginTop: "1.25rem" },
 };
