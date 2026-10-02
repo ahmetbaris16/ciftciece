@@ -59,7 +59,14 @@ export async function listCustomers(opts: { q?: string; page?: number; perPage?:
     ? await Promise.all([
         prisma.order.groupBy({
           by: ["guestEmail"],
-          where: { guestEmail: { in: emails }, status: { in: [...PAID] } },
+          // Kapıda ödemeli sipariş teslimde tahsil edilene kadar ödenmiş sayılmaz
+          where: {
+            guestEmail: { in: emails },
+            OR: [
+              { paymentMethod: { not: "CASH_ON_DELIVERY" }, status: { in: [...PAID] } },
+              { paymentMethod: "CASH_ON_DELIVERY", status: "DELIVERED" },
+            ],
+          },
           _count: { _all: true },
           _sum: { totalKurus: true },
         }),

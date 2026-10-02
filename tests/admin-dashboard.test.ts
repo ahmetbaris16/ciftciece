@@ -42,7 +42,10 @@ test("filtreler: kargolanacak, havale bekleyen, dikkat, müşteri talebi", async
 
   const stats = await getDashboardStats();
   assert.equal(stats.todayOrders, 4);
-  assert.equal(stats.monthPaidOrders, 2); // havale onaylı + kapıda ödeme (hazırlanıyor)
+  // Yalnız onaylanan havale: kapıda ödemeli sipariş teslimde tahsil edilene kadar ciroya girmez
+  assert.equal(stats.monthPaidOrders, 1);
+  assert.equal(stats.monthRevenueKurus, paid.totalKurus);
+  assert.equal(stats.monthRefundKurus, 0);
 });
 
 test("arama: sipariş no, ad, e-posta ve telefon (0 ile ya da +90 ile); sayfalama", async () => {

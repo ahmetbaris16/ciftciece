@@ -10,7 +10,7 @@ import { getBusinessInfo } from "@/lib/business/business.repository";
 import { missingBusinessFields } from "@/lib/business/info";
 import { getPaymentSettings } from "@/lib/payment/settings.repository";
 import { isBankTransferReady } from "@/lib/payment/methods";
-import { paymentProviderStatus } from "@/lib/payment/provider";
+import { isTestProvider, paymentProviderStatus } from "@/lib/payment/provider";
 import { emailMode } from "@/lib/email/config";
 import { getShippingSettings } from "@/lib/shipping/shipping.repository";
 
@@ -57,8 +57,11 @@ export async function getAdminBadges(): Promise<AdminBadges> {
 
 export interface DashboardStats {
   todayOrders: number;
+  /** Bu ay alınan ödemeler (banka/havale onayı, kapıda tahsilat); test ödemeleri hariç */
   monthRevenueKurus: number;
   monthPaidOrders: number;
+  /** Bu ay girilen iade kayıtları */
+  monthRefundKurus: number;
   shipped: number;
   lowStock: Array<{ productName: string; variantName: string; quantity: number }>;
 }
@@ -74,16 +77,17 @@ function istanbulStarts(now = new Date()): { today: Date; month: Date } {
 }
 
 export async function getDashboardStats(): Promise<DashboardStats> {
-  if (!USE_DB) return { todayOrders: 0, monthRevenueKurus: 0, monthPaidOrders: 0, shipped: 0, lowStock: [] };
+  if (!USE_DB) return { todayOrders: 0, monthRevenueKurus: 0, monthPaidOrders: 0, monthRefundKurus: 0, shipped: 0, lowStock: [] };
   const { today, month } = istanbulStarts();
-  const paidStatuses = ["PAID", "PROCESSING", "SHIPPED", "DELIVERED"] as const;
-  const [todayOrders, monthAgg, shipped, low] = await Promise.all([
+  // Ciro sipariş durumundan değil, alınmış ödemeden sayılır: kapıda ödemeli sipariş teslimde tahsil edilene kadar
+  // ödenmiş sayılmaz; bankanın test ortamındaki ödemeler gerçek para değildir.
+  const [todayOrders, paidAttempts, refundAgg, shipped, low] = await Promise.all([
     prisma.order.count({ where: { createdAt: { gte: today }, status: { not: "CANCELLED" } } }),
-    prisma.order.aggregate({
-      where: { createdAt: { gte: month }, status: { in: [...paidStatuses] } },
-      _sum: { totalKurus: true },
-      _count: { _all: true },
+    prisma.paymentAttempt.findMany({
+      where: { status: "SUCCEEDED", verifiedAt: { gte: month } },
+      select: { provider: true, amountKurus: true, paidAmountKurus: true, chargedAmountKurus: true },
     }),
+    prisma.refund.aggregate({ where: { createdAt: { gte: month } }, _sum: { amountKurus: true } }),
     prisma.order.count({ where: { status: "SHIPPED" } }),
     prisma.inventory.findMany({
       where: { quantity: { lte: 3 }, variant: { isAvailable: true, product: { isPublished: true } } },
@@ -92,10 +96,12 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       select: { quantity: true, variant: { select: { name: true, product: { select: { name: true } } } } },
     }),
   ]);
+  const real = paidAttempts.filter((a) => !isTestProvider(a.provider));
   return {
     todayOrders,
-    monthRevenueKurus: monthAgg._sum.totalKurus ?? 0,
-    monthPaidOrders: monthAgg._count._all,
+    monthRevenueKurus: real.reduce((sum, a) => sum + (a.chargedAmountKurus ?? a.paidAmountKurus ?? a.amountKurus), 0),
+    monthPaidOrders: real.length,
+    monthRefundKurus: refundAgg._sum.amountKurus ?? 0,
     shipped,
     lowStock: low.map((l) => ({ productName: l.variant.product.name, variantName: l.variant.name, quantity: l.quantity })),
   };

@@ -249,7 +249,7 @@ export function renderEmail(input: RenderInput): { html: string; text: string } 
 <span style="display:block;margin-top:4px;font-family:${FONT};font-size:11px;letter-spacing:0.22em;text-transform:uppercase;color:${COLORS.gold}">Orhangazi &middot; Zeytin &amp; Zeytinyağı</span>
 </td></tr>
 <tr><td style="background:${COLORS.card};border-radius:18px;padding:34px 30px 26px;border:1px solid ${COLORS.line}">
-${input.eyebrow ? `<p style="margin:0 0 8px;font-family:${FONT};font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:${COLORS.gold};font-weight:600">${esc(input.eyebrow)}</p>` : ""}
+${input.eyebrow ? `<p style="margin:0 0 8px;font-family:${FONT};font-size:13px;letter-spacing:0.02em;color:${COLORS.gold};font-weight:600">${esc(input.eyebrow)}</p>` : ""}
 <h1 style="margin:0 0 16px;font-family:${SERIF};font-size:26px;line-height:1.25;font-weight:600;color:${COLORS.ink}">${esc(input.title)}</h1>
 ${content}
 </td></tr>

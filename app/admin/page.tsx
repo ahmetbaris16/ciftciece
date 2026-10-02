@@ -58,7 +58,11 @@ export default async function AdminDashboardPage() {
 
         <div style={s.tiles}>
           <Tile label="Bugünkü siparişler" value={String(stats.todayOrders)} />
-          <Tile label="Bu ay ödenen" value={formatPrice(stats.monthRevenueKurus)} hint={`${stats.monthPaidOrders} sipariş`} />
+          <Tile
+            label="Bu ay alınan ödeme"
+            value={formatPrice(stats.monthRevenueKurus)}
+            hint={`${stats.monthPaidOrders} ödeme${stats.monthRefundKurus > 0 ? ` · iade ${formatPrice(stats.monthRefundKurus)}` : ""}`}
+          />
           <Tile label="Kargoda" value={String(stats.shipped)} />
         </div>
 
