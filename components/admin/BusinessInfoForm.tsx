@@ -3,7 +3,7 @@
 /**
  * Admin — İşletme (satıcı) bilgileri. Sitede altbilgi, İletişim sayfası, Ön Bilgilendirme Formu, Mesafeli
  * Satış Sözleşmesi ve müşteri e-postaları bu bilgileri kullanır. Bilgiler vergi levhası / ticaret sicili ve
- * ödeme kuruluşu (iyzico) başvurusuyla birebir aynı yazılmalıdır.
+ * ödeme kuruluşu (Akbank sanal POS) başvurusuyla birebir aynı yazılmalıdır.
  */
 
 import { useState } from "react";

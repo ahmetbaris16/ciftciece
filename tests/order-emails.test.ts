@@ -18,6 +18,7 @@ import { enqueueTransferReminders } from "@/lib/orders/reminders";
 import { writeOutbox } from "@/lib/outbox";
 import { customMessageDraft } from "@/lib/notifications/order-rules";
 import { enqueueEmail } from "@/lib/notifications/queue";
+import { contactReplyKeyPrefix, replyToContactMessage } from "@/lib/contact/replies";
 import { resetTransportCache } from "@/lib/email/transport";
 import { enableBankTransfer, setupTestDb } from "./helpers/db";
 import { createTestOrder, makeOverdue } from "./helpers/orders";
@@ -185,4 +186,26 @@ test("admin mesajı: aynı anahtarla bir kez kuyruğa girer; müşteriye kaçı�
   const row = await prisma.emailMessage.findFirstOrThrow({ where: { orderId: order.id, kind: "CUSTOM_MESSAGE" } });
   assert.equal(row.status, "SENT");
   assert.equal(row.replyTo, "bilgi@ornek-magaza.test");
+});
+
+test("iletişim mesajına panelden yanıt: alıntılı gider, mesaj 'yanıtlandı' olur, aynı anahtar ikinci kez gitmez", async () => {
+  const msg = await prisma.contactMessage.create({
+    data: { name: "Ayşe Yılmaz", email: "ayse@ornek.test", subject: "Ürün bilgisi", message: "Siyah zeytin salamura mı?" },
+  });
+  assert.deepEqual(await replyToContactMessage(msg.id, "Evet, tuzlu salamura.", "nonce-abcdefgh"), { queued: true });
+  assert.deepEqual(await replyToContactMessage(msg.id, "Evet, tuzlu salamura.", "nonce-abcdefgh"), { queued: false });
+  assert.equal(await replyToContactMessage("olmayan-mesaj", "Merhaba", "nonce-abcdefgh"), null);
+  await sendDueEmails();
+
+  assert.equal(smtp.received.length, 1);
+  const raw = smtp.received[0].raw;
+  assert.match(subjectOf(raw), /^Re: Ürün bilgisi/);
+  const text = partOf(raw, "text/plain");
+  assert.match(text, /Merhaba Ayşe,/);
+  assert.match(text, /Evet, tuzlu salamura\./);
+  assert.match(text, /Siyah zeytin salamura mı\?/);
+  assert.equal((await prisma.contactMessage.findUniqueOrThrow({ where: { id: msg.id } })).status, "ANSWERED");
+  const row = await prisma.emailMessage.findFirstOrThrow({ where: { dedupeKey: { startsWith: contactReplyKeyPrefix(msg.id) } } });
+  assert.equal(row.replyTo, "bilgi@ornek-magaza.test");
+  assert.equal(row.status, "SENT");
 });

@@ -24,7 +24,7 @@ export const ALERT_TITLES: Record<PaymentAlertKind, string> = {
   LATE_PAYMENT: "Geç ödeme — sipariş yeniden açıldı",
   LATE_PAYMENT_NO_STOCK: "Geç ödeme — stok yok, iade önerilir",
   PAYMENT_ON_CLOSED_ORDER: "Kapanmış siparişe ödeme geldi",
-  FRAUD_REVIEW: "iyzico ödemeyi incelemeye aldı",
+  FRAUD_REVIEW: "Ödeme kuruluşu ödemeyi incelemeye aldı",
   WEBHOOK_SIGNATURE_INVALID: "İmzası doğrulanamayan ödeme bildirimi",
 };
 

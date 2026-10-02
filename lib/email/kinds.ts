@@ -12,6 +12,7 @@ export const EMAIL_KIND_TR: Record<string, string> = {
   REQUEST_RECEIVED: "Talep alındı",
   TRANSFER_REMINDER: "Havale hatırlatması",
   CUSTOM_MESSAGE: "Admin mesajı",
+  CONTACT_REPLY: "İletişim mesajına yanıt",
   TEST: "Deneme e-postası",
   STORE_NEW_ORDER: "Yeni sipariş (işletmeye)",
   STORE_PAYMENT_ALERT: "Ödeme uyarısı (işletmeye)",

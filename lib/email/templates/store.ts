@@ -41,7 +41,7 @@ export function paymentAlertEmail(opts: {
   const blocks: Block[] = [
     notice(opts.message, "danger", opts.title),
     paragraph(
-      "Bu sipariş otomatik iptal edilmez ve para hareketi otomatik yapılmaz. Yönetim panelinde sipariş detayından durumu kontrol edin; gerekiyorsa iyzico panelinden işlem yapın."
+      "Bu sipariş otomatik iptal edilmez ve para hareketi otomatik yapılmaz. Yönetim panelinde sipariş detayından durumu kontrol edin; gerekiyorsa bankanın sanal POS panelinden işlem yapın."
     ),
   ];
   if (opts.orderId) blocks.push(button("Siparişi panelde aç", adminOrderUrl(opts.orderId)));
