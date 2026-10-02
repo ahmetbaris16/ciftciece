@@ -75,6 +75,11 @@
   color: var(--color-text);
 }
 
+.unitPrice {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
 .priceContact {
   font-size: var(--text-base);
   color: var(--color-text-secondary);

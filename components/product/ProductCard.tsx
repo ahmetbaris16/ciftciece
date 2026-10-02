@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import styles from "./ProductCard.module.css";
+import { unitPriceLabel } from "@/lib/catalog/unit-price";
 
 export interface ProductCardProps {
   slug: string;
@@ -39,6 +40,7 @@ export default function ProductCard({
   const hasDiscount =
     originalPriceKurus != null && originalPriceKurus > priceKurus;
   const priceAvailable = priceKurus > 0;
+  const unitLabel = priceAvailable && variantName ? unitPriceLabel(priceKurus, variantName) : null;
 
   return (
     <article className={styles.card}>
@@ -92,6 +94,7 @@ export default function ProductCard({
                     {formatPrice(originalPriceKurus)}
                   </span>
                 )}
+                {unitLabel && <span className={styles.unitPrice}>{unitLabel}</span>}
               </>
             ) : (
               <span className={styles.priceUnknown}>Fiyat için irtibata geçin</span>

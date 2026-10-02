@@ -118,6 +118,13 @@
   line-height: 1;
 }
 
+.unitPrice {
+  flex-basis: 100%;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  line-height: 1.2;
+}
+
 .priceUnknown {
   font-size: var(--text-xs);
   color: var(--color-text-muted);

@@ -13,6 +13,7 @@ import { useState, useCallback } from "react";
 import { useCart } from "@/lib/cart/CartContext";
 import { STORE } from "@/lib/config/store";
 import { formatPrice } from "@/types";
+import { unitPriceLabel } from "@/lib/catalog/unit-price";
 import type { ProductVariant } from "@/types";
 import styles from "./AddToCartSection.module.css";
 
@@ -93,9 +94,16 @@ export default function AddToCartSection({ product }: { product: ProductData }) 
       {/* Price Display */}
       <div className={styles.priceDisplay}>
         {priceAvailable ? (
-          <span className={styles.price}>
-            {formatPrice(selectedVariant!.priceKurus)}
-          </span>
+          <>
+            <span className={styles.price}>
+              {formatPrice(selectedVariant!.priceKurus)}
+            </span>
+            {unitPriceLabel(selectedVariant!.priceKurus, selectedVariant!.name) && (
+              <span className={styles.unitPrice}>
+                ({unitPriceLabel(selectedVariant!.priceKurus, selectedVariant!.name)})
+              </span>
+            )}
+          </>
         ) : (
           <span className={styles.priceContact}>
             Fiyat için{" "}

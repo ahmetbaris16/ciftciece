@@ -12,6 +12,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useCart } from "@/lib/cart/CartContext";
 import { formatPrice } from "@/types";
+import { unitPriceLabel } from "@/lib/catalog/unit-price";
 import { useShippingSettings } from "@/lib/shipping/useShippingSettings";
 import { useShippingQuote } from "@/lib/shipping/useShippingQuote";
 import { RECIPIENT_PAYS_NOTE, SHIPPING_BASIS_NOTE } from "@/lib/shipping/quote";
@@ -106,6 +107,8 @@ export default function SepetPage() {
                         </Link>
                         <span className={styles.itemVariant}>
                           {item.variantName}
+                          {unitPriceLabel(item.priceKurus, item.variantName) &&
+                            ` · ${unitPriceLabel(item.priceKurus, item.variantName)}`}
                         </span>
                       </div>
 
