@@ -33,13 +33,19 @@ DATABASE_URL="mysql://KULLANICI:SIFRE@MYSQL_SUNUCU_ADI:3306/VERITABANI" npx pris
 ```
 
 ```bash
-DATABASE_URL="mysql://KULLANICI:SIFRE@MYSQL_SUNUCU_ADI:3306/VERITABANI" ADMIN_EMAIL="siz@alanadiniz.com" ADMIN_PASSWORD="EN-AZ-12-KARAKTER-1" npx prisma db seed
+DATABASE_URL="mysql://KULLANICI:SIFRE@MYSQL_SUNUCU_ADI:3306/VERITABANI" ADMIN_USERNAME="ece" ADMIN_EMAIL="siz@alanadiniz.com" ADMIN_PASSWORD="EN-AZ-12-KARAKTER-1" npx prisma db seed
 ```
 
 - Birinci komut tabloları ve veri kurallarını (CHECK kısıtları) kurar.
 - İkinci komut kataloğu (kategoriler, ürünler, başlangıç stokları, mağaza yorumları, kargo ayarı) yükler ve
-  yönetici hesabını açar. Şifre en az 12 karakter, harf ve rakam içermeli. Tekrar çalıştırmak güvenlidir:
-  var olan kayıtlara dokunmaz, yönetici şifresini değiştirmez.
+  yönetici hesabını açar. Tekrar çalıştırmak güvenlidir: var olan kayıtlara dokunmaz, yönetici şifresini
+  değiştirmez.
+- **Yönetici girişi:** `/admin/giris` → **kullanıcı adı** (`ADMIN_USERNAME`; küçük harf, rakam, `. _ -`, 3–40
+  karakter) ya da e-posta + şifre. Şifre en az 12 karakter, harf ve rakam içermeli. Kullanıcı adı, e-posta ve
+  şifre sonradan **Admin → Ayarlar → Yönetici hesabı**'ndan değiştirilir (mevcut şifre istenir; şifre değişince
+  açık oturumlar en geç 5 dakikada kapanır). Şifre unutulursa SSH'tan ya da bilgisayardan
+  `ADMIN_USERNAME=... ADMIN_EMAIL=... ADMIN_PASSWORD=... npm run admin:hesap` (aynı veritabanı adresiyle) hesabı
+  günceller.
 - Şifrede `@ : / ? #` gibi karakterler varsa adreste URL kodlamasıyla yazılmalıdır (ör. `@` → `%40`).
 - Windows'ta (PowerShell) değişkenleri önce ayrı satırda tanımlayın: `$env:DATABASE_URL="..."` sonra komut.
 
@@ -78,10 +84,11 @@ gider. Sipariş teyit e-postası (sözleşmelerle birlikte) yasal zorunluluktur.
 | `CRON_SECRET` | En az 24 karakter rastgele değer (`openssl rand -hex 24`); 6. adımda kullanılır |
 | `PAYMENT_PROVIDER` | `akbank` |
 | `AKBANK_ENV` | Sanal POS gelene kadar boş bırakılabilir; test bilgileri gelince `test`, sonra `prod` |
-| `AKBANK_MERCHANT_SAFE_ID`, `AKBANK_TERMINAL_SAFE_ID`, `AKBANK_SECRET_KEY` | Akbank verince (docs/AKBANK_TEST.md). Boşken kart “yakında” görünür, sipariş havale/EFT ve kapıda ödemeyle alınır |
+| `AKBANK_MERCHANT_SAFE_ID`, `AKBANK_TERMINAL_SAFE_ID`, `AKBANK_SECRET_KEY` | Akbank verince (docs/AKBANK_TEST.md). Boşken kart **demo**dur: müşteri “yakında” görür, sipariş havale/EFT ve kapıda ödemeyle alınır; yönetici girişiyle banka sayfasının demo kopyası açılır (aşağıda “Banka sunumu”) |
 
 Tanımlanmaması gerekenler: `ALLOW_STUB_PAYMENTS`, `LOCAL_PRODUCTION_TEST`, `AKBANK_API_URL`,
 `AKBANK_GATEWAY_URL` (yalnız yerel deneme), `ADMIN_PASSWORD` (yalnız ilk kurulumda, bilgisayarınızda).
+`PAYMENT_PROVIDER=stub` canlıda site açılmaz (test sağlayıcısı her ödemeyi başarılı sayar).
 
 5. Yayınla. Her `main` push'unda Hostinger yeniden derler.
 
@@ -133,6 +140,28 @@ curl -fsS -m 60 -H "Authorization: Bearer CRON_SECRET_DEGERI" https://alanadiniz
 5. Havale ile deneme siparişi verin → teyit e-postası (sözleşmelerle) ve sipariş sayfasında IBAN görünüyor mu →
    admin'den iptal edin (stok geri gelir, müşteriye iptal e-postası gider).
 6. Akbank sanal POS bilgileri gelince: docs/AKBANK_TEST.md.
+
+## 7b. Banka sunumu (sanal POS başvurusu — demo ödeme)
+
+Sanal POS bilgileri girilmeden kartla ödeme, bankanın güvenli ödeme sayfasının **demo kopyasıyla** baştan sona
+gösterilebilir. Gerçek para çekilmez; kart bilgileri tarayıcıdan çıkmaz, hiçbir yere gönderilmez. Demo **yalnız
+yönetici oturumunda** çalışır: müşteriler bu sırada kartı “yakında” görür.
+
+1. `/admin/giris` → kullanıcı adınız ve şifrenizle girin. Aynı tarayıcıda siteye geçin.
+2. Ürünü sepete ekleyin → ödeme → iletişim ve teslimat bilgileri → ödeme yöntemi **Kredi / Banka Kartı (DEMO)**
+   → sözleşmeyi onaylayın → **Siparişi onayla ve öde**.
+3. Demo banka sayfası açılır: **Test kartıyla doldur** (ya da geçerli biçimde herhangi bir kart numarası) →
+   **Ödemeyi onayla**.
+4. Ekranın üstünde telefona gelmiş gibi **SMS** görünür. 6 haneli kodu yazıp **Onayla** deyin. Yanlış kodda hak
+   azalır; 3 yanlışta ödeme reddedilir ve müşteri ödeme adımına döner (bankalardaki gibi). **Vazgeç** de aynı yere
+   döndürür.
+5. “Siparişiniz alındı” sayfası gelir. Admin → **Siparişler**: sipariş **Ödendi** olarak düşer, üstünde “Demo
+   ödeme: gerçek para alınmadı” uyarısı ve ödeme olayları (kod gönderildi / yanlış kod / onay) görünür.
+6. Sunumdan sonra demo siparişini kapatın: sipariş → İade formu → yöntem “Diğer”, sebep “demo ödeme”, “siparişi
+   kapat” işaretli → **İadeyi kaydet** (stok geri gelir; demo ödemeler ciroya sayılmaz).
+
+Akbank bilgileri hPanel'e girildiği anda demo kendiliğinden kapanır, kart bankanın gerçek (önce test) sayfasına
+gider. Sunumu gerçek alan adında, `https://` (SSL açık) adresle yapın.
 
 ## 8. Yedek
 

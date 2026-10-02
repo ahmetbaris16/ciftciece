@@ -9,7 +9,7 @@ ayrıca Akbank'tan sunucudan sorgular (tarayıcı dönüşü tek başına kanıt
 
 | Durum | Ne zaman | Müşteri ne görür |
 |---|---|---|
-| **Demo** | Akbank bilgileri girilmemiş | Kart seçeneği "Kartla ödeme çok yakında" notuyla görünür, seçilemez. Sipariş havale/EFT (ve açıksa kapıda ödeme) ile alınır. |
+| **Demo** | Akbank bilgileri girilmemiş | **Müşteri:** kart seçeneği "Kartla ödeme çok yakında" notuyla görünür, seçilemez; sipariş havale/EFT (ve açıksa kapıda ödeme) ile alınır. **Yönetici** (admin girişi açıkken): kart "DEMO" etiketiyle seçilir; Akbank sayfasının yerine sitenin **demo banka sayfası** açılır (kart bilgileri → telefona gelmiş gibi gösterilen 6 haneli kod) ve sipariş "Ödendi" olur, admin'de "Demo ödeme" uyarısıyla. Gerçek para çekilmez; kart bilgileri hiçbir yere gönderilmez. Banka sunumu için: docs/YAYIN.md 7b. |
 | **Test** | `AKBANK_ENV=test` + test bilgileri | Kart seçeneğini **yalnız yönetici** (admin girişi açıkken) görür ve kullanır; müşteriler "yakında" görür. Gerçek para çekilmez. Bu siparişler admin'de "TEST ÖDEMESİ" uyarısıyla görünür. |
 | **Canlı** | `AKBANK_ENV=prod` + canlı bilgiler | Herkes kartla öder; gerçek tahsilat. |
 
