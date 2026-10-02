@@ -33,9 +33,9 @@ const STATUS_TR: Record<string, { label: string; color: string }> = {
 const dateTimeTr = (d: Date) =>
   new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Istanbul" }).format(d);
 
-export default async function AdminMesajlarPage({ searchParams }: { searchParams: Promise<{ durum?: string }> }) {
+export default async function AdminMesajlarPage({ searchParams }: { searchParams: Promise<{ durum?: string; gonderildi?: string }> }) {
   const user = await requireAdmin();
-  const { durum } = await searchParams;
+  const { durum, gonderildi } = await searchParams;
   const filter = durum && durum in FILTERS ? durum : "acik";
 
   const messages = USE_DB
@@ -55,6 +55,12 @@ export default async function AdminMesajlarPage({ searchParams }: { searchParams
       <div style={st.page}>
         <h1 style={st.h1}>Mesajlar</h1>
         <p style={st.sub}>İletişim formundan gelen mesajlar. Yanıtlarınız işletmenin e-posta adresinden gider.</p>
+
+        {gonderildi && (
+          <p style={st.sent} role="status">
+            Yanıtınız gönderildi; mesaj “Yanıtlananlar” bölümüne taşındı.
+          </p>
+        )}
 
         <nav style={st.filters} aria-label="Mesaj filtreleri">
           {Object.entries(FILTERS).map(([k, v]) => (
@@ -142,6 +148,7 @@ const st: Record<string, React.CSSProperties> = {
   h1: { margin: 0, fontSize: "1.5rem", fontWeight: 700 },
   sub: { margin: "0.25rem 0 1rem", fontSize: "0.875rem", color: "rgba(232,228,217,0.55)" },
   filters: { display: "flex", flexWrap: "wrap", gap: "0.375rem", marginBottom: "1rem" },
+  sent: { margin: "0 0 1rem", padding: "0.65rem 0.9rem", borderRadius: 10, background: "rgba(159,211,159,0.1)", color: "#9fd39f", fontSize: "0.875rem" },
   filter: {
     padding: "0.375rem 0.75rem",
     borderRadius: 999,

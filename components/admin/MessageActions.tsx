@@ -6,6 +6,7 @@
  */
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAdminRequest } from "./order/useAdminRequest";
 import f from "./order/forms.module.css";
 
@@ -14,6 +15,7 @@ type Status = "NEW" | "READ" | "ANSWERED" | "ARCHIVED";
 const newNonce = () => crypto.randomUUID();
 
 export default function MessageActions({ id, status, email }: { id: string; status: Status; email: string }) {
+  const router = useRouter();
   const { busy, error, done, send, setError } = useAdminRequest();
   const [replying, setReplying] = useState(false);
   const [reply, setReply] = useState("");
@@ -37,6 +39,10 @@ export default function MessageActions({ id, status, email }: { id: string; stat
       setReply("");
       setReplying(false);
       setNonce(newNonce());
+      // Yanıtlanan mesaj "Bekleyenler"den çıkar: sayfanın üstünde onay notu göster
+      const params = new URLSearchParams(window.location.search);
+      params.set("gonderildi", "1");
+      router.replace(`/admin/mesajlar?${params.toString()}`);
     }
   };
 

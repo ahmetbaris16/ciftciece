@@ -134,7 +134,18 @@ export default async function PackingSlip({ params }: { params: Promise<{ id: st
 }
 
 const st: Record<string, React.CSSProperties> = {
-  page: { maxWidth: 760, margin: "0 auto", padding: 24, color: "#111", background: "#fff", fontFamily: "Inter, Arial, sans-serif", fontSize: 13 },
+  page: {
+    maxWidth: 760,
+    margin: "0 auto",
+    padding: 24,
+    color: "#111",
+    background: "#fff",
+    fontFamily: "Inter, Arial, sans-serif",
+    fontSize: 13,
+    // globals.css başlık/paragraf renkleri değişkenden gelir
+    ["--color-text" as string]: "#111",
+    ["--color-text-secondary" as string]: "#111",
+  },
   head: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "2px solid #111", paddingBottom: 10, marginBottom: 14 },
   h1: { margin: 0, fontSize: 20 },
   h2: { margin: "0 0 6px", fontSize: 12, fontWeight: 700, color: "#555" },

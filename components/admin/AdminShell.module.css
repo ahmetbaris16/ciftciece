@@ -4,6 +4,11 @@
   background: #141812;
   color: #e8e4d9;
   font-family: var(--font-body, "Inter", -apple-system, sans-serif);
+  /* Sitenin genel başlık / paragraf renkleri (globals.css: h1–h6, p) açık zemine göre koyu; yönetim koyu zeminli */
+  --color-text: #e8e4d9;
+  --color-text-secondary: rgba(232, 228, 217, 0.78);
+  --color-text-muted: rgba(232, 228, 217, 0.55);
+  --color-text-placeholder: rgba(232, 228, 217, 0.4);
 }
 
 .sidebar {
