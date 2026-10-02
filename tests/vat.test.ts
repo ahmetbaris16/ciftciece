@@ -5,18 +5,24 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { prisma } from "@/lib/db/prisma";
-import { vatBpsToPercent, vatPercentToBps } from "@/lib/catalog/vat";
+import { parseVatPercent, vatBpsToPercent } from "@/lib/catalog/vat";
 import { getProductByIdForAdmin } from "@/lib/repositories";
 import { createProduct, setupTestDb } from "./helpers/db";
 
 setupTestDb();
 
-test("yüzde ↔ baz puan: boş = girilmemiş, geçersiz değer kabul edilmez", () => {
-  assert.equal(vatPercentToBps(""), null);
-  assert.equal(vatPercentToBps("1"), 100);
-  assert.equal(vatPercentToBps("20"), 2000);
-  assert.equal(vatPercentToBps("7.5"), null);
-  assert.equal(vatPercentToBps("101"), null);
+test("elle yazılan oran → baz puan: boş = girilmemiş, geçersiz giriş 'girilmemiş' diye geçmez", () => {
+  assert.deepEqual(parseVatPercent(""), { ok: true, bps: null });
+  assert.deepEqual(parseVatPercent("   "), { ok: true, bps: null });
+  assert.deepEqual(parseVatPercent("0"), { ok: true, bps: 0 });
+  assert.deepEqual(parseVatPercent("1"), { ok: true, bps: 100 });
+  assert.deepEqual(parseVatPercent(" 20 "), { ok: true, bps: 2000 });
+  assert.deepEqual(parseVatPercent("%10"), { ok: true, bps: 1000 });
+  assert.deepEqual(parseVatPercent("8 %"), { ok: true, bps: 800 });
+  assert.deepEqual(parseVatPercent("100"), { ok: true, bps: 10_000 });
+  for (const bad of ["7.5", "7,5", "101", "-1", "1e1", "on", "%", "10%%"]) {
+    assert.equal(parseVatPercent(bad).ok, false, `"${bad}" kabul edilmemeli`);
+  }
   assert.equal(vatBpsToPercent(null), "");
   assert.equal(vatBpsToPercent(1000), "10");
 });

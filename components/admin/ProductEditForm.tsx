@@ -10,7 +10,8 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { Product, Category } from "@/types";
 import { decimalToKurus, kurusToDecimalString } from "@/lib/payment/money";
-import { VAT_RATE_CHOICES, vatBpsToPercent, vatPercentToBps } from "@/lib/catalog/vat";
+import { VAT_INPUT_RULE, parseVatPercent, vatBpsToPercent } from "@/lib/catalog/vat";
+import VatRateField from "./VatRateField";
 
 interface Props {
   product: Product;
@@ -29,6 +30,10 @@ export default function ProductEditForm({ product, categories }: Props) {
   const [vatPercent, setVatPercent] = useState(vatBpsToPercent(product.vatRateBps));
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+
+  // Sitede gizli kategori seçilemez (ürün kategori sayfası/menü olmadan kalırdı); ürün zaten öyleyse görünür ve işaretli
+  const categoryOptions = categories.filter((c) => c.isPublished || c.id === product.categoryId);
+  const selectedCategory = categories.find((c) => c.id === categoryId);
 
   // Varyant state. initialStock: sayfa açıldığında görülen stok — stok yalnız admin değiştirdiyse ve
   // veritabanındaki değer hâlâ buysa yazılır (bu arada satış olduysa sunucu 409 döner; R-06)
@@ -50,6 +55,11 @@ export default function ProductEditForm({ product, categories }: Props) {
   async function handleSave(e: FormEvent) {
     e.preventDefault();
     setMessage("");
+    const vat = parseVatPercent(vatPercent);
+    if (!vat.ok) {
+      setMessage(`Hata: KDV oranı geçersiz — ${VAT_INPUT_RULE} Hiçbir şey kaydedilmedi.`);
+      return;
+    }
     const badPrice = variants.find((v) => v.priceKurus === null);
     if (badPrice) {
       setMessage(`Hata: "${badPrice.name}" fiyatı geçersiz — en fazla 2 ondalık basamak (ör. 289.90). Hiçbir şey kaydedilmedi.`);
@@ -65,7 +75,7 @@ export default function ProductEditForm({ product, categories }: Props) {
         body: JSON.stringify({
           name, slug, description: description || null,
           categoryId, isPublished, isFeatured,
-          vatRateBps: vatPercentToBps(vatPercent),
+          vatRateBps: vat.bps,
         }),
       });
 
@@ -162,19 +172,17 @@ export default function ProductEditForm({ product, categories }: Props) {
 
         <div style={styles.grid2}>
           <div style={styles.field}>
-            <label style={styles.label}>Kategori</label>
-            <select style={styles.input} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+            <label htmlFor="product-category" style={styles.label}>Kategori</label>
+            <select id="product-category" style={styles.input} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+              {categoryOptions.map((c) => (
+                <option key={c.id} value={c.id}>{c.isPublished ? c.name : `${c.name} (sitede gizli)`}</option>
               ))}
             </select>
-            <label style={styles.label}>KDV oranı</label>
-            <select style={styles.input} value={vatPercent} onChange={(e) => setVatPercent(e.target.value)}>
-              <option value="">Girilmemiş</option>
-              {VAT_RATE_CHOICES.map((r) => (
-                <option key={r} value={String(r)}>%{r}</option>
-              ))}
-            </select>
+            {selectedCategory && !selectedCategory.isPublished && (
+              <span style={styles.warn}>
+                Bu kategori sitede gizli: ürün yalnız Tüm Ürünler&apos;de ve aramada görünür. Sitede görünen bir kategori seçin.
+              </span>
+            )}
           </div>
           <div style={{ display: "flex", gap: "1.5rem", alignItems: "center", paddingTop: "1.5rem" }}>
             <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.875rem", color: "rgba(232,228,217,0.7)", cursor: "pointer" }}>
@@ -187,6 +195,8 @@ export default function ProductEditForm({ product, categories }: Props) {
             </label>
           </div>
         </div>
+
+        <VatRateField value={vatPercent} onChange={setVatPercent} />
       </div>
 
       {/* Varyantlar */}
@@ -237,12 +247,14 @@ export default function ProductEditForm({ product, categories }: Props) {
 const styles: Record<string, React.CSSProperties> = {
   section: { marginBottom: "2rem", padding: "1.5rem", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "12px" },
   sectionTitle: { fontSize: "1rem", fontWeight: 600, color: "#e8e4d9", margin: "0 0 1rem" },
-  grid2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" },
-  grid4: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "0.75rem" },
-  field: { display: "flex", flexDirection: "column" as const, gap: "0.375rem", marginBottom: "0.75rem" },
+  // Sütunlar dar ekranda alt alta iner; alanlar sütununa sığar (taşmasın: minWidth 0 + width 100%)
+  grid2: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(16rem, 1fr))", gap: "1rem" },
+  grid4: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(9rem, 1fr))", gap: "0.75rem" },
+  field: { display: "flex", flexDirection: "column" as const, gap: "0.375rem", marginBottom: "0.75rem", minWidth: 0 },
   label: { fontSize: "0.8125rem", fontWeight: 500, color: "rgba(232,228,217,0.7)" },
   labelSmall: { fontSize: "0.75rem", fontWeight: 500, color: "rgba(232,228,217,0.5)" },
-  input: { padding: "0.625rem 0.875rem", background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "6px", color: "#e8e4d9", fontSize: "0.875rem", outline: "none" },
+  input: { width: "100%", minWidth: 0, boxSizing: "border-box", padding: "0.625rem 0.875rem", background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "6px", color: "#e8e4d9", fontSize: "0.875rem" },
   variantRow: { padding: "1rem", background: "rgba(255,255,255,0.02)", borderRadius: "8px", marginBottom: "0.75rem", border: "1px solid rgba(255,255,255,0.04)" },
   invalid: { borderColor: "rgba(239,68,68,0.8)" },
+  warn: { fontSize: "0.75rem", lineHeight: 1.5, color: "#f5c46b" },
 };

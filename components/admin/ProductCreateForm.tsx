@@ -8,7 +8,8 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { Category } from "@/types";
 import { decimalToKurus } from "@/lib/payment/money";
-import { VAT_RATE_CHOICES, vatPercentToBps } from "@/lib/catalog/vat";
+import { VAT_INPUT_RULE, parseVatPercent } from "@/lib/catalog/vat";
+import VatRateField from "./VatRateField";
 
 interface Props {
   categories: Category[];
@@ -22,11 +23,13 @@ interface VariantInput {
 }
 
 export default function ProductCreateForm({ categories }: Props) {
+  // Yalnız sitede görünen kategoriler: gizli kategorideki ürünün kategori sayfası ve menü bağlantısı olmaz
+  const categoryOptions = categories.filter((c) => c.isPublished);
   const router = useRouter();
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [description, setDescription] = useState("");
-  const [categoryId, setCategoryId] = useState(categories[0]?.id ?? "");
+  const [categoryId, setCategoryId] = useState(categoryOptions[0]?.id ?? "");
   const [isPublished, setIsPublished] = useState(false);
   const [isFeatured, setIsFeatured] = useState(false);
   // KDV oranı (%); "" = girilmemiş
@@ -72,8 +75,13 @@ export default function ProductCreateForm({ categories }: Props) {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    setSaving(true);
     setMessage("");
+    const vat = parseVatPercent(vatPercent);
+    if (!vat.ok) {
+      setMessage(`Hata: KDV oranı geçersiz — ${VAT_INPUT_RULE}`);
+      return;
+    }
+    setSaving(true);
 
     // TL → kuruş tam sayı aritmetiğiyle (F-01): en fazla 2 ondalık; aşan giriş sessizce yuvarlanmaz
     const named = variants.filter((v) => v.name.trim());
@@ -105,7 +113,7 @@ export default function ProductCreateForm({ categories }: Props) {
         body: JSON.stringify({
           name, slug, description: description || undefined,
           categoryId, isPublished, isFeatured, sortOrder: 0,
-          vatRateBps: vatPercentToBps(vatPercent),
+          vatRateBps: vat.bps,
           variants: apiVariants,
         }),
       });
@@ -139,7 +147,7 @@ export default function ProductCreateForm({ categories }: Props) {
       )}
 
       <div style={styles.section}>
-        <h2 style={styles.sectionTitle}>Ürün Bilgileri</h2>
+        <h2 style={{ ...styles.sectionTitle, marginBottom: "1rem" }}>Ürün Bilgileri</h2>
         <div style={styles.grid2}>
           <div style={styles.field}>
             <label style={styles.label}>Ürün Adı *</label>
@@ -158,17 +166,10 @@ export default function ProductCreateForm({ categories }: Props) {
 
         <div style={styles.grid2}>
           <div style={styles.field}>
-            <label style={styles.label}>Kategori *</label>
-            <select style={styles.input} value={categoryId} onChange={(e) => setCategoryId(e.target.value)} required>
-              {categories.map((c) => (
+            <label htmlFor="product-category" style={styles.label}>Kategori *</label>
+            <select id="product-category" style={styles.input} value={categoryId} onChange={(e) => setCategoryId(e.target.value)} required>
+              {categoryOptions.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-            <label style={styles.label}>KDV oranı</label>
-            <select style={styles.input} value={vatPercent} onChange={(e) => setVatPercent(e.target.value)}>
-              <option value="">Girilmemiş</option>
-              {VAT_RATE_CHOICES.map((r) => (
-                <option key={r} value={String(r)}>%{r}</option>
               ))}
             </select>
           </div>
@@ -181,6 +182,8 @@ export default function ProductCreateForm({ categories }: Props) {
             </label>
           </div>
         </div>
+
+        <VatRateField value={vatPercent} onChange={setVatPercent} />
       </div>
 
       <div style={styles.section}>
@@ -204,8 +207,8 @@ export default function ProductCreateForm({ categories }: Props) {
                 <label style={styles.labelSmall}>Stok</label>
                 <input style={styles.input} type="number" value={v.stockQuantity} onChange={(e) => updateVariant(i, "stockQuantity", parseInt(e.target.value || "0"))} />
               </div>
-              <div style={{ display: "flex", alignItems: "flex-end", gap: "0.5rem" }}>
-                <div style={styles.field}>
+              <div style={{ display: "flex", alignItems: "flex-end", gap: "0.5rem", minWidth: 0 }}>
+                <div style={{ ...styles.field, flex: 1 }}>
                   <label style={styles.labelSmall}>SKU</label>
                   <input style={styles.input} value={v.sku} onChange={(e) => updateVariant(i, "sku", e.target.value)} />
                 </div>
@@ -233,12 +236,13 @@ export default function ProductCreateForm({ categories }: Props) {
 const styles: Record<string, React.CSSProperties> = {
   section: { marginBottom: "2rem", padding: "1.5rem", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "12px" },
   sectionTitle: { fontSize: "1rem", fontWeight: 600, color: "#e8e4d9", margin: 0 },
-  grid2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" },
-  grid4: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "0.75rem" },
-  field: { display: "flex", flexDirection: "column" as const, gap: "0.375rem", marginBottom: "0.75rem" },
+  // Sütunlar dar ekranda alt alta iner; alanlar sütununa sığar (taşmasın: minWidth 0 + width 100%)
+  grid2: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(16rem, 1fr))", gap: "1rem" },
+  grid4: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(9rem, 1fr))", gap: "0.75rem" },
+  field: { display: "flex", flexDirection: "column" as const, gap: "0.375rem", marginBottom: "0.75rem", minWidth: 0 },
   label: { fontSize: "0.8125rem", fontWeight: 500, color: "rgba(232,228,217,0.7)" },
   labelSmall: { fontSize: "0.75rem", fontWeight: 500, color: "rgba(232,228,217,0.5)" },
-  input: { padding: "0.625rem 0.875rem", background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "6px", color: "#e8e4d9", fontSize: "0.875rem", outline: "none" },
+  input: { width: "100%", minWidth: 0, boxSizing: "border-box", padding: "0.625rem 0.875rem", background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "6px", color: "#e8e4d9", fontSize: "0.875rem" },
   checkbox: { display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.875rem", color: "rgba(232,228,217,0.7)", cursor: "pointer" },
   variantRow: { padding: "1rem", background: "rgba(255,255,255,0.02)", borderRadius: "8px", marginBottom: "0.75rem", border: "1px solid rgba(255,255,255,0.04)" },
   addBtn: { padding: "0.375rem 0.75rem", background: "rgba(143,163,78,0.15)", border: "1px solid rgba(143,163,78,0.3)", borderRadius: "6px", color: "#c4d68e", fontSize: "0.8125rem", cursor: "pointer" },

@@ -1,17 +1,27 @@
 /**
  * KDV oranı — baz puan (100 = %1). Ürün kaydında boş (null) = girilmemiş: oran uydurulmaz, sipariş
  * kalemine de boş kopyalanır (Y-12). Hangi ürüne hangi oranın uygulanacağı işletmenin/mali müşavirin
- * kararıdır; burada yalnız seçenekler var.
+ * kararıdır; admin oranı elle yazar, aşağıdakiler yalnız hızlı seçim düğmeleridir.
  */
 
-/** Admin formunda sunulan oranlar (yüzde) — Türkiye'de 2023'ten beri uygulanan %1 / %10 / %20 ve %0 */
+/** Hızlı seçim (yüzde) — Türkiye'de 2023'ten beri uygulanan %1 / %10 / %20 ve %0 */
 export const VAT_RATE_CHOICES = [0, 1, 10, 20] as const;
 
-/** Form değeri ("" = girilmemiş, "10" = %10) → baz puan */
-export function vatPercentToBps(value: string): number | null {
-  if (value === "") return null;
-  const n = Number(value);
-  return Number.isInteger(n) && n >= 0 && n <= 100 ? n * 100 : null;
+export const VAT_INPUT_RULE = "0 ile 100 arasında tam sayı yazın (ör. 10).";
+
+export type VatParseResult = { ok: true; bps: number | null } | { ok: false };
+
+/**
+ * Formdaki metin ("10", "%10", "10 %") → baz puan. Boş = girilmemiş (null).
+ * Geçersiz giriş ok:false döner: sessizce "girilmemiş" diye kaydedilmez.
+ */
+export function parseVatPercent(text: string): VatParseResult {
+  const raw = text.trim();
+  if (raw === "") return { ok: true, bps: null };
+  const t = raw.replace(/^%\s*/, "").replace(/\s*%$/, "");
+  if (!/^\d{1,3}$/.test(t)) return { ok: false };
+  const percent = Number(t);
+  return percent <= 100 ? { ok: true, bps: percent * 100 } : { ok: false };
 }
 
 /** Baz puan → form değeri */
