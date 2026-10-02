@@ -9,6 +9,7 @@ import { confirmBankTransferPayment } from "@/lib/payment/offline";
 import { createCustomerRequest } from "@/lib/orders/lifecycle";
 import { searchOrdersForAdmin } from "@/lib/admin/orders";
 import { getAdminBadges, getDashboardStats } from "@/lib/admin/dashboard";
+import { listCustomers } from "@/lib/admin/customers";
 import { setupTestDb } from "./helpers/db";
 import { createTestOrder } from "./helpers/orders";
 
@@ -59,4 +60,27 @@ test("arama: sipariş no, ad, e-posta ve telefon (0 ile ya da +90 ile); sayfalam
   assert.equal(p1.rows.length, 5);
   assert.equal(p2.rows.length, 2);
   assert.equal(new Set([...refs(p1.rows), ...refs(p2.rows)]).size, 7);
+});
+
+test("müşteriler: e-postaya göre toplanır; ödenen tutar yalnız ödenmiş siparişlerden; arama", async () => {
+  const { order: a } = await createTestOrder({ method: "BANK_TRANSFER", dueInMinutes: 60, priceKurus: 10_000 });
+  const { order: b } = await createTestOrder({ method: "BANK_TRANSFER", dueInMinutes: 60, priceKurus: 25_000 });
+  await confirmBankTransferPayment(b.id, "admin-1");
+  await prisma.order.update({ where: { id: a.id }, data: { guestEmail: "baska@example.com", guestName: "Başka Kişi" } });
+
+  const all = await listCustomers({});
+  assert.equal(all.total, 2);
+  const musteri = all.rows.find((r) => r.email === "musteri@example.com");
+  assert.ok(musteri);
+  assert.equal(musteri.orders, 1);
+  assert.equal(musteri.paidOrders, 1);
+  assert.equal(musteri.paidKurus, 25_000);
+  const baska = all.rows.find((r) => r.email === "baska@example.com");
+  assert.equal(baska?.paidKurus, 0);
+  assert.equal(baska?.name, "Başka Kişi");
+
+  assert.deepEqual(
+    (await listCustomers({ q: "başka" })).rows.map((r) => r.email),
+    ["baska@example.com"]
+  );
 });

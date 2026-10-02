@@ -33,6 +33,7 @@ const NAV_ITEMS: Array<{ key: string; label: string; href: string; icon: string;
     urgent: (b) => b.attention,
   },
   { key: "urunler", label: "Ürünler", href: "/admin/urunler", icon: "📦" },
+  { key: "musteriler", label: "Müşteriler", href: "/admin/musteriler", icon: "👥" },
   { key: "mesajlar", label: "Mesajlar", href: "/admin/mesajlar", icon: "✉️", badge: (b) => b.newMessages },
   { key: "yorumlar", label: "Yorumlar", href: "/admin/yorumlar", icon: "⭐", badge: (b) => b.pendingReviews },
   { key: "epostalar", label: "E-postalar", href: "/admin/epostalar", icon: "📨", urgent: (b) => b.failedEmails },
