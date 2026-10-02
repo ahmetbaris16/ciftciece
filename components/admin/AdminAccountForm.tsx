@@ -95,7 +95,10 @@ export default function AdminAccountForm({
         <label style={s.field}>
           <span style={s.label}>E-posta</span>
           <input style={s.input} type="email" value={email} autoComplete="email" onChange={(e) => setEmail(e.target.value)} />
-          <span style={s.hint}>Girişte kullanıcı adı yerine de yazılabilir.</span>
+          <span style={s.hint}>
+            Girişte kullanıcı adı yerine de yazılabilir. Bu e-postayla mağazaya üye olunamaz ve üye girişi yapılamaz; mağazayı
+            müşteri olarak denemek için başka bir e-posta kullanın.
+          </span>
         </label>
         <label style={s.field}>
           <span style={s.label}>Yeni şifre (değiştirmeyecekseniz boş bırakın)</span>

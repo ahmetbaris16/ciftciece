@@ -61,6 +61,11 @@ export default async function AdminMusterilerPage({ searchParams }: { searchPara
                     <span className={rows_.name}>
                       {c.name ?? "—"}
                       {c.member && <span style={st.member}>Üye</span>}
+                      {c.staff && (
+                        <span style={st.staff} title="Bu e-posta yönetici hesabına ait: aynı e-postayla mağazaya üye girişi yapılamaz.">
+                          Yönetici hesabı
+                        </span>
+                      )}
                     </span>
                     <span className={rows_.meta}>
                       {c.email}
@@ -123,6 +128,7 @@ const st: Record<string, React.CSSProperties> = {
   clear: { color: "rgba(232,228,217,0.6)", fontSize: "0.8125rem" },
   empty: { padding: "3rem 0", textAlign: "center", color: "rgba(232,228,217,0.45)" },
   member: { padding: "0.05rem 0.4rem", borderRadius: 4, fontSize: "0.6875rem", fontWeight: 700, background: "rgba(196,214,142,0.15)", color: "#c4d68e" },
+  staff: { padding: "0.05rem 0.4rem", borderRadius: 4, fontSize: "0.6875rem", fontWeight: 700, background: "rgba(245,196,107,0.14)", color: "#f5c46b" },
   meta: { fontSize: "0.75rem", color: "rgba(232,228,217,0.5)", wordBreak: "break-all" },
   pager: { display: "flex", justifyContent: "center", alignItems: "center", gap: "1rem", marginTop: "1.25rem" },
   pageLink: {

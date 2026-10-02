@@ -17,7 +17,10 @@ export interface AdminCustomerRow {
   paidOrders: number;
   paidKurus: number;
   lastOrderAt: Date;
+  /** Bu e-postayla mağaza üyeliği (müşteri hesabı) var */
   member: boolean;
+  /** Bu e-posta yönetici/personel hesabına ait: aynı e-postayla mağazaya üye girişi yapılamaz */
+  staff: boolean;
 }
 
 export async function listCustomers(opts: { q?: string; page?: number; perPage?: number }) {
@@ -75,7 +78,7 @@ export async function listCustomers(opts: { q?: string; page?: number; perPage?:
           orderBy: { createdAt: "desc" },
           select: { guestEmail: true, guestName: true, guestPhone: true },
         }),
-        prisma.user.findMany({ where: { email: { in: emails } }, select: { email: true } }),
+        prisma.user.findMany({ where: { email: { in: emails } }, select: { email: true, role: true } }),
       ])
     : [[], [], []];
 
@@ -83,6 +86,7 @@ export async function listCustomers(opts: { q?: string; page?: number; perPage?:
     const email = g.guestEmail ?? "";
     const p = paid.find((x) => x.guestEmail === email);
     const last = latest.find((x) => x.guestEmail === email);
+    const account = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
     return {
       email,
       name: last?.guestName ?? null,
@@ -91,7 +95,8 @@ export async function listCustomers(opts: { q?: string; page?: number; perPage?:
       paidOrders: p?._count._all ?? 0,
       paidKurus: p?._sum.totalKurus ?? 0,
       lastOrderAt: g._max.createdAt ?? new Date(0),
-      member: users.some((u) => u.email.toLowerCase() === email.toLowerCase()),
+      member: account?.role === "CUSTOMER",
+      staff: account?.role === "ADMIN" || account?.role === "STAFF",
     };
   });
   return { rows, total: totalGroups.length, page, pages: Math.max(1, Math.ceil(totalGroups.length / perPage)), members };

@@ -70,17 +70,23 @@ test("müşteriler: e-postaya göre toplanır; ödenen tutar yalnız ödenmiş s
   const { order: b } = await createTestOrder({ method: "BANK_TRANSFER", dueInMinutes: 60, priceKurus: 25_000 });
   await confirmBankTransferPayment(b.id, "admin-1");
   await prisma.order.update({ where: { id: a.id }, data: { guestEmail: "baska@example.com", guestName: "Başka Kişi" } });
+  // Aynı e-postada yönetici hesabı "Üye" sayılmaz (mağazaya üye girişi yapamaz); müşteri hesabı sayılır
+  await prisma.user.create({ data: { email: "baska@example.com", role: "ADMIN", username: "baska" } });
+  await prisma.user.create({ data: { email: "musteri@example.com", role: "CUSTOMER" } });
 
   const all = await listCustomers({});
+  assert.equal(all.members, 1);
   assert.equal(all.total, 2);
   const musteri = all.rows.find((r) => r.email === "musteri@example.com");
   assert.ok(musteri);
   assert.equal(musteri.orders, 1);
   assert.equal(musteri.paidOrders, 1);
   assert.equal(musteri.paidKurus, 25_000);
+  assert.deepEqual([musteri.member, musteri.staff], [true, false]);
   const baska = all.rows.find((r) => r.email === "baska@example.com");
   assert.equal(baska?.paidKurus, 0);
   assert.equal(baska?.name, "Başka Kişi");
+  assert.deepEqual([baska?.member, baska?.staff], [false, true]);
 
   assert.deepEqual(
     (await listCustomers({ q: "başka" })).rows.map((r) => r.email),
