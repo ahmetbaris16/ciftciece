@@ -26,6 +26,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { USE_DB } from "@/lib/data/source";
 import { getVariantById, createOrder, releaseExpiredOrders } from "@/lib/repositories";
 import { OutOfStockError, findOrderByIdempotencyKey } from "@/lib/repositories/order.repository";
 import { checkoutRequestHash } from "@/lib/checkout/idempotency";
@@ -107,6 +108,11 @@ function billingInfoOf(billing: BillingInput | undefined, fullName: string): Bil
 // ── Handler ─────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
+  // Veritabanısız deneme kipi (yalnız geliştirmede açılır): sipariş kaydedilemez — anlaşılır mesaj
+  if (!USE_DB) {
+    return fail(503, "NO_DATABASE", "Site veritabanısız deneme kipinde açık: sipariş kaydedilemez. Siteyi veritabanıyla açın (Siteyi Ac).");
+  }
+
   let body: unknown;
   try {
     body = await request.json();
