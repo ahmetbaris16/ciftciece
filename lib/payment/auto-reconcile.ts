@@ -29,7 +29,7 @@ export async function reconcilePendingCardPayments(
   try {
     providerName = getPaymentProvider().name;
   } catch {
-    return result; // sanal POS bağlı değil (demo)
+    return result; // ödeme sağlayıcısı ayarı geçersiz (kart kapalı)
   }
   const now = opts.now?.getTime() ?? Date.now();
   const attempts = await prisma.paymentAttempt.findMany({

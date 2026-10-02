@@ -53,6 +53,14 @@ test("test ödeme sağlayıcısı (stub) canlıda açılamaz; yalnız yerel prod
   assert.deepEqual(errorsOf(local), []);
 });
 
+test("ödeme sağlayıcısı tanımsız: kart DEMO kipinde (uyarı); stub canlıda açılmaz", () => {
+  const noProvider: EnvVars = { ...GOOD, PAYMENT_PROVIDER: undefined };
+  const r = checkProductionConfig(noProvider);
+  assert.deepEqual(r.errors, []);
+  assert.ok(r.warnings.some((w) => w.includes("DEMO")));
+  assert.ok(errorsOf({ ...GOOD, PAYMENT_PROVIDER: "stub" }).some((e) => e.includes("stub")));
+});
+
 test("iyzico adresi yalnız resmi canlı/test adresi olabilir; anahtar yoksa yalnız uyarı", () => {
   assert.equal(errorsOf({ ...GOOD, IYZICO_BASE_URL: "https://iyzico.example.com" }).length, 1);
   const r = checkProductionConfig({ ...GOOD, IYZICO_API_KEY: "TODO" });

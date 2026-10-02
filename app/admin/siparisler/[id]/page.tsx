@@ -20,7 +20,7 @@ import RequestActions from "@/components/admin/order/RequestActions";
 import EmailRequeueButton from "@/components/admin/order/EmailRequeueButton";
 import { formatPrice, type Order } from "@/types";
 import { PAYMENT_METHOD_LABELS } from "@/lib/payment/methods";
-import { PROVIDER_LABELS, isTestProvider } from "@/lib/payment/provider";
+import { PROVIDER_LABELS, cardPaymentMode, isTestProvider } from "@/lib/payment/provider";
 import { ALERT_TITLES, type PaymentAlertKind } from "@/lib/payment/alerts";
 import { LEGAL_DOCUMENTS, type LegalDocumentId } from "@/lib/legal/documents";
 import { loadAdminOrder } from "@/lib/admin/order-detail";
@@ -121,12 +121,13 @@ export default async function AdminSiparisDetay({ params }: Props) {
   const status = STATUS[order.status] ?? { label: order.status, color: "#999" };
   const shipped = order.status === "SHIPPED" || order.status === "DELIVERED";
   const remaining = Math.max(0, d.paidKurus - d.refundedKurus);
-  const testPaid = d.attempts.some((a) => a.status === "SUCCEEDED" && isTestProvider(a.provider));
+  const testPaid = d.attempts.find((a) => a.status === "SUCCEEDED" && isTestProvider(a.provider))?.provider ?? null;
   const canShip = !order.needsAttention && (order.status === "PAID" || order.status === "PROCESSING");
   const openRequests = d.requests.filter((r) => r.status === "OPEN");
   const failedEmails = d.emails.filter((e) => e.status === "FAILED").length;
   const billing = order.billingInfo;
-  const provider = process.env.PAYMENT_PROVIDER;
+  // Akbank bilgileri girilene kadar kart ödemesi demo bankadır (lib/payment/provider.ts)
+  const provider = cardPaymentMode() === "demo" ? "demo" : process.env.PAYMENT_PROVIDER;
 
   return (
     <AdminShell user={user} activeSection="siparisler">
@@ -184,11 +185,14 @@ export default async function AdminSiparisDetay({ params }: Props) {
         {testPaid && (
           <div className={`${s.card} ${s.alert}`} role="alert">
             <h2 className={s.h2} style={{ color: "#fb923c" }}>
-              Test ödemesi: gerçek para alınmadı
+              {testPaid === "demo" ? "Demo ödeme: gerçek para alınmadı" : "Test ödemesi: gerçek para alınmadı"}
             </h2>
             <p className={s.muted}>
-              Bu sipariş bankanın test ortamında ödendi. Gerçek sipariş gibi kargolamayın. Deneme bittiyse aşağıdaki iade formundan “Diğer”
-              yöntemiyle, sebep “test ödemesi” yazarak kapatın.
+              {testPaid === "demo"
+                ? "Bu sipariş, sanal POS bağlanmadan önce banka ödeme sayfasının demo kopyasıyla “ödendi”. "
+                : "Bu sipariş bankanın test ortamında ödendi. "}
+              Gerçek sipariş gibi kargolamayın. Deneme bittiyse aşağıdaki iade formundan “Diğer” yöntemiyle, sebep “
+              {testPaid === "demo" ? "demo ödeme" : "test ödemesi"}” yazıp “siparişi kapat” seçerek kapatın.
             </p>
           </div>
         )}
@@ -377,7 +381,11 @@ export default async function AdminSiparisDetay({ params }: Props) {
                           Açıldı {dateTimeTr(a.createdAt)}
                           {a.verifiedAt && <> · doğrulandı {dateTimeTr(a.verifiedAt)}</>}
                           {a.providerPaymentId && (
-                            <> · banka işlem no {a.provider.startsWith("akbank") ? a.providerPaymentId.split(":").pop() : a.providerPaymentId}</>
+                            <>
+                              {" "}
+                              · {a.provider === "demo" ? "demo onay kodu" : "banka işlem no"}{" "}
+                              {a.provider.startsWith("akbank") || a.provider === "demo" ? a.providerPaymentId.split(":").pop() : a.providerPaymentId}
+                            </>
                           )}
                         </p>
                         {a.method === "CARD" && (a.paidAmountKurus !== null || a.chargedAmountKurus !== null) && (
@@ -407,7 +415,15 @@ export default async function AdminSiparisDetay({ params }: Props) {
               {order.paymentMethod === "CARD" && (
                 <ReconcileButton
                   orderId={order.id}
-                  label={provider === "akbank" ? "Akbank'tan sorgula" : provider === "iyzico" ? "iyzico'dan sorgula" : "Bankadan sorgula"}
+                  label={
+                    provider === "demo"
+                      ? "Demo bankadan sorgula"
+                      : provider === "akbank"
+                        ? "Akbank'tan sorgula"
+                        : provider === "iyzico"
+                          ? "iyzico'dan sorgula"
+                          : "Bankadan sorgula"
+                  }
                 />
               )}
               <details className={s.details} style={{ marginTop: "1rem" }}>

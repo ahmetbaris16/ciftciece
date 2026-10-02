@@ -170,7 +170,9 @@ export async function getLaunchChecklist(): Promise<CheckItem[]> {
           ? "Canlı: kartla ödeme alınıyor."
           : provider.mode === "test"
             ? "Test ortamı: kartı yalnız siz görürsünüz. Denemeler bitince canlıya geçin."
-            : "Sanal POS bağlı değil; kart seçeneği “yakında” görünüyor.",
+            : provider.mode === "demo"
+              ? "Sanal POS bağlı değil: müşteriler kartı “yakında” görür. Siz (yönetici girişiyle) kartla ödemeyi banka sayfasının demo kopyasıyla baştan sona gösterebilirsiniz."
+              : "Kartla ödeme kapalı: ödeme sağlayıcısı ayarı (PAYMENT_PROVIDER) geçersiz.",
       href: "/admin/ayarlar#odeme",
     },
     {

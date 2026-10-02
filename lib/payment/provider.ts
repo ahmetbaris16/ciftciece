@@ -3,29 +3,39 @@
  *
  * PAYMENT_PROVIDER:
  * - "akbank" → Akbank Sanal POS, ortak ödeme sayfası (lib/payment/providers/akbank.ts). AKBANK_MERCHANT_SAFE_ID,
- *              AKBANK_TERMINAL_SAFE_ID, AKBANK_SECRET_KEY, AKBANK_ENV (test | prod) gerekir.
+ *              AKBANK_TERMINAL_SAFE_ID, AKBANK_SECRET_KEY, AKBANK_ENV (test | prod) gerekir. Bilgiler girilene
+ *              kadar kart ödemesi DEMO'dur (aşağıda).
+ * - "demo"   → (tanımsızsa da) demo banka: banka sayfasının demo kopyası (lib/payment/providers/demo.ts).
  * - "iyzico" → iyzico ortak ödeme formu. IYZICO_API_KEY / IYZICO_SECRET_KEY / IYZICO_BASE_URL.
- * - "stub"   → geliştirme: gerçek para çekmeden başarılı sayar. Canlıda kapalı (R-13).
+ * - "stub"   → yalnız geliştirme/otomatik test: sayfasız, gerçek para çekmeden başarılı sayar. Canlıda kapalı (R-13).
  *
  * Kart ödemesinin durumu (admin → Ayarlar → Ödeme'de görünür):
- * - demo: sanal POS bağlı değil. Müşteri kart seçeneğini "yakında" olarak görür, seçemez.
+ * - demo: sanal POS bağlı değil. Kartla ödeme banka sayfasının demo kopyasıyla baştan sona gösterilir (kart bilgileri
+ *         → 6 haneli kod → sipariş "Ödendi"); gerçek para çekilmez. YALNIZ yönetici kullanır; müşteri kartı "yakında"
+ *         görür. Akbank bilgileri girilince kendiliğinden test/canlıya geçer.
  * - test: bankanın TEST ortamı (gerçek para çekilmez). Kart seçeneğini YALNIZ yönetici görür ve kullanır:
  *         gerçek müşteri test ödemesiyle "ödenmiş" sipariş veremez.
  * - live: canlı tahsilat; herkes kartla öder.
+ * - off:  ayar hatası (bilinmeyen sağlayıcı, canlıda stub, anahtarsız iyzico): kart "yakında", kimse kullanamaz.
+ * Geliştirmede (NODE_ENV != production) demo ve test herkese açıktır.
  */
 
 import type { PaymentProvider } from "./types";
 import { StubPaymentProvider } from "./providers/stub";
 import { IyzicoProvider, iyzicoConfigFromEnv } from "./providers/iyzico";
 import { AkbankProvider, akbankConfigFromEnv } from "./providers/akbank";
+import { DemoBankProvider, DEMO_PROVIDER } from "./providers/demo";
 
-export type CardPaymentMode = "demo" | "test" | "live";
+export type CardPaymentMode = "off" | "demo" | "test" | "live";
 
 export function getPaymentProvider(): PaymentProvider {
-  const providerName = process.env.PAYMENT_PROVIDER ?? "stub";
+  const providerName = process.env.PAYMENT_PROVIDER?.trim() || DEMO_PROVIDER;
   const isProd = process.env.NODE_ENV === "production";
 
   switch (providerName) {
+    case DEMO_PROVIDER:
+      return new DemoBankProvider();
+
     case "stub":
       // Stub her ödemeyi başarılı sayar — production'da yalnız bu bilgisayardaki denemede (R-13):
       // ALLOW_STUB_PAYMENTS=true + LOCAL_PRODUCTION_TEST=1 + site adresi localhost. Aksi hâlde
@@ -38,11 +48,9 @@ export function getPaymentProvider(): PaymentProvider {
       return new StubPaymentProvider();
 
     case "akbank": {
+      // Sanal POS bilgileri girilene kadar demo banka (yalnız yönetici; müşteriye "yakında")
       const config = akbankConfigFromEnv();
-      if (!config) {
-        throw new Error("Akbank seçili ama AKBANK_MERCHANT_SAFE_ID / AKBANK_TERMINAL_SAFE_ID / AKBANK_SECRET_KEY girilmemiş.");
-      }
-      return new AkbankProvider(config);
+      return config ? new AkbankProvider(config) : new DemoBankProvider();
     }
 
     case "iyzico": {
@@ -52,7 +60,7 @@ export function getPaymentProvider(): PaymentProvider {
     }
 
     default:
-      // Sessizce stub'a düşmek yok: bilinmeyen sağlayıcı bir kurulum hatasıdır
+      // Sessizce başka sağlayıcıya düşmek yok: bilinmeyen sağlayıcı bir kurulum hatasıdır
       throw new Error(`Bilinmeyen ödeme sağlayıcısı: "${providerName}"`);
   }
 }
@@ -67,38 +75,27 @@ function isLocalStubAllowed(): boolean {
   }
 }
 
-/** Sağlayıcı kurulu ve anahtarları girilmiş mi */
-export function isCardPaymentReady(): boolean {
-  try {
-    getPaymentProvider();
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/** Kart ödemesinin durumu: demo (bağlı değil), test (test ortamı), live (canlı) */
+/** Kart ödemesinin durumu: off (ayar hatası), demo (sanal POS bağlı değil), test (test ortamı), live (canlı) */
 export function cardPaymentMode(): CardPaymentMode {
-  if (!isCardPaymentReady()) return "demo";
-  const name = process.env.PAYMENT_PROVIDER ?? "stub";
-  if (name === "akbank") return akbankConfigFromEnv()?.environment === "prod" ? "live" : "test";
-  if (name === "iyzico") {
-    const base = process.env.IYZICO_BASE_URL?.trim() || "https://sandbox-api.iyzipay.com";
-    return base.includes("sandbox") ? "test" : "live";
+  let provider: PaymentProvider;
+  try {
+    provider = getPaymentProvider();
+  } catch {
+    return "off";
   }
-  // stub: yalnız geliştirmede ve yerel denemede açılır
-  return "test";
-}
-
-/**
- * Bu ziyaretçi kartla ödeyebilir mi? Canlıda herkes; test ortamında yalnız yönetici (gerçek müşteri test
- * ödemesiyle sipariş vermesin). Geliştirmede (NODE_ENV != production) test ortamı herkese açıktır.
- */
-export function canUseCardPayment(viewerIsAdmin: boolean): boolean {
-  const mode = cardPaymentMode();
-  if (mode === "live") return true;
-  if (mode === "test") return viewerIsAdmin || process.env.NODE_ENV !== "production";
-  return false;
+  switch (provider.name) {
+    case DEMO_PROVIDER:
+      return "demo";
+    case "akbank":
+      return "live";
+    case "iyzico": {
+      const base = process.env.IYZICO_BASE_URL?.trim() || "https://sandbox-api.iyzipay.com";
+      return base.includes("sandbox") ? "test" : "live";
+    }
+    default:
+      // akbank-test, stub (yalnız geliştirmede ve yerel denemede açılır)
+      return "test";
+  }
 }
 
 export interface ProviderStatus {
@@ -111,20 +108,29 @@ export interface ProviderStatus {
 
 /** Admin'de gösterilecek durum */
 export function paymentProviderStatus(): ProviderStatus {
-  const name = process.env.PAYMENT_PROVIDER ?? "stub";
+  const name = process.env.PAYMENT_PROVIDER?.trim() || DEMO_PROVIDER;
   const mode = cardPaymentMode();
-  const ready = mode !== "demo";
-  const display = name === "akbank" ? "Akbank Sanal POS" : name === "iyzico" ? "iyzico" : name === "stub" ? "Test (stub)" : name;
+  const ready = mode === "test" || mode === "live";
+  const display =
+    name === "akbank" ? "Akbank Sanal POS" : name === "iyzico" ? "iyzico" : name === "stub" ? "Test (stub)" : name === DEMO_PROVIDER ? "Demo banka" : name;
 
+  if (mode === "off") {
+    return {
+      name: display,
+      mode,
+      ready,
+      note: `Kartla ödeme kapalı: ödeme sağlayıcısı ayarı geçersiz (PAYMENT_PROVIDER="${name}"). Müşteri kart seçeneğini “yakında” görür.`,
+    };
+  }
   if (mode === "demo") {
     return {
       name: display,
       mode,
       ready,
       note:
-        name === "akbank"
-          ? "Akbank bilgileri (Güvenli İş Yeri No, Terminal Safe ID, gizli anahtar) girilmemiş."
-          : "Sanal POS bağlı değil. Müşteri kart seçeneğini “yakında” olarak görür; siparişler havale/EFT (ve açıksa kapıda ödeme) ile alınır.",
+        (name === "akbank" ? "Akbank bilgileri (Güvenli İş Yeri No, Terminal Safe ID, gizli anahtar) henüz girilmemiş. " : "Sanal POS bağlı değil. ") +
+        "Yönetici girişi açıkken kartla ödemeyi banka sayfasının demo kopyasıyla baştan sona deneyebilirsiniz: kart bilgileri, " +
+        "6 haneli doğrulama kodu, sipariş “Ödendi”. Gerçek para çekilmez. Müşteriler kartı “yakında” görür.",
     };
   }
   if (mode === "test") {
@@ -145,13 +151,14 @@ export function paymentProviderStatus(): ProviderStatus {
 export const PROVIDER_LABELS: Record<string, string> = {
   akbank: "Akbank",
   "akbank-test": "Akbank (TEST — gerçek para yok)",
+  demo: "Demo banka (gerçek para yok)",
   iyzico: "iyzico",
   stub: "Test (stub — gerçek para yok)",
   havale: "Havale/EFT",
   kapida: "Kapıda ödeme",
 };
 
-/** Bu sağlayıcıyla alınan "ödeme" gerçek para mı (test ortamı/stub değil) */
+/** Bu sağlayıcıyla alınan "ödeme" gerçek para mı (test ortamı/stub/demo değil) */
 export function isTestProvider(provider: string): boolean {
-  return provider === "stub" || provider === "akbank-test";
+  return provider === "stub" || provider === "akbank-test" || provider === DEMO_PROVIDER;
 }

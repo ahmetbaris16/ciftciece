@@ -126,6 +126,9 @@ export default async function SiparisPage({ params, searchParams }: Props) {
           </p>
           <p className={styles.date}>{dateTimeTr(d.createdAt)}</p>
           <p className={styles.message}>{message}</p>
+          {view.testPayment && (
+            <p className={styles.noteBox}>Bu sipariş deneme (demo/test) ödemesiyle onaylandı: karttan gerçek para çekilmedi.</p>
+          )}
           {d.customerEmail && !closed && (
             <p className={styles.muted}>Her adımda {d.customerEmail} adresine e-posta gönderiyoruz.</p>
           )}

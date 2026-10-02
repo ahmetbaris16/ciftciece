@@ -68,18 +68,21 @@ export function checkProductionConfig(env: EnvVars): ConfigCheckResult {
   if (localTest) warnings.push("LOCAL_PRODUCTION_TEST=1: yalnız yerel production denemesi içindir, canlıda tanımlanmamalı.");
 
   // Ödeme sağlayıcısı (R-13: test sağlayıcısı canlıda asla)
-  const provider = env.PAYMENT_PROVIDER?.trim() || "stub";
+  const provider = env.PAYMENT_PROVIDER?.trim() || "demo";
+  const demoNote = "müşteriler kartı “yakında” görür, yönetici banka sayfasının demo kopyasıyla deneyebilir; sipariş havale/EFT ve açıksa kapıda ödemeyle alınır.";
   if (env.ALLOW_STUB_PAYMENTS === "true" && !(isLocalApp && localTest)) {
     errors.push("ALLOW_STUB_PAYMENTS canlıda tanımlanamaz: test sağlayıcısı her kart ödemesini başarılı sayar.");
   }
-  if (provider === "stub") {
-    warnings.push(
-      "PAYMENT_PROVIDER tanımlı değil: kartla ödeme “yakında” görünür (demo); sipariş havale/EFT ve açıksa kapıda ödemeyle alınır."
-    );
+  if (provider === "demo") {
+    warnings.push(`Kartla ödeme DEMO kipinde (sanal POS bağlı değil): ${demoNote}`);
+  } else if (provider === "stub") {
+    if (!(isLocalApp && localTest)) {
+      errors.push("PAYMENT_PROVIDER=stub canlıda kullanılamaz: yalnız yerel denemede açılır. akbank (ya da demo) yazın.");
+    }
   } else if (provider === "akbank") {
     const ids = [env.AKBANK_MERCHANT_SAFE_ID, env.AKBANK_TERMINAL_SAFE_ID, env.AKBANK_SECRET_KEY].map((v) => v?.trim());
     if (ids.some((v) => !v || PLACEHOLDER.test(v))) {
-      warnings.push("Akbank bilgileri (AKBANK_MERCHANT_SAFE_ID, AKBANK_TERMINAL_SAFE_ID, AKBANK_SECRET_KEY) eksik: kartla ödeme “yakında” (demo).");
+      warnings.push(`Akbank bilgileri (AKBANK_MERCHANT_SAFE_ID, AKBANK_TERMINAL_SAFE_ID, AKBANK_SECRET_KEY) eksik: kartla ödeme DEMO kipinde — ${demoNote}`);
     }
     const akEnv = env.AKBANK_ENV?.trim().toLowerCase() || "test";
     if (akEnv !== "test" && akEnv !== "prod") errors.push(`AKBANK_ENV "test" ya da "prod" olmalı (şu an "${env.AKBANK_ENV}").`);

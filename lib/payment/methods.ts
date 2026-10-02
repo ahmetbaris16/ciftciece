@@ -2,8 +2,8 @@
  * Ödeme yöntemleri — ayarlar ve kullanılabilirlik (saf; sunucu ve istemci ortak).
  *
  *  - CARD             Kredi/banka kartı (Akbank Sanal POS ortak ödeme sayfası, 3D Secure). Para otomatik gelir;
- *                     satıcının yapacağı iş yok. Sanal POS bağlanmadan "yakında" olarak görünür, seçilemez
- *                     (lib/payment/provider.ts: demo / test / canlı).
+ *                     satıcının yapacağı iş yok. Sanal POS bağlanmadan müşteriye "yakında" olarak görünür, seçilemez;
+ *                     yönetici banka sayfasının demo kopyasıyla dener (lib/payment/provider.ts: demo / test / canlı).
  *  - BANK_TRANSFER    Havale/EFT. Sipariş verilir, müşteriye IBAN + açıklama (sipariş no) gösterilir; satıcı
  *                     parayı görünce admin'de tek tıkla "ödeme alındı" der. Süresinde ödenmezse sipariş
  *                     kendiliğinden iptal olur, stok geri döner (satıcı takip etmek zorunda kalmaz).
@@ -90,6 +90,8 @@ export interface PaymentOption {
   available: boolean;
   /** Bankanın test ortamı: gerçek para çekilmez (yalnız yönetici görür) */
   testMode?: boolean;
+  /** Sanal POS bağlı değil: banka sayfasının demo kopyası, gerçek para çekilmez (yalnız yönetici görür) */
+  demoMode?: boolean;
   /** Bu yöntemle toplama eklenen ücret (kuruş) */
   feeKurus: number;
   /** Kapıda ödeme üst sınırı; istemci toplam değişince yeniden kontrol eder */
@@ -107,10 +109,11 @@ export function isBankTransferReady(b: PaymentSettings["bankTransfer"]): boolean
 }
 
 /**
- * Kartın bu ziyaretçi için durumu: "ready" (canlı), "test" (test ortamı — yalnız yönetici), "unavailable"
- * (sanal POS bağlı değil ya da test ortamında müşteri). Sunucu hesaplar (lib/payment/provider.ts).
+ * Kartın bu ziyaretçi için durumu: "ready" (canlı), "test" (test ortamı — yalnız yönetici), "demo" (sanal POS
+ * bağlı değil, banka sayfasının demo kopyası — yalnız yönetici), "unavailable" (müşteri demo/test ortamında ya da
+ * ayar hatası). Sunucu hesaplar (lib/payment/availability.ts).
  */
-export type CardAvailability = "ready" | "test" | "unavailable";
+export type CardAvailability = "ready" | "test" | "demo" | "unavailable";
 
 /**
  * Müşteriye gösterilecek yöntemler. Sıra: kart, havale, kapıda ödeme. Seçilebilenler `available: true`;
@@ -134,9 +137,10 @@ export function availablePaymentOptions(s: PaymentSettings, card: CardAvailabili
             id: "CARD",
             title: PAYMENT_METHOD_LABELS.CARD,
             description:
-              "Tek çekim. Kart bilgileriniz bankanın 3D Secure güvenli ödeme sayfasında girilir; sitemize gelmez, saklanmaz.",
+              "Tek çekim. Kart bilgilerinizi bir sonraki adımda bankanın 3D Secure güvenli ödeme sayfasında girer, telefonunuza gelen kodla onaylarsınız. Kart bilgileri sitemize gelmez, saklanmaz.",
             available: true,
             ...(cardState === "test" ? { testMode: true } : {}),
+            ...(cardState === "demo" ? { demoMode: true } : {}),
             feeKurus: 0,
             maxOrderKurus: null,
           }

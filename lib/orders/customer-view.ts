@@ -8,6 +8,7 @@ import { prisma } from "@/lib/db/prisma";
 import { USE_DB } from "@/lib/data/source";
 import { loadOrderEmailData, orderLegalContext, type OrderEmailData } from "@/lib/notifications/order-data";
 import type { OrderContext } from "@/lib/legal/content";
+import { isTestProvider } from "@/lib/payment/provider";
 import { customerOptions } from "./lifecycle";
 import type { OrderStatus } from "@/types";
 
@@ -22,6 +23,8 @@ export interface CustomerOrderView {
   legal: OrderContext;
   /** Kart ödemesi açık deneme sayısı (ödemeyi tamamla düğmesi için bilgi) */
   hasOpenCardAttempt: boolean;
+  /** Ödeme demo/test ortamında alındı: gerçek para çekilmedi (sayfada açıkça yazılır) */
+  testPayment: boolean;
 }
 
 export async function loadCustomerOrderView(reference: string): Promise<CustomerOrderView | null> {
@@ -31,7 +34,7 @@ export async function loadCustomerOrderView(reference: string): Promise<Customer
     select: { id: true, needsAttention: true, invoiceNumber: true, invoiceIssuedAt: true },
   });
   if (!row) return null;
-  const [data, events, requests, openCard] = await Promise.all([
+  const [data, events, requests, openCard, paidAttempt] = await Promise.all([
     loadOrderEmailData(row.id),
     prisma.orderEvent.findMany({
       where: { orderId: row.id, visibleToCustomer: true },
@@ -43,6 +46,7 @@ export async function loadCustomerOrderView(reference: string): Promise<Customer
       select: { type: true, createdAt: true },
     }),
     prisma.paymentAttempt.count({ where: { orderId: row.id, method: "CARD", status: "INITIATED" } }),
+    prisma.paymentAttempt.findFirst({ where: { orderId: row.id, status: "SUCCEEDED" }, select: { provider: true } }),
   ]);
   if (!data) return null;
   return {
@@ -55,6 +59,7 @@ export async function loadCustomerOrderView(reference: string): Promise<Customer
     options: customerOptions(data.status as OrderStatus),
     legal: orderLegalContext(data),
     hasOpenCardAttempt: openCard > 0,
+    testPayment: paidAttempt ? isTestProvider(paidAttempt.provider) : false,
   };
 }
 

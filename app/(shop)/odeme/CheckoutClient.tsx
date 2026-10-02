@@ -720,6 +720,7 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
                             {o.title}
                             {o.feeKurus > 0 && <span className={styles.methodFee}>+{formatPrice(o.feeKurus)}</span>}
                             {o.testMode && <span className={styles.testPill}>TEST — gerçek para çekilmez</span>}
+                            {o.demoMode && <span className={styles.testPill}>DEMO — gerçek ödeme alınmaz</span>}
                           </span>
                           <span className={styles.methodDesc}>{o.description}</span>
                           {o.id === "CARD" && <PaymentMarks compact />}
@@ -784,7 +785,7 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
 
                 <p className={styles.obligation}>
                   {selected?.id === "CARD"
-                    ? "“Siparişi onayla ve öde” düğmesine bastığınızda siparişiniz ödeme yükümlülüğü doğurur ve bankanın güvenli ödeme sayfasına geçersiniz."
+                    ? "“Siparişi onayla ve öde” düğmesine bastığınızda siparişiniz ödeme yükümlülüğü doğurur ve bankanın güvenli ödeme sayfasına geçersiniz; kart bilgilerinizi orada girip telefonunuza gelen kodla onaylarsınız."
                     : selected?.id === "BANK_TRANSFER"
                       ? "“Siparişi onayla” düğmesine bastığınızda siparişiniz ödeme yükümlülüğü doğurur; havale bilgileri bir sonraki sayfada ve e-postanızda gösterilir."
                       : "“Siparişi onayla” düğmesine bastığınızda siparişiniz ödeme yükümlülüğü doğurur; ödemeyi teslimatta yaparsınız."}
@@ -809,7 +810,9 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
                   </button>
                 </div>
                 <p className={styles.trustLine}>
-                  {selected?.id === "CARD"
+                  {selected?.id === "CARD" && selected.demoMode
+                    ? "Demo: sanal POS bağlanana kadar bir sonraki sayfa bankanın ödeme sayfasının demo kopyasıdır; gerçek ödeme alınmaz, kart bilgileri hiçbir yere gönderilmez."
+                    : selected?.id === "CARD"
                     ? `Kart bilgileriniz ${cardProvider} güvenli ödeme sayfasında (3D Secure) girilir; sitemize gelmez ve saklanmaz.`
                     : `Sorunuz mu var? ${formatPhoneTr(business.phone)} — ödeme ya da teslimatla ilgili her konuda yardımcı oluruz.`}
                 </p>

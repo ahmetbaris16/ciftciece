@@ -13,7 +13,8 @@ import { INSTALLMENT_CHOICES, formatIban, isValidTrIban, normalizeIban, type Pay
 import type { ProviderStatus } from "@/lib/payment/provider";
 
 const MODE_BADGE: Record<ProviderStatus["mode"], { label: string; color: string; bg: string }> = {
-  demo: { label: "DEMO — sanal POS bağlı değil", color: "#e8c07a", bg: "rgba(232,192,122,0.12)" },
+  off: { label: "KAPALI — ödeme sağlayıcısı ayarı geçersiz", color: "#f3a0a0", bg: "rgba(243,160,160,0.12)" },
+  demo: { label: "DEMO — sanal POS bağlı değil, banka sayfası demo kopyası", color: "#e8c07a", bg: "rgba(232,192,122,0.12)" },
   test: { label: "TEST ORTAMI — gerçek para çekilmez", color: "#9ec5f0", bg: "rgba(158,197,240,0.12)" },
   live: { label: "CANLI — gerçek tahsilat", color: "#9fd39f", bg: "rgba(159,211,159,0.12)" },
 };
@@ -50,7 +51,7 @@ export default function PaymentSettingsForm({
   const bankReady = bankEnabled && isValidTrIban(iban) && holder.trim().length > 1 && bankName.trim().length > 1;
   const visible = [
     cardEnabled && provider.mode === "live" && "Kart",
-    cardEnabled && provider.mode !== "live" && "Kart (“yakında” olarak, seçilemez)",
+    cardEnabled && provider.mode !== "live" && "Kart (müşteriye “yakında”, seçilemez)",
     bankReady && "Havale/EFT",
     codEnabled && "Kapıda ödeme",
   ].filter(Boolean) as string[];
@@ -112,10 +113,18 @@ export default function PaymentSettingsForm({
           Kartla ödeme seçeneğini ödeme sayfasında göster
         </label>
         {provider.mode === "demo" && (
-          <p style={s.hint}>
-            Sanal POS bağlanana kadar müşteri kart seçeneğini “Kartla ödeme çok yakında” notuyla görür ama seçemez. Banka
-            incelemesinde ödeme sayfasında kart seçeneği görünür.
-          </p>
+          <div style={s.demoBox}>
+            <p style={{ ...s.hint, color: "rgba(232,228,217,0.75)" }}>
+              <strong>Banka sunumu / deneme:</strong> bu tarayıcıda yönetici girişi açıkken mağazadan sipariş verin, ödeme
+              yönteminde “Kredi / Banka Kartı (DEMO)” seçin. Bankanın ödeme sayfasının demo kopyası açılır: kart bilgileri
+              girilir (“Test kartıyla doldur”), telefona gelmiş gibi gösterilen 6 haneli kod yazılır, sipariş “Ödendi” olarak
+              Siparişler’e düşer. Gerçek para çekilmez; siparişte “Demo ödeme” uyarısı görünür.
+            </p>
+            <p style={s.hint}>
+              Müşteriler bu sırada kart seçeneğini “Kartla ödeme çok yakında” notuyla görür, seçemez. Akbank bilgileri hPanel’e
+              girilince demo kendiliğinden kapanır.
+            </p>
+          </div>
         )}
         <details style={s.details}>
           <summary style={s.summaryToggle}>Akbank sanal POS bağlama ve canlıya geçiş adımları</summary>
@@ -262,6 +271,15 @@ const s = {
   footer: { display: "flex", alignItems: "center", gap: "1rem" },
   badge: { margin: 0, padding: "0.375rem 0.625rem", borderRadius: 6, fontSize: "0.75rem", fontWeight: 700, letterSpacing: "0.03em", alignSelf: "flex-start" },
   details: { border: "1px solid rgba(255,255,255,0.08)", borderRadius: 6, padding: "0.5rem 0.75rem" },
+  demoBox: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.375rem",
+    padding: "0.625rem 0.75rem",
+    borderRadius: 6,
+    background: "rgba(232,192,122,0.06)",
+    border: "1px solid rgba(232,192,122,0.18)",
+  },
   summaryToggle: { cursor: "pointer", fontSize: "0.8125rem", color: "#e8e4d9" },
   steps: { margin: "0.5rem 0 0.5rem 1.1rem", padding: 0, fontSize: "0.8125rem", lineHeight: 1.6, color: "rgba(232,228,217,0.75)" },
   primaryBtn: {
