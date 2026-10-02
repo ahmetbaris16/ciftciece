@@ -1,16 +1,20 @@
 /**
- * Admin — Sipariş Listesi
+ * Admin — Siparişler: iş odaklı filtreler (kargolanacak, havale bekleyen, dikkat, müşteri talebi…), arama ve
+ * sayfalama. Tarihler İstanbul saatiyle.
  */
 
-import { requireAdmin } from "@/lib/auth/session";
-import { getOrdersForAdmin, releaseExpiredOrders } from "@/lib/repositories";
-import AdminShell from "@/components/admin/AdminShell";
 import Link from "next/link";
+import { requireAdmin } from "@/lib/auth/session";
+import { releaseExpiredOrders } from "@/lib/repositories";
+import AdminShell from "@/components/admin/AdminShell";
 import { formatPrice } from "@/types";
 import { PAYMENT_METHOD_LABELS } from "@/lib/payment/methods";
+import { ORDER_FILTERS, parseFilter, searchOrdersForAdmin, type OrderFilter } from "@/lib/admin/orders";
 
-const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  PENDING: { label: "Bekliyor", color: "#facc15" },
+export const dynamic = "force-dynamic";
+
+const STATUS: Record<string, { label: string; color: string }> = {
+  PENDING: { label: "Ödeme bekliyor", color: "#facc15" },
   PAID: { label: "Ödendi", color: "#4ade80" },
   PROCESSING: { label: "Hazırlanıyor", color: "#60a5fa" },
   SHIPPED: { label: "Kargoda", color: "#a78bfa" },
@@ -19,97 +23,165 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   REFUNDED: { label: "İade", color: "#fb923c" },
 };
 
-export default async function AdminSiparislerPage() {
+const dateTimeTr = (d: Date) =>
+  new Intl.DateTimeFormat("tr-TR", { dateStyle: "short", timeStyle: "short", timeZone: "Europe/Istanbul" }).format(d);
+
+interface Props {
+  searchParams: Promise<{ q?: string; durum?: string; sayfa?: string }>;
+}
+
+export default async function AdminSiparislerPage({ searchParams }: Props) {
   const user = await requireAdmin();
+  const params = await searchParams;
+  const filter = parseFilter(params.durum);
+  const q = params.q ?? "";
+  const page = Number(params.sayfa) || 1;
   // Süresi dolan ödenmemiş siparişler listede güncel görünsün (stok iade edilir)
   await releaseExpiredOrders().catch((err) => console.error("[admin/siparisler]", err));
-  const { orders, total } = await getOrdersForAdmin();
+  const { rows, total, pages } = await searchOrdersForAdmin({ q, filter, page });
+
+  const href = (next: { durum?: OrderFilter; sayfa?: number; q?: string }) => {
+    const sp = new URLSearchParams();
+    const f = next.durum ?? filter;
+    if (f !== "tum") sp.set("durum", f);
+    const query = next.q ?? q;
+    if (query) sp.set("q", query);
+    if (next.sayfa && next.sayfa > 1) sp.set("sayfa", String(next.sayfa));
+    const s = sp.toString();
+    return `/admin/siparisler${s ? `?${s}` : ""}`;
+  };
 
   return (
     <AdminShell user={user} activeSection="siparisler">
-      <div style={{ padding: "2rem" }}>
-        <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "#e8e4d9", margin: "0 0 0.25rem" }}>
-          Siparişler
-        </h1>
-        <p style={{ fontSize: "0.875rem", color: "rgba(232,228,217,0.5)", margin: "0 0 1.5rem" }}>
-          {total} sipariş
-        </p>
+      <div style={st.page}>
+        <h1 style={st.h1}>Siparişler</h1>
+        <p style={st.sub}>{total} sipariş</p>
 
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-                {["Referans", "Müşteri", "Tutar", "Durum", "Tarih", ""].map((h) => (
-                  <th key={h} style={{ padding: "0.75rem", textAlign: "left", fontSize: "0.75rem", fontWeight: 600, color: "rgba(232,228,217,0.4)", textTransform: "uppercase" as const }}>
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {orders.length === 0 ? (
-                <tr>
-                  <td colSpan={6} style={{ padding: "3rem", textAlign: "center", color: "rgba(232,228,217,0.4)" }}>
-                    Henüz sipariş yok
-                  </td>
-                </tr>
-              ) : orders.map((order) => {
-                const base = STATUS_LABELS[order.status] ?? { label: order.status, color: "#999" };
-                // Havale bekleyen sipariş ayrıca işaretlenir: satıcı hesabı kontrol edip onaylar
-                const status =
-                  order.status === "PENDING" && order.paymentMethod === "BANK_TRANSFER"
-                    ? { label: "Havale bekleniyor", color: base.color }
-                    : base;
-                return (
-                  <tr key={order.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                    <td style={{ padding: "0.75rem", fontWeight: 600, color: "#e8e4d9", fontSize: "0.875rem" }}>
-                      #{order.reference}
-                    </td>
-                    <td style={{ padding: "0.75rem", fontSize: "0.875rem", color: "rgba(232,228,217,0.6)" }}>
-                      {order.guestName ?? order.guestEmail ?? "—"}
-                    </td>
-                    <td style={{ padding: "0.75rem", fontSize: "0.875rem", color: "#e8e4d9" }}>
-                      {formatPrice(order.totalKurus)}
-                      <span style={{ display: "block", fontSize: "0.75rem", color: "rgba(232,228,217,0.45)" }}>
-                        {PAYMENT_METHOD_LABELS[order.paymentMethod]}
-                        {order.shippingAddress?.shippingMode === "recipient" ? " · kargo alıcı ödemeli" : ""}
+        <form method="get" action="/admin/siparisler" style={st.search}>
+          {filter !== "tum" && <input type="hidden" name="durum" value={filter} />}
+          <input name="q" defaultValue={q} placeholder="Sipariş no, ad, e-posta ya da telefon" style={st.input} aria-label="Sipariş ara" />
+          <button type="submit" style={st.btn}>
+            Ara
+          </button>
+          {q && (
+            <Link href={href({ q: "" })} style={st.clear}>
+              Temizle
+            </Link>
+          )}
+        </form>
+
+        <nav style={st.filters} aria-label="Sipariş filtreleri">
+          {(Object.keys(ORDER_FILTERS) as OrderFilter[]).map((f) => (
+            <Link key={f} href={href({ durum: f, sayfa: 1 })} style={{ ...st.filter, ...(filter === f ? st.filterOn : {}) }}>
+              {ORDER_FILTERS[f]}
+            </Link>
+          ))}
+        </nav>
+
+        {rows.length === 0 ? (
+          <p style={st.empty}>{q || filter !== "tum" ? "Bu ölçütlere uyan sipariş yok." : "Henüz sipariş yok."}</p>
+        ) : (
+          <ul style={st.list}>
+            {rows.map((o) => {
+              const status =
+                o.status === "PENDING" && o.paymentMethod === "BANK_TRANSFER"
+                  ? { label: "Havale bekleniyor", color: "#facc15" }
+                  : STATUS[o.status] ?? { label: o.status, color: "#999" };
+              return (
+                <li key={o.id}>
+                  <Link href={`/admin/siparisler/${o.id}`} style={st.row}>
+                    <span style={st.colMain}>
+                      <span style={st.name}>{o.name}</span>
+                      <span style={st.meta}>
+                        #{o.reference} · {dateTimeTr(o.createdAt)}
                       </span>
-                    </td>
-                    <td style={{ padding: "0.75rem" }}>
-                      <span style={{
-                        padding: "0.125rem 0.5rem", borderRadius: "4px",
-                        fontSize: "0.75rem", fontWeight: 600,
-                        background: `${status.color}20`, color: status.color,
-                      }}>
-                        {status.label}
+                    </span>
+                    <span style={st.colAmount}>
+                      <strong>{formatPrice(o.totalKurus)}</strong>
+                      <span style={st.meta}>
+                        {PAYMENT_METHOD_LABELS[o.paymentMethod as keyof typeof PAYMENT_METHOD_LABELS]}
+                        {o.recipientPays ? " · alıcı ödemeli kargo" : ""}
                       </span>
-                      {order.needsAttention && (
-                        <span
-                          title="Ödeme tarafında karar gerekiyor — detaya bakın"
-                          style={{
-                            marginLeft: "0.375rem", padding: "0.125rem 0.5rem", borderRadius: "4px",
-                            fontSize: "0.75rem", fontWeight: 700, background: "#fb923c30", color: "#fb923c",
-                          }}
-                        >
-                          Dikkat
-                        </span>
-                      )}
-                    </td>
-                    <td style={{ padding: "0.75rem", fontSize: "0.8125rem", color: "rgba(232,228,217,0.4)" }}>
-                      {new Date(order.createdAt).toLocaleDateString("tr-TR")}
-                    </td>
-                    <td style={{ padding: "0.75rem", textAlign: "right" }}>
-                      <Link href={`/admin/siparisler/${order.id}`} style={{ color: "#8fa34e", fontSize: "0.8125rem", textDecoration: "none" }}>
-                        Detay →
-                      </Link>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                    </span>
+                    <span style={st.colStatus}>
+                      <span style={{ ...st.pill, background: `${status.color}20`, color: status.color }}>{status.label}</span>
+                      {o.needsAttention && <span style={{ ...st.pill, background: "#fb923c30", color: "#fb923c" }}>Dikkat</span>}
+                      {o.openRequests > 0 && <span style={{ ...st.pill, background: "#9ec5f025", color: "#9ec5f0" }}>Talep</span>}
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        {pages > 1 && (
+          <nav style={st.pager} aria-label="Sayfalar">
+            {page > 1 && (
+              <Link href={href({ sayfa: page - 1 })} style={st.filter}>
+                ‹ Önceki
+              </Link>
+            )}
+            <span style={st.meta}>
+              Sayfa {page} / {pages}
+            </span>
+            {page < pages && (
+              <Link href={href({ sayfa: page + 1 })} style={st.filter}>
+                Sonraki ›
+              </Link>
+            )}
+          </nav>
+        )}
       </div>
     </AdminShell>
   );
 }
+
+const st: Record<string, React.CSSProperties> = {
+  page: { padding: "1.5rem clamp(1rem, 3vw, 2rem)", maxWidth: 1100 },
+  h1: { margin: 0, fontSize: "1.5rem", fontWeight: 700, color: "#e8e4d9" },
+  sub: { margin: "0.25rem 0 1rem", fontSize: "0.875rem", color: "rgba(232,228,217,0.5)" },
+  search: { display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center", marginBottom: "0.75rem" },
+  input: {
+    flex: "1 1 260px",
+    padding: "0.625rem 0.75rem",
+    borderRadius: 8,
+    border: "1px solid rgba(255,255,255,0.12)",
+    background: "rgba(255,255,255,0.05)",
+    color: "#e8e4d9",
+    fontSize: "0.9375rem",
+  },
+  btn: { padding: "0.625rem 1rem", borderRadius: 8, border: 0, background: "#c4d68e", color: "#15180f", fontWeight: 600 },
+  clear: { color: "rgba(232,228,217,0.6)", fontSize: "0.8125rem" },
+  filters: { display: "flex", flexWrap: "wrap", gap: "0.375rem", marginBottom: "1rem" },
+  filter: {
+    padding: "0.375rem 0.75rem",
+    borderRadius: 999,
+    border: "1px solid rgba(255,255,255,0.1)",
+    color: "rgba(232,228,217,0.75)",
+    textDecoration: "none",
+    fontSize: "0.8125rem",
+  },
+  filterOn: { background: "rgba(196,214,142,0.15)", borderColor: "rgba(196,214,142,0.4)", color: "#e8e4d9" },
+  empty: { padding: "3rem 0", textAlign: "center", color: "rgba(232,228,217,0.45)" },
+  list: { listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 6 },
+  row: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1.4fr) minmax(0, 1fr) auto",
+    gap: "0.75rem",
+    alignItems: "center",
+    padding: "0.875rem 1rem",
+    borderRadius: 10,
+    background: "rgba(255,255,255,0.03)",
+    border: "1px solid rgba(255,255,255,0.06)",
+    color: "#e8e4d9",
+    textDecoration: "none",
+  },
+  colMain: { display: "flex", flexDirection: "column", minWidth: 0 },
+  name: { fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  meta: { fontSize: "0.75rem", color: "rgba(232,228,217,0.45)", wordBreak: "break-all" },
+  colAmount: { display: "flex", flexDirection: "column", minWidth: 0, fontSize: "0.9375rem" },
+  colStatus: { display: "flex", flexWrap: "wrap", gap: 4, justifyContent: "flex-end" },
+  pill: { padding: "0.125rem 0.5rem", borderRadius: 4, fontSize: "0.75rem", fontWeight: 600, whiteSpace: "nowrap" },
+  pager: { display: "flex", justifyContent: "center", alignItems: "center", gap: "1rem", marginTop: "1.25rem" },
+};
