@@ -17,8 +17,10 @@ export function passwordResetEmail(opts: {
   firstName: string;
   url: string;
   ttlMinutes: number;
+  /** Bağlantıyı mağaza yönetim panelinden gönderdi (müşteri "şifremi unuttum" demedi) */
+  byStore?: boolean;
 }): RenderedEmail {
-  const { business } = opts;
+  const { business, byStore } = opts;
   const { html, text } = renderEmail({
     brandName: business.tradeName,
     preheader: "Şifrenizi yenilemek için bağlantınız hazır.",
@@ -26,13 +28,25 @@ export function passwordResetEmail(opts: {
     blocks: [
       paragraph(opts.firstName ? `Merhaba ${opts.firstName},` : "Merhaba,"),
       paragraph(
-        `${business.tradeName} üyeliğiniz için şifre yenileme isteği aldık. Yeni şifrenizi belirlemek için aşağıdaki düğmeye tıklayın.`
+        byStore
+          ? `${business.tradeName} ekibi üyeliğiniz için şifre yenileme bağlantısı gönderdi. Yeni şifrenizi belirlemek için aşağıdaki düğmeye tıklayın.`
+          : `${business.tradeName} üyeliğiniz için şifre yenileme isteği aldık. Yeni şifrenizi belirlemek için aşağıdaki düğmeye tıklayın.`
       ),
       button("Yeni şifre belirle", opts.url),
       paragraph(`Bağlantı ${opts.ttlMinutes} dakika geçerlidir ve yalnız bir kez kullanılabilir.`, { muted: true, small: true }),
-      notice("Bu isteği siz yapmadıysanız bu e-postayı yok sayın; şifreniz değişmez.", "info"),
+      notice(
+        byStore
+          ? "Şifrenizi değiştirmek istemiyorsanız bu e-postayı yok sayın; şifreniz değişmez."
+          : "Bu isteği siz yapmadıysanız bu e-postayı yok sayın; şifreniz değişmez.",
+        "info"
+      ),
     ],
-    footer: emailFooter(business, "Bu e-postayı şifre yenileme isteğiniz üzerine aldınız."),
+    footer: emailFooter(
+      business,
+      byStore
+        ? "Bu e-postayı, mağaza ekibi üyeliğiniz için şifre yenileme bağlantısı gönderdiği için aldınız."
+        : "Bu e-postayı şifre yenileme isteğiniz üzerine aldınız."
+    ),
   });
   return { subject: `${business.tradeName} — şifre yenileme bağlantınız`, html, text };
 }

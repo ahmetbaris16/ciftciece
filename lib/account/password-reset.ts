@@ -12,9 +12,41 @@ import { createHash, randomBytes } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
 import { USE_DB } from "@/lib/data/source";
 import { readMock, updateMock } from "@/lib/data/mock-store";
+import { sendEmail } from "@/lib/email/mailer";
+import { passwordResetEmail } from "@/lib/email/templates/account";
+import { getBusinessInfo } from "@/lib/business/business.repository";
 import { setPasswordAfterReset } from "./customer.repository";
 
 export const RESET_TOKEN_TTL_MINUTES = 60;
+
+/** Bağlantının kökü: canlıda sabit adres (Host başlığına güvenilmez); geliştirmede isteğin geldiği adres */
+export function resetLinkOrigin(requestUrl: string): string {
+  if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_APP_URL) {
+    return process.env.NEXT_PUBLIC_APP_URL.replace(/\/+$/, "");
+  }
+  return new URL(requestUrl).origin;
+}
+
+/**
+ * Yeni bağlantı üretip üyenin e-postasına gönderir (önceki bağlantılar geçersiz olur). Bağlantı gizli: kuyruğa
+ * (veritabanına) yazılmaz, doğrudan gönderilir. Gönderim hatası çağırana fırlatılır.
+ * byStore: bağlantıyı yönetim panelinden mağaza gönderiyor (e-posta metni buna göre).
+ */
+export async function sendPasswordResetLink(
+  user: { id: string; email: string; name: string | null },
+  origin: string,
+  opts: { byStore?: boolean } = {}
+): Promise<void> {
+  const token = await createPasswordResetToken(user.id);
+  const mail = passwordResetEmail({
+    business: await getBusinessInfo(),
+    firstName: user.name?.split(" ")[0] || "",
+    url: `${origin}/sifre-sifirla?token=${encodeURIComponent(token)}`,
+    ttlMinutes: RESET_TOKEN_TTL_MINUTES,
+    byStore: opts.byStore,
+  });
+  await sendEmail({ to: user.email, subject: mail.subject, html: mail.html, text: mail.text });
+}
 
 const hashToken = (raw: string) => createHash("sha256").update(raw).digest("hex");
 

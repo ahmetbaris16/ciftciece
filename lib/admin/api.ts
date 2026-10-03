@@ -9,17 +9,10 @@ import { requireAdminApi, type SessionUser } from "@/lib/auth/session";
 import { isSameOrigin } from "@/lib/security/same-origin";
 import { OrderTransitionError } from "@/lib/repositories/order.repository";
 import { PaymentConfirmError } from "@/lib/payment/offline";
+import { AdminActionError } from "./errors";
 
-/** Admin işleminde kullanıcıya gösterilecek hata (ör. "Mesaj bulunamadı.", "E-posta ayarlı değil.") */
-export class AdminActionError extends Error {
-  constructor(
-    message: string,
-    public status = 400
-  ) {
-    super(message);
-    this.name = "AdminActionError";
-  }
-}
+// Hata sınıfı ayrı dosyada: oturum/HTTP katmanını yüklemeden kütüphane kodu da fırlatabilsin
+export { AdminActionError };
 
 export async function adminAction<S extends z.ZodType>(
   request: NextRequest,

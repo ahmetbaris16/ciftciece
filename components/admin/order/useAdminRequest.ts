@@ -15,7 +15,11 @@ export function useAdminRequest() {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
 
-  async function send(url: string, body: unknown, opts: { method?: string; success?: string } = {}): Promise<boolean> {
+  async function send(
+    url: string,
+    body: unknown,
+    opts: { method?: string; success?: string | ((result: unknown) => string) } = {}
+  ): Promise<boolean> {
     setBusy(true);
     setError(null);
     setDone(null);
@@ -31,7 +35,7 @@ export function useAdminRequest() {
         if (res.status === 409) router.refresh();
         return false;
       }
-      setDone(opts.success ?? "Kaydedildi.");
+      setDone(typeof opts.success === "function" ? opts.success(data?.result) : (opts.success ?? "Kaydedildi."));
       router.refresh();
       return true;
     } catch {

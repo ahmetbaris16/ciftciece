@@ -10,21 +10,11 @@
 
 import { NextRequest, NextResponse, after } from "next/server";
 import { findUserByEmail } from "@/lib/account/customer.repository";
-import { createPasswordResetToken, RESET_TOKEN_TTL_MINUTES } from "@/lib/account/password-reset";
-import { emailDelivery, sendEmail } from "@/lib/email/mailer";
-import { passwordResetEmail } from "@/lib/email/templates/account";
-import { getBusinessInfo } from "@/lib/business/business.repository";
+import { resetLinkOrigin, sendPasswordResetLink } from "@/lib/account/password-reset";
+import { emailDelivery } from "@/lib/email/mailer";
 import { clientIp, rateLimit } from "@/lib/security/rate-limit";
 import { isSameOrigin } from "@/lib/security/same-origin";
 import { ACCOUNT_MESSAGES, PasswordResetRequestSchema, accountFieldErrors } from "@/lib/validation/account";
-
-/** Bağlantının kökü: canlıda sabit adres (Host başlığına güvenilmez); geliştirmede isteğin geldiği adres */
-function appOrigin(request: NextRequest): string {
-  if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_APP_URL) {
-    return process.env.NEXT_PUBLIC_APP_URL.replace(/\/+$/, "");
-  }
-  return new URL(request.url).origin;
-}
 
 export async function POST(request: NextRequest) {
   if (!isSameOrigin(request)) return NextResponse.json({ error: ACCOUNT_MESSAGES.generic }, { status: 403 });
@@ -45,21 +35,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: ACCOUNT_MESSAGES.tooMany }, { status: 429 });
   }
 
-  const origin = appOrigin(request);
+  const origin = resetLinkOrigin(request.url);
   after(async () => {
     try {
       const user = await findUserByEmail(email);
       if (!user || user.role !== "CUSTOMER") return; // yanıt aynı; e-posta gitmez
-      const token = await createPasswordResetToken(user.id);
-      const url = `${origin}/sifre-sifirla?token=${encodeURIComponent(token)}`;
-      const mail = passwordResetEmail({
-        business: await getBusinessInfo(),
-        firstName: user.name?.split(" ")[0] || "",
-        url,
-        ttlMinutes: RESET_TOKEN_TTL_MINUTES,
-      });
-      // Bağlantı gizli: kuyruğa (veritabanına) yazılmaz, doğrudan gönderilir
-      await sendEmail({ to: user.email, subject: mail.subject, html: mail.html, text: mail.text });
+      await sendPasswordResetLink(user, origin);
     } catch (err) {
       console.error("[/api/account/password-reset] bağlantı gönderilemedi:", err);
     }

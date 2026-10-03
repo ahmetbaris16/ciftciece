@@ -553,6 +553,9 @@ export default async function AdminSiparisDetay({ params }: Props) {
                   <a href={`tel:${d.phone}`}>{formatPhoneTr(d.phone)}</a>
                 </p>
               )}
+              <p className={s.muted} style={{ marginTop: "0.5rem" }}>
+                <Link href={`/admin/musteriler/${order.id}`}>Müşteri sayfası (tüm siparişleri) ›</Link>
+              </p>
               {d.requests.length > openRequests.length && (
                 <p className={s.muted} style={{ marginTop: "0.5rem" }}>
                   Kapanmış talepler:{" "}

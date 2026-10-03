@@ -82,7 +82,7 @@ export default async function AdminMesajlarPage({ searchParams }: { searchParams
               const status = STATUS_TR[m.status] ?? { label: m.status, color: "#999" };
               const rs = repliesOf(m.id);
               return (
-                <li key={m.id} style={{ ...st.card, ...(m.status === "NEW" ? st.cardNew : {}) }}>
+                <li key={m.id} id={`mesaj-${m.id}`} style={{ ...st.card, ...(m.status === "NEW" ? st.cardNew : {}) }}>
                   <div style={st.head}>
                     <div style={{ minWidth: 0 }}>
                       <p style={st.subject}>{m.subject}</p>
