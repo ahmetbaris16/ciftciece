@@ -113,7 +113,7 @@ test("ödenmiş siparişin iadeyle kapanması tek e-posta: 'iadeniz yapıldı, s
   const { order } = await createTestOrder({ method: "BANK_TRANSFER", dueInMinutes: 48 * 60 });
   await confirmBankTransferPayment(order.id, "admin-1");
   await flush();
-  await recordRefund(order.id, { amountKurus: order.totalKurus, method: "BANK_TRANSFER", reason: "Müşteri vazgeçti", close: true }, "admin-1");
+  await recordRefund(order.id, { amountKurus: order.totalKurus, method: "BANK_TRANSFER", reason: "Müşteri vazgeçti" }, "admin-1");
   await flush();
   const after = (await emails(order.id)).map((e) => e.kind);
   assert.ok(after.includes("REFUND_RECORDED"));

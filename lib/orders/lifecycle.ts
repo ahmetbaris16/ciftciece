@@ -15,6 +15,10 @@ import type { PaymentMethod } from "@/types";
 import { recordOrderEvent } from "./events";
 import {
   changeStatusInTx,
+  FULLY_REFUNDED_MESSAGE,
+  hasOpenCancelRequest,
+  isFullyRefunded,
+  OPEN_CANCEL_REQUEST_MESSAGE,
   OrderTransitionError,
   paidAmountKurus,
   refundedAmountKurus,
@@ -51,7 +55,8 @@ export interface ShipInput {
 
 /**
  * Siparişi kargoya verir (R-22: takip numarası zorunlu). Ödenmiş ya da hazırlanan sipariş SHIPPED olur;
- * zaten kargodaysa ek gönderi (ek koli) kaydedilir. Ödeme incelemesindeki sipariş kargolanamaz (R-12).
+ * zaten kargodaysa ek gönderi (ek koli) kaydedilir. Ödeme incelemesindeki (R-12), parası tamamen iade edilmiş ya
+ * da müşterinin iptal isteği karar bekleyen sipariş kargolanamaz.
  */
 export async function shipOrder(orderId: string, input: ShipInput, actorId: string | null) {
   const trackingNumber = normalizeTrackingNumber(input.trackingNumber);
@@ -77,8 +82,14 @@ export async function shipOrder(orderId: string, input: ShipInput, actorId: stri
         throw new OrderTransitionError(
           order.status === "PENDING"
             ? "Ödemesi alınmamış sipariş kargolanamaz."
-            : "Bu durumdaki sipariş kargolanamaz."
+            : order.status === "CANCELLED" || order.status === "REFUNDED"
+              ? "Bu sipariş kapandı (iptal/iade); kargolanamaz. Sayfayı yenileyin."
+              : "Bu durumdaki sipariş kargolanamaz."
         );
+      }
+      if (await isFullyRefunded(tx, orderId)) throw new OrderTransitionError(FULLY_REFUNDED_MESSAGE);
+      if (order.status !== "SHIPPED" && (await hasOpenCancelRequest(tx, orderId))) {
+        throw new OrderTransitionError(OPEN_CANCEL_REQUEST_MESSAGE);
       }
 
       const shipment = await tx.shipment.create({
@@ -140,15 +151,15 @@ export interface RefundInput {
   method: RefundMethod;
   reference?: string | null;
   reason: string;
-  /**
-   * İadeyle birlikte sipariş kapanacaksa: kargolanmamış sipariş → CANCELLED, kargolanmış/teslim edilmiş →
-   * REFUNDED. Kapanış için toplam iade alınan ödemeye eşit olmalı. Boş: kısmi iade, durum değişmez.
-   */
-  close?: boolean;
-  /** Kargolanmış siparişte geri gelen ürünler stoğa eklensin mi */
+  /** Kargolanmış siparişin tam iadesinde geri gelen ürünler stoğa eklensin mi */
   restock?: boolean;
 }
 
+/**
+ * İade kaydı. Alınan ödemenin tamamı iade edilince açık sipariş kendiliğinden kapanır: kargolanmamış → İptal
+ * edildi (stok geri eklenir), kargolanmış/teslim edilmiş → İade edildi. Parası iade edilmiş sipariş açık kalıp
+ * hazırlanamaz/kargolanamaz. Kısmi iadede sipariş sürer. İade kaydı açık iade (cayma) bildirimini kapatır.
+ */
 export async function recordRefund(orderId: string, input: RefundInput, actorId: string | null) {
   if (!Number.isInteger(input.amountKurus) || input.amountKurus <= 0) {
     throw new OrderTransitionError("İade tutarı geçersiz.", 400);
@@ -171,6 +182,7 @@ export async function recordRefund(orderId: string, input: RefundInput, actorId:
       );
     }
 
+    const closes = refunded + input.amountKurus >= paid && order.status !== "CANCELLED" && order.status !== "REFUNDED";
     const refund = await tx.refund.create({
       data: {
         orderId,
@@ -194,13 +206,15 @@ export async function recordRefund(orderId: string, input: RefundInput, actorId:
       aggregateType: "order",
       aggregateId: orderId,
       dedupeKey: `order.refunded:${refund.id}`,
-      payload: { orderId, refundId: refund.id, closes: !!input.close },
+      payload: { orderId, refundId: refund.id, closes },
     });
 
-    if (input.close) {
-      if (refunded + input.amountKurus < paid) {
-        throw new OrderTransitionError("Siparişi kapatmak için alınan ödemenin tamamı iade edilmeli (kısmi iadede kapatmayın).", 400);
-      }
+    await tx.customerRequest.updateMany({
+      where: { orderId, type: "RETURN", status: "OPEN" },
+      data: { status: "RESOLVED", resolvedAt: new Date(), resolvedById: actorId, resolutionNote: "İade kaydı girildi." },
+    });
+
+    if (closes) {
       const shipped = order.status === "SHIPPED" || order.status === "DELIVERED";
       await changeStatusInTx(tx, order, shipped ? "REFUNDED" : "CANCELLED", actorId, {
         actorType: "ADMIN",
@@ -290,28 +304,41 @@ export async function createCustomerRequest(reference: string, input: CustomerRe
   });
 }
 
-export async function resolveCustomerRequest(
-  requestId: string,
-  input: { status: "RESOLVED" | "REJECTED"; note?: string | null },
-  actorId: string
-) {
+/**
+ * Müşterinin talebini reddeder; sipariş sürer. Kabul edilen talep elle kapatılmaz: iptal isteği sipariş iptal
+ * edilince, iade bildirimi iade kaydı girilince kendiliğinden kapanır (talep "sonuçlandı" görünüp sipariş devam
+ * etmesin).
+ */
+export async function rejectCustomerRequest(requestId: string, note: string | null | undefined, actorId: string) {
   return prisma.$transaction(async (tx) => {
     const req = await tx.customerRequest.findUnique({ where: { id: requestId } });
     if (!req) throw new OrderTransitionError("Talep bulunamadı.", 404);
-    if (req.status !== "OPEN") throw new OrderTransitionError("Talep zaten kapanmış.");
-    const updated = await tx.customerRequest.update({
-      where: { id: requestId },
-      data: { status: input.status, resolutionNote: input.note?.trim() || null, resolvedAt: new Date(), resolvedById: actorId },
+    const text = note?.trim() || null;
+    const { count } = await tx.customerRequest.updateMany({
+      where: { id: requestId, status: "OPEN" },
+      data: { status: "REJECTED", resolutionNote: text, resolvedAt: new Date(), resolvedById: actorId },
     });
+    if (count !== 1) throw new OrderTransitionError("Talep zaten kapanmış.");
     await recordOrderEvent(tx, {
       orderId: req.orderId,
       type: "REQUEST",
       actorType: "ADMIN",
       actorId,
       visibleToCustomer: false,
-      message: `${req.type === "CANCEL" ? "İptal isteği" : "İade bildirimi"} ${input.status === "RESOLVED" ? "sonuçlandı" : "reddedildi"}${input.note ? `: ${input.note}` : ""}`,
+      message: `${req.type === "CANCEL" ? "İptal isteği" : "İade bildirimi"} reddedildi${text ? `: ${text}` : ""}`,
     });
-    return updated;
+    await recordOrderEvent(tx, {
+      orderId: req.orderId,
+      type: "REQUEST",
+      actorType: "ADMIN",
+      actorId,
+      visibleToCustomer: true,
+      message:
+        req.type === "CANCEL"
+          ? "İptal isteğiniz kabul edilemedi; siparişiniz işleme devam ediyor. Sorunuz için bize ulaşabilirsiniz."
+          : "İade (cayma) bildiriminiz kabul edilemedi. Ayrıntı için bize ulaşabilirsiniz.",
+    });
+    return { ...req, status: "REJECTED" as const };
   });
 }
 

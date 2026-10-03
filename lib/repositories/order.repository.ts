@@ -315,6 +315,16 @@ export class OrderTransitionError extends Error {
  * confirmBankTransferPayment), kargolama yalnız takip numarasıyla (lib/orders/lifecycle.ts shipOrder) yapılır.
  * SHIPPED → CANCELLED: teslim edilemeyen/geri dönen kapıda ödemeli paket (ödeme alınmamış).
  */
+const STATUS_TR: Record<OrderStatus, string> = {
+  PENDING: "ödeme bekleniyor",
+  PAID: "ödendi",
+  PROCESSING: "hazırlanıyor",
+  SHIPPED: "kargoda",
+  DELIVERED: "teslim edildi",
+  CANCELLED: "iptal edildi",
+  REFUNDED: "iade edildi",
+};
+
 const MANUAL_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   PENDING: ["CANCELLED"],
   PAID: ["PROCESSING", "CANCELLED"],
@@ -360,6 +370,21 @@ export async function refundedAmountKurus(tx: Tx, orderId: string): Promise<numb
   return r._sum.amountKurus ?? 0;
 }
 
+/** Alınan ödemenin tamamı iade kaydına geçmiş mi (ödemesi olmayan sipariş için false) */
+export async function isFullyRefunded(tx: Tx, orderId: string): Promise<boolean> {
+  const paid = await paidAmountKurus(tx, orderId);
+  return paid > 0 && (await refundedAmountKurus(tx, orderId)) >= paid;
+}
+
+export async function hasOpenCancelRequest(tx: Tx, orderId: string): Promise<boolean> {
+  return (await tx.customerRequest.count({ where: { orderId, type: "CANCEL", status: "OPEN" } })) > 0;
+}
+
+export const FULLY_REFUNDED_MESSAGE =
+  "Bu siparişin ödemesinin tamamı iade edilmiş; hazırlanamaz, kargolanamaz ya da teslim edildi yapılamaz. Siparişi kapatın.";
+export const OPEN_CANCEL_REQUEST_MESSAGE =
+  "Müşteri bu siparişin iptalini istedi. Önce talebe karar verin: kabul ediyorsanız parayı iade edip iade kaydını girin (sipariş iptal edilir); etmiyorsanız talebi reddedin.";
+
 /**
  * Durum geçişi — çağıranın işlemi içinde. Sipariş satırı koşullu güncellenir (aynı anda iki geçiş olmaz),
  * stok kurala göre geri eklenir, geçmiş ve bildirim olayı aynı işlemde yazılır.
@@ -379,7 +404,20 @@ export async function changeStatusInTx(
   }
   const allowed = MANUAL_TRANSITIONS[order.status] ?? [];
   if (!allowed.includes(newStatus)) {
-    throw new OrderTransitionError(`Bu geçiş yapılamaz: ${order.status} → ${newStatus}`);
+    // Çoğunlukla eski sekmede kalmış düğme: sipariş bu arada başka duruma geçmiştir
+    throw new OrderTransitionError(
+      order.status === "CANCELLED" || order.status === "REFUNDED"
+        ? `Bu sipariş ${STATUS_TR[order.status]} ve kapandı; başka işlem yapılamaz. Sayfayı yenileyin.`
+        : `Sipariş şu an “${STATUS_TR[order.status]}” durumunda; “${STATUS_TR[newStatus]}” yapılamaz. Sayfayı yenileyin.`
+    );
+  }
+
+  // Parası iade edilmiş ya da müşterisi iptal istemiş sipariş ilerletilmez (hem iade hem devam görünmesin)
+  if (newStatus === "PROCESSING" || newStatus === "DELIVERED") {
+    if (await isFullyRefunded(tx, order.id)) throw new OrderTransitionError(FULLY_REFUNDED_MESSAGE);
+    if (newStatus === "PROCESSING" && (await hasOpenCancelRequest(tx, order.id))) {
+      throw new OrderTransitionError(OPEN_CANCEL_REQUEST_MESSAGE);
+    }
   }
 
   // Ödemesi alınmış sipariş iade kaydı olmadan iptal/iade edilemez (R-07)
@@ -421,6 +459,19 @@ export async function changeStatusInTx(
     }
   }
   if (newStatus === "REFUNDED" && opts.restock === true) await restoreStock(tx, order.id);
+
+  // Kapanan siparişte açık talep kalmaz: iptal/iade isteği bu kapanışla karşılanmış olur
+  if (newStatus === "CANCELLED" || newStatus === "REFUNDED") {
+    await tx.customerRequest.updateMany({
+      where: { orderId: order.id, status: "OPEN" },
+      data: {
+        status: "RESOLVED",
+        resolvedAt: new Date(),
+        resolvedById: actorId,
+        resolutionNote: newStatus === "CANCELLED" ? "Sipariş iptal edildi." : "Sipariş iade edildi.",
+      },
+    });
+  }
 
   // Kapıda ödeme: teslim edildiğinde para kargo görevlisine ödenmiştir
   if (newStatus === "DELIVERED" && order.paymentMethod === "CASH_ON_DELIVERY") {

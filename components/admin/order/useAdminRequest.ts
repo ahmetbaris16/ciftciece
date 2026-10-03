@@ -2,7 +2,8 @@
 
 /**
  * Admin formları için ortak istek: JSON gönderir, sunucunun anlaşılır hata mesajını gösterir, başarıda sayfa
- * verisini yeniler (router.refresh).
+ * verisini yeniler (router.refresh). 409 (sipariş bu arada başka duruma geçti, ör. başka sekmede) da sayfayı yeniler:
+ * eski sayfa güncel durumu göstersin.
  */
 
 import { useRouter } from "next/navigation";
@@ -27,6 +28,7 @@ export function useAdminRequest() {
       const data = await res.json().catch(() => null);
       if (!res.ok) {
         setError(data?.error ?? "İşlem yapılamadı.");
+        if (res.status === 409) router.refresh();
         return false;
       }
       setDone(opts.success ?? "Kaydedildi.");

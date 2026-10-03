@@ -16,10 +16,12 @@ import {
   cancelByCustomer,
   createCustomerRequest,
   recordRefund,
-  resolveCustomerRequest,
+  rejectCustomerRequest,
   setInvoice,
   shipOrder,
 } from "@/lib/orders/lifecycle";
+import { searchOrdersForAdmin } from "@/lib/admin/orders";
+import { getAdminBadges } from "@/lib/admin/dashboard";
 import { setupTestDb, stockOf } from "./helpers/db";
 import { createTestOrder, makeOverdue, orderState } from "./helpers/orders";
 
@@ -105,37 +107,33 @@ test("kargolama kuralları: ödenmemiş ve ödemesi incelemedeki sipariş kargol
   );
 });
 
-test("ödenmiş sipariş iade kaydı olmadan iptal edilemez; tam iade kaydıyla kapanır, stok geri döner", async () => {
+test("ödenmiş sipariş iade kaydı olmadan iptal edilemez; kısmi iadede sürer, tam iadeyle kendiliğinden kapanır, stok geri döner", async () => {
   const { order, variant } = await paidTransferOrder({ stock: 10, quantity: 2 });
   assert.equal(await stockOf(variant.id), 8);
   await assert.rejects(updateOrderStatus(order.id, "CANCELLED", "admin-1"), isTransition(/iade kaydını girin/));
 
-  // Kısmi iade: durum değişmez
+  // Kısmi iade: durum değişmez, sipariş hazırlanmaya devam edebilir
   await recordRefund(order.id, { amountKurus: 1000, method: "BANK_TRANSFER", reason: "Eksik ürün" }, "admin-1");
   assert.equal((await orderState(order.id)).status, "PAID");
-  // Fazlası kabul edilmez
+  // Fazlası kabul edilmez (işlem kayıt bırakmaz)
   await assert.rejects(
     recordRefund(order.id, { amountKurus: order.totalKurus, method: "BANK_TRANSFER", reason: "x x x" }, "admin-1"),
     isTransition(/aşıyor/)
   );
-  // Kalanı kapatmadan tam iade değil → kapatma reddedilir (işlem geri alınır)
-  await assert.rejects(
-    recordRefund(order.id, { amountKurus: 500, method: "BANK_TRANSFER", reason: "kısmi", close: true }, "admin-1"),
-    isTransition(/tamamı iade/)
-  );
-  assert.equal(await prisma.refund.count({ where: { orderId: order.id } }), 1, "reddedilen işlem kayıt bırakmaz");
+  assert.equal(await prisma.refund.count({ where: { orderId: order.id } }), 1);
+  await updateOrderStatus(order.id, "PROCESSING", "admin-1");
 
+  // Kalanın iadesi = tam iade → sipariş kendiliğinden kapanır ("kapat" seçeneği yok: iade edilip açık kalamaz)
   await recordRefund(
     order.id,
-    { amountKurus: order.totalKurus - 1000, method: "BANK_TRANSFER", reference: "DEKONT-1", reason: "Müşteri vazgeçti", close: true },
+    { amountKurus: order.totalKurus - 1000, method: "BANK_TRANSFER", reference: "DEKONT-1", reason: "Müşteri vazgeçti" },
     "admin-1"
   );
   assert.equal((await orderState(order.id)).status, "CANCELLED");
   assert.equal(await stockOf(variant.id), 10, "kargolanmamış sipariş iptalinde stok geri döner");
-  const statusEvent = await prisma.outboxEvent.findFirstOrThrow({
-    where: { aggregateId: order.id, topic: "order.status_changed" },
-  });
-  assert.ok((statusEvent.payload as Record<string, unknown>).refundId, "iade ile kapanış tek e-posta için işaretli");
+  const statusEvents = await prisma.outboxEvent.findMany({ where: { aggregateId: order.id, topic: "order.status_changed" } });
+  const cancelEvent = statusEvents.find((e) => (e.payload as Record<string, unknown>).to === "CANCELLED");
+  assert.ok((cancelEvent?.payload as Record<string, unknown> | undefined)?.refundId, "iade ile kapanış tek e-posta için işaretli");
   assert.equal(await prisma.outboxEvent.count({ where: { aggregateId: order.id, topic: "order.refunded" } }), 2);
 });
 
@@ -143,7 +141,7 @@ test("teslim edilmiş siparişin iadesi: REFUNDED; stok yalnız istenirse geri e
   const a = await paidTransferOrder({ stock: 5, quantity: 1 });
   await shipOrder(a.order.id, { carrier: "Yurtiçi Kargo", trackingNumber: "555555555555" }, "x");
   await updateOrderStatus(a.order.id, "DELIVERED", "x");
-  await recordRefund(a.order.id, { amountKurus: a.order.totalKurus, method: "BANK_TRANSFER", reason: "Cayma", close: true }, "x");
+  await recordRefund(a.order.id, { amountKurus: a.order.totalKurus, method: "BANK_TRANSFER", reason: "Cayma" }, "x");
   assert.equal((await orderState(a.order.id)).status, "REFUNDED");
   assert.equal(await stockOf(a.variant.id), 4, "varsayılan: geri gelen gıda stoğa eklenmez");
 
@@ -152,7 +150,7 @@ test("teslim edilmiş siparişin iadesi: REFUNDED; stok yalnız istenirse geri e
   await updateOrderStatus(b.order.id, "DELIVERED", "x");
   await recordRefund(
     b.order.id,
-    { amountKurus: b.order.totalKurus, method: "BANK_TRANSFER", reason: "Açılmamış iade", close: true, restock: true },
+    { amountKurus: b.order.totalKurus, method: "BANK_TRANSFER", reason: "Açılmamış iade", restock: true },
     "x"
   );
   assert.equal(await stockOf(b.variant.id), 5);
@@ -191,10 +189,92 @@ test("müşteri: ödenmemiş siparişi iptal eder; ödenmişte iptal isteği, te
     isTransition(/kargolanmış ya da teslim/)
   );
   assert.equal(await prisma.outboxEvent.count({ where: { aggregateId: paid.order.id, topic: "order.customer_request" } }), 1);
-  await resolveCustomerRequest(r1.request.id, { status: "RESOLVED", note: "İade edildi" }, "admin-1");
+  // Ret: sipariş sürer, müşteri sipariş sayfasında görür; ret sebebi iç not olarak kalır
+  await rejectCustomerRequest(r1.request.id, "Sipariş hazırlanmıştı", "admin-1");
   const closed = await prisma.customerRequest.findUniqueOrThrow({ where: { id: r1.request.id } });
-  assert.equal(closed.status, "RESOLVED");
-  await assert.rejects(resolveCustomerRequest(r1.request.id, { status: "REJECTED" }, "admin-1"), isTransition(/zaten kapanmış/));
+  assert.equal(closed.status, "REJECTED");
+  assert.equal(closed.resolutionNote, "Sipariş hazırlanmıştı");
+  const rejectEvents = (await events(paid.order.id)).filter((e) => e.type === "REQUEST" && e.actorType === "ADMIN");
+  assert.equal(rejectEvents.find((e) => e.visibleToCustomer)?.message.includes("kabul edilemedi"), true);
+  assert.equal(rejectEvents.find((e) => !e.visibleToCustomer)?.message.includes("Sipariş hazırlanmıştı"), true);
+  assert.equal((await orderState(paid.order.id)).status, "PAID");
+  await assert.rejects(rejectCustomerRequest(r1.request.id, null, "admin-1"), isTransition(/zaten kapanmış/));
+});
+
+test("parası tamamen iade edilmiş ama açık kalmış sipariş (eski kayıt) ilerletilemez, yalnız kapatılır", async () => {
+  const { order } = await paidTransferOrder();
+  // Bu sürümden önce "siparişi kapat" işaretlenmeden girilmiş tam iade
+  await prisma.refund.create({ data: { orderId: order.id, amountKurus: order.totalKurus, method: "OTHER", reason: "eski kayıt" } });
+  await assert.rejects(updateOrderStatus(order.id, "PROCESSING", "admin-1"), isTransition(/tamamı iade edilmiş/));
+  await assert.rejects(
+    shipOrder(order.id, { carrier: "Yurtiçi Kargo", trackingNumber: "888888888888" }, "admin-1"),
+    isTransition(/tamamı iade edilmiş/)
+  );
+  await updateOrderStatus(order.id, "CANCELLED", "admin-1");
+  assert.equal((await orderState(order.id)).status, "CANCELLED");
+
+  const shipped = await paidTransferOrder();
+  await shipOrder(shipped.order.id, { carrier: "Yurtiçi Kargo", trackingNumber: "999999999999" }, "admin-1");
+  await prisma.refund.create({ data: { orderId: shipped.order.id, amountKurus: shipped.order.totalKurus, method: "OTHER", reason: "eski kayıt" } });
+  await assert.rejects(updateOrderStatus(shipped.order.id, "DELIVERED", "admin-1"), isTransition(/tamamı iade edilmiş/));
+  await updateOrderStatus(shipped.order.id, "REFUNDED", "admin-1");
+  assert.equal((await orderState(shipped.order.id)).status, "REFUNDED");
+});
+
+test("müşteri iptal istedi: karar verilene kadar hazırlanmaz/kargolanmaz; ret → sürer; tam iade → iptal ve talep kapanır", async () => {
+  const a = await paidTransferOrder();
+  await createCustomerRequest(a.order.reference, { type: "CANCEL", message: "Vazgeçtim" });
+  await assert.rejects(updateOrderStatus(a.order.id, "PROCESSING", "admin-1"), isTransition(/iptalini istedi/));
+  await assert.rejects(
+    shipOrder(a.order.id, { carrier: "Yurtiçi Kargo", trackingNumber: "121212121212" }, "admin-1"),
+    isTransition(/iptalini istedi/)
+  );
+  // "Kargolanacak" listesinde ve sayacında değil, "Müşteri talebi"nde
+  assert.equal((await searchOrdersForAdmin({ filter: "kargolanacak" })).total, 0);
+  assert.equal((await searchOrdersForAdmin({ filter: "talep" })).total, 1);
+  assert.equal((await getAdminBadges()).toShip, 0);
+
+  const request = await prisma.customerRequest.findFirstOrThrow({ where: { orderId: a.order.id } });
+  await rejectCustomerRequest(request.id, "Kargoya hazır", "admin-1");
+  await updateOrderStatus(a.order.id, "PROCESSING", "admin-1");
+  assert.equal((await searchOrdersForAdmin({ filter: "kargolanacak" })).total, 1);
+
+  const b = await paidTransferOrder({ stock: 5, quantity: 1 });
+  await createCustomerRequest(b.order.reference, { type: "CANCEL", message: "Yanlış adres" });
+  await recordRefund(b.order.id, { amountKurus: b.order.totalKurus, method: "BANK_TRANSFER", reason: "İptal kabul" }, "admin-1");
+  assert.equal((await orderState(b.order.id)).status, "CANCELLED");
+  assert.equal(await stockOf(b.variant.id), 5);
+  const closedRequest = await prisma.customerRequest.findFirstOrThrow({ where: { orderId: b.order.id } });
+  assert.equal(closedRequest.status, "RESOLVED");
+  assert.equal(closedRequest.resolutionNote, "Sipariş iptal edildi.");
+  // Kapanan sipariş eski sekmedeki düğmeyle de ilerletilemez; mesaj anlaşılır
+  await assert.rejects(updateOrderStatus(b.order.id, "PROCESSING", "admin-1"), isTransition(/iptal edildi ve kapandı/));
+  await assert.rejects(
+    shipOrder(b.order.id, { carrier: "Yurtiçi Kargo", trackingNumber: "131313131313" }, "admin-1"),
+    isTransition(/kapandı/)
+  );
+
+  // Kapıda ödeme (ödeme alınmamış): iptal isteği "İptal et" ile kabul edilir, talep kendiliğinden kapanır
+  const cod = await createTestOrder({ method: "CASH_ON_DELIVERY", dueInMinutes: null });
+  await createCustomerRequest(cod.order.reference, { type: "CANCEL", message: "Gerek kalmadı" });
+  await updateOrderStatus(cod.order.id, "CANCELLED", "admin-1");
+  assert.equal((await prisma.customerRequest.findFirstOrThrow({ where: { orderId: cod.order.id } })).status, "RESOLVED");
+});
+
+test("iade (cayma) bildirimi iade kaydıyla kapanır; kısmi iadede teslim edilmiş sipariş sürer, kalanıyla iade edildi olur", async () => {
+  const { order } = await paidTransferOrder();
+  await shipOrder(order.id, { carrier: "Yurtiçi Kargo", trackingNumber: "343434343434" }, "admin-1");
+  await updateOrderStatus(order.id, "DELIVERED", "admin-1");
+  await createCustomerRequest(order.reference, { type: "RETURN", message: "Bir kavanoz kırık geldi" });
+
+  await recordRefund(order.id, { amountKurus: 1000, method: "BANK_TRANSFER", reason: "Kırık ürün bedeli" }, "admin-1");
+  assert.equal((await orderState(order.id)).status, "DELIVERED");
+  const request = await prisma.customerRequest.findFirstOrThrow({ where: { orderId: order.id } });
+  assert.equal(request.status, "RESOLVED");
+  assert.equal(request.resolutionNote, "İade kaydı girildi.");
+
+  await recordRefund(order.id, { amountKurus: order.totalKurus - 1000, method: "BANK_TRANSFER", reason: "Cayma" }, "admin-1");
+  assert.equal((await orderState(order.id)).status, "REFUNDED");
 });
 
 test("fatura numarası müşteriye görünen geçmişe yazılır", async () => {

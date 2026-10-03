@@ -93,6 +93,11 @@
   color: #15180f;
 }
 
+a.primary {
+  display: inline-block;
+  text-decoration: none;
+}
+
 .secondary {
   border: 1px solid rgba(196, 214, 142, 0.5);
   background: transparent;

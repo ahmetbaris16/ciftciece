@@ -27,7 +27,8 @@ export function parseFilter(v: string | undefined): OrderFilter {
 function whereFor(filter: OrderFilter): Prisma.OrderWhereInput {
   switch (filter) {
     case "kargolanacak":
-      return { status: { in: ["PAID", "PROCESSING"] }, needsAttention: false };
+      // Müşterinin iptal isteği karar bekleyen sipariş kargolanmaz: "Müşteri talebi"nde görünür
+      return { status: { in: ["PAID", "PROCESSING"] }, needsAttention: false, requests: { none: { type: "CANCEL", status: "OPEN" } } };
     case "havale":
       return { status: "PENDING", paymentMethod: "BANK_TRANSFER" };
     case "dikkat":

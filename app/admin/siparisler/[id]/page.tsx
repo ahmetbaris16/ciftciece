@@ -74,9 +74,25 @@ const dateTimeTr = (d: Date) =>
   new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Istanbul" }).format(d);
 const dateTr = (d: Date) => new Intl.DateTimeFormat("tr-TR", { dateStyle: "long", timeZone: "Europe/Istanbul" }).format(d);
 
-function nextStep(order: Order, paidKurus: number): string {
+interface StepContext {
+  paidKurus: number;
+  refundedKurus: number;
+  openCancel: boolean;
+}
+
+function nextStep(order: Order, c: StepContext): string {
   if (order.needsAttention) return "Önce ödeme uyarısını çözün: banka panelinden kontrol edip gerekirse “bankadan sorgula”yı kullanın.";
   const cod = order.paymentMethod === "CASH_ON_DELIVERY";
+  const closed = order.status === "CANCELLED" || order.status === "REFUNDED";
+  const fullyRefunded = c.paidKurus > 0 && c.refundedKurus >= c.paidKurus;
+  if (!closed && fullyRefunded) {
+    return "Ödemenin tamamı iade edilmiş ama sipariş açık kalmış (eski kayıt). Aşağıdaki düğmeyle siparişi kapatın; hazırlanamaz ve kargolanamaz.";
+  }
+  if (!closed && c.openCancel) {
+    return c.paidKurus > 0
+      ? "Müşteri iptal istedi; sipariş karar verilene kadar hazırlanamaz ve kargolanamaz. Kabul ediyorsanız parayı iade edip aşağıdaki İade bölümünden tam iade kaydı girin: sipariş iptal edilir. Kabul etmiyorsanız yukarıdaki talebi reddedin; sipariş devam eder."
+      : "Müşteri iptal istedi; sipariş karar verilene kadar kargolanamaz. Kabul ediyorsanız “İptal et”e basın. Kabul etmiyorsanız yukarıdaki talebi reddedin; sipariş devam eder.";
+  }
   switch (order.status) {
     case "PENDING":
       return order.paymentMethod === "BANK_TRANSFER"
@@ -93,13 +109,15 @@ function nextStep(order: Order, paidKurus: number): string {
         ? "Kargoda. Kargo teslim edip ödemeyi tahsil edince “Teslim edildi”ye basın."
         : "Kargoda. Teslim edilince “Teslim edildi”ye basın (müşteriye e-posta gider).";
     case "DELIVERED":
-      return paidKurus > 0
+      return c.paidKurus > 0
         ? "Teslim edildi. Müşteri teslimden itibaren 14 gün içinde cayma hakkını kullanabilir; iade gelirse aşağıdan iade kaydı girin."
         : "Teslim edildi.";
     case "CANCELLED":
-      return "Sipariş iptal edildi.";
+      return c.refundedKurus > 0
+        ? `Sipariş iptal edildi; ${formatPrice(c.refundedKurus)} iade edildi. Sipariş kapandı, başka işlem gerekmez.`
+        : "Sipariş iptal edildi. Sipariş kapandı, başka işlem gerekmez.";
     case "REFUNDED":
-      return "Sipariş iade edildi ve kapandı.";
+      return `Sipariş iade edildi ve kapandı (${formatPrice(c.refundedKurus)} iade). Başka işlem gerekmez.`;
     default:
       return "";
   }
@@ -120,10 +138,16 @@ export default async function AdminSiparisDetay({ params }: Props) {
   const recipientPays = addr?.shippingMode === "recipient";
   const status = STATUS[order.status] ?? { label: order.status, color: "#999" };
   const shipped = order.status === "SHIPPED" || order.status === "DELIVERED";
+  const closed = order.status === "CANCELLED" || order.status === "REFUNDED";
   const remaining = Math.max(0, d.paidKurus - d.refundedKurus);
+  const fullyRefunded = d.paidKurus > 0 && remaining === 0;
+  const partialRefund = !closed && d.refundedKurus > 0 && !fullyRefunded;
   const testPaid = d.attempts.find((a) => a.status === "SUCCEEDED" && isTestProvider(a.provider))?.provider ?? null;
-  const canShip = !order.needsAttention && (order.status === "PAID" || order.status === "PROCESSING");
   const openRequests = d.requests.filter((r) => r.status === "OPEN");
+  const openCancel = openRequests.some((r) => r.type === "CANCEL");
+  // Parası iade edilmiş ya da müşterisi iptal istemiş sipariş kargolanmaz (sunucu da reddeder)
+  const canShip =
+    !order.needsAttention && (order.status === "PAID" || order.status === "PROCESSING") && !fullyRefunded && !openCancel;
   const failedEmails = d.emails.filter((e) => e.status === "FAILED").length;
   const billing = order.billingInfo;
   // Akbank bilgileri girilene kadar kart ödemesi demo bankadır (lib/payment/provider.ts)
@@ -149,6 +173,11 @@ export default async function AdminSiparisDetay({ params }: Props) {
             <span className={s.status} style={{ color: status.color, background: `${status.color}22` }}>
               {status.label}
             </span>
+            {partialRefund && (
+              <span className={s.status} style={{ color: "#fb923c", background: "#fb923c22" }}>
+                Kısmi iade {formatPrice(d.refundedKurus)}
+              </span>
+            )}
             <a href={`/siparis/${order.reference}`} target="_blank" rel="noopener noreferrer">
               Müşterinin gördüğü sayfa
             </a>
@@ -192,7 +221,7 @@ export default async function AdminSiparisDetay({ params }: Props) {
                 ? "Bu sipariş, sanal POS bağlanmadan önce banka ödeme sayfasının demo kopyasıyla “ödendi”. "
                 : "Bu sipariş bankanın test ortamında ödendi. "}
               Gerçek sipariş gibi kargolamayın. Deneme bittiyse aşağıdaki iade formundan “Diğer” yöntemiyle, sebep “
-              {testPaid === "demo" ? "demo ödeme" : "test ödemesi"}” yazıp “siparişi kapat” seçerek kapatın.
+              {testPaid === "demo" ? "demo ödeme" : "test ödemesi"}” yazıp tam iade kaydı girin; sipariş kendiliğinden kapanır.
             </p>
           </div>
         )}
@@ -210,18 +239,22 @@ export default async function AdminSiparisDetay({ params }: Props) {
             </p>
             <p className={s.muted} style={{ margin: "0.5rem 0 0.75rem" }}>
               {r.type === "CANCEL"
-                ? "Kabul ederseniz parayı iade edip aşağıdan iade kaydını “siparişi kapat” ile girin, sonra talebi “Sonuçlandı” yapın."
-                : "Ürün size geri ulaşınca (en geç 14 gün içinde) parayı iade edin, iade kaydını girin ve talebi “Sonuçlandı” yapın."}
+                ? d.paidKurus > 0
+                  ? "Kabul: parayı iade edip İade bölümünde tam iade kaydını girin; sipariş iptal edilir, talep kendiliğinden kapanır. Ret: sipariş hazırlanmaya devam eder."
+                  : "Kabul: “İptal et”e basın; talep kendiliğinden kapanır. Ret: sipariş devam eder."
+                : d.paidKurus > 0
+                  ? "Kabul: ürün size geri ulaşınca (en geç 14 gün içinde) parayı iade edip İade bölümünde iade kaydını girin; talep kendiliğinden kapanır, tam iadede sipariş “iade edildi” olur. Ret: iade yapılmaz."
+                  : "Kabul: gönderi size geri dönünce “İptal et (gönderi geri döndü)”ye basın; talep kendiliğinden kapanır. Ret: iade yapılmaz."}
             </p>
-            <RequestActions requestId={r.id} />
+            <RequestActions requestId={r.id} type={r.type} acceptHref={d.paidKurus > 0 ? "#iade" : "#siradaki-adim"} />
           </div>
         ))}
 
         <div className={s.grid}>
           <div className={s.main}>
-            <section className={`${s.card} ${s.strong}`}>
+            <section id="siradaki-adim" className={`${s.card} ${s.strong}`}>
               <h2 className={s.h2}>Sıradaki adım</h2>
-              <p className={s.next}>{nextStep(order, d.paidKurus)}</p>
+              <p className={s.next}>{nextStep(order, { paidKurus: d.paidKurus, refundedKurus: d.refundedKurus, openCancel })}</p>
               {recipientPays && (canShip || order.status === "SHIPPED") && (
                 <p className={s.next} style={{ color: "#e8c07a", fontWeight: 600 }}>
                   Kargo ALICI ÖDEMELİ: gönderiyi Yurtiçi Kargo&apos;da “ücreti alıcı öder” seçeneğiyle açın.
@@ -233,6 +266,7 @@ export default async function AdminSiparisDetay({ params }: Props) {
                 method={order.paymentMethod}
                 paidKurus={d.paidKurus}
                 refundedKurus={d.refundedKurus}
+                openCancelRequest={openCancel}
               />
               {canShip && (
                 <>
@@ -271,7 +305,7 @@ export default async function AdminSiparisDetay({ params }: Props) {
                     </li>
                   ))}
                 </ul>
-                {order.status === "SHIPPED" && !order.needsAttention && (
+                {order.status === "SHIPPED" && !order.needsAttention && !fullyRefunded && (
                   <details className={s.details} style={{ marginTop: "0.75rem" }}>
                     <summary>Ek koli ekle (ikinci takip numarası)</summary>
                     <ShipForm orderId={order.id} additional />
@@ -325,7 +359,7 @@ export default async function AdminSiparisDetay({ params }: Props) {
             </section>
 
             {(d.paidKurus > 0 || d.refunds.length > 0) && (
-              <section className={s.card}>
+              <section id="iade" className={s.card}>
                 <h2 className={s.h2}>İade</h2>
                 {d.refunds.length > 0 && (
                   <ul className={s.list} style={{ marginBottom: "0.75rem" }}>

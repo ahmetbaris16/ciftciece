@@ -1,7 +1,7 @@
 /**
- * POST /api/admin/orders/[id]/refund { amountKurus, method, reference?, reason, close?, restock? }
+ * POST /api/admin/orders/[id]/refund { amountKurus, method, reference?, reason, restock? }
  * İade KAYDI (R-07): para bankadan/havaleyle iade edildikten sonra girilir; sitede para hareketi yapılmaz.
- * close: tam iadeyle sipariş kapanır (kargolanmamış → iptal, kargolanmış → iade edildi).
+ * Alınan ödemenin tamamı iade edilince sipariş kendiliğinden kapanır (kargolanmamış → iptal, kargolanmış → iade edildi).
  */
 
 import type { NextRequest } from "next/server";
@@ -16,7 +16,6 @@ const Schema = z.object({
   method: z.enum(["CARD_PROVIDER", "BANK_TRANSFER", "CASH", "OTHER"]),
   reference: z.string().trim().max(120).optional().nullable(),
   reason: z.string().trim().min(3, { error: "İade sebebini yazın." }).max(2000),
-  close: z.boolean().optional(),
   restock: z.boolean().optional(),
 });
 
@@ -29,7 +28,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       action: "order.refund_recorded",
       entity: "order",
       entityId: id,
-      details: { refundId: refund.id, amountKurus: refund.amountKurus, method: refund.method, close: !!input.close },
+      details: { refundId: refund.id, amountKurus: refund.amountKurus, method: refund.method },
     });
     scheduleNotifications();
     return { refundId: refund.id };

@@ -27,7 +27,8 @@ test("filtreler: kargolanacak, havale bekleyen, dikkat, müşteri talebi", async
   await createCustomerRequest(paid.reference, { type: "CANCEL", message: "Yanlışlıkla iki kez sipariş verdim." });
 
   assert.deepEqual(refs((await searchOrdersForAdmin({ filter: "havale" })).rows), [transfer.reference]);
-  assert.deepEqual(refs((await searchOrdersForAdmin({ filter: "kargolanacak" })).rows), refs([paid, cod]));
+  // İptal isteği karar bekleyen ödenmiş sipariş kargolanacaklarda değil, "Müşteri talebi"nde
+  assert.deepEqual(refs((await searchOrdersForAdmin({ filter: "kargolanacak" })).rows), [cod.reference]);
   assert.deepEqual(refs((await searchOrdersForAdmin({ filter: "dikkat" })).rows), [flagged.reference]);
   const talep = await searchOrdersForAdmin({ filter: "talep" });
   assert.deepEqual(refs(talep.rows), [paid.reference]);
@@ -36,7 +37,7 @@ test("filtreler: kargolanacak, havale bekleyen, dikkat, müşteri talebi", async
 
   const b = await getAdminBadges();
   assert.equal(b.pendingTransfers, 1);
-  assert.equal(b.toShip, 2);
+  assert.equal(b.toShip, 1);
   assert.equal(b.attention, 1);
   assert.equal(b.openRequests, 1);
 

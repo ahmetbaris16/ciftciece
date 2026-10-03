@@ -5,7 +5,8 @@
  * - Havale bekleyen siparişte "Havale ödemesi alındı" = PENDING → PAID (ödeme kaydı da tamamlanır).
  * - Kargoya verme takip numarasıyla ayrı formdan (ShipForm) yapılır.
  * - Ödemesi alınmış sipariş iade kaydı girilmeden iptal/iade yapılamaz (R-07): bu düğmeler yalnız ödeme yoksa ya
- *   da tamamı iade kaydına geçmişse görünür; normal yol iade formundaki "siparişi kapat"tır.
+ *   da tamamı iade kaydına geçmişse görünür; normal yol iade kaydıdır (tam iade siparişi kendiliğinden kapatır).
+ * - Parası tamamen iade edilmiş ya da müşterisi iptal istemiş sipariş ilerletilmez (hazırlanıyor/teslim edildi yok).
  */
 
 import { useRouter } from "next/navigation";
@@ -59,26 +60,32 @@ export default function OrderActions({
   method,
   paidKurus,
   refundedKurus,
+  openCancelRequest,
 }: {
   orderId: string;
   status: Status;
   method: Method;
   paidKurus: number;
   refundedKurus: number;
+  openCancelRequest: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<Status | null>(null);
   const [error, setError] = useState<string | null>(null);
   const settled = paidKurus === 0 || refundedKurus >= paidKurus;
+  const fullyRefunded = paidKurus > 0 && refundedKurus >= paidKurus;
   const options = NEXT[status].filter((to) => {
     // Kartla ödenmemiş sipariş elle "ödendi" yapılmaz: kart ödemesi yalnız banka onayıyla işlenir
     if (to === "PAID") return status === "PENDING" && method === "BANK_TRANSFER";
+    if (to === "PROCESSING") return !fullyRefunded && !openCancelRequest;
+    if (to === "DELIVERED") return !fullyRefunded;
     if (to === "CANCELLED") return settled;
     if (to === "REFUNDED") return paidKurus > 0 && settled;
     return true;
   });
 
-  if (options.length === 0) return null;
+  // Hata, düğmeler kalktıktan sonra da görünsün (409'da sayfa yenilenir; sipariş bu arada kapanmış olabilir)
+  if (options.length === 0 && !error) return null;
 
   const go = async (to: Status) => {
     const question = confirmText(to, status, method);
@@ -94,6 +101,7 @@ export default function OrderActions({
       const data = await res.json().catch(() => null);
       if (!res.ok) {
         setError(data?.error ?? "Güncellenemedi.");
+        if (res.status === 409) router.refresh();
         return;
       }
       router.refresh();

@@ -50,7 +50,9 @@ export async function getAdminBadges(): Promise<AdminBadges> {
   const [attention, pendingTransfers, toShip, openRequests, newMessages, failedEmails, pendingReviews] = await Promise.all([
     prisma.order.count({ where: { needsAttention: true } }),
     prisma.order.count({ where: { status: "PENDING", paymentMethod: "BANK_TRANSFER" } }),
-    prisma.order.count({ where: { status: { in: ["PAID", "PROCESSING"] }, needsAttention: false } }),
+    prisma.order.count({
+      where: { status: { in: ["PAID", "PROCESSING"] }, needsAttention: false, requests: { none: { type: "CANCEL", status: "OPEN" } } },
+    }),
     prisma.customerRequest.count({ where: { status: "OPEN" } }),
     prisma.contactMessage.count({ where: { status: "NEW" } }),
     prisma.emailMessage.count({ where: { status: "FAILED" } }),

@@ -157,8 +157,9 @@ yönetici oturumunda** çalışır: müşteriler bu sırada kartı “yakında�
    döndürür.
 5. “Siparişiniz alındı” sayfası gelir. Admin → **Siparişler**: sipariş **Ödendi** olarak düşer, üstünde “Demo
    ödeme: gerçek para alınmadı” uyarısı ve ödeme olayları (kod gönderildi / yanlış kod / onay) görünür.
-6. Sunumdan sonra demo siparişini kapatın: sipariş → İade formu → yöntem “Diğer”, sebep “demo ödeme”, “siparişi
-   kapat” işaretli → **İadeyi kaydet** (stok geri gelir; demo ödemeler ciroya sayılmaz).
+6. Sunumdan sonra demo siparişini kapatın: sipariş → İade formu → tutarın tamamı, yöntem “Diğer”, sebep “demo
+   ödeme” → **İadeyi kaydet**. Tam iade siparişi kendiliğinden “iptal edildi” yapar (stok geri gelir; demo ödemeler
+   ciroya sayılmaz).
 
 Akbank bilgileri hPanel'e girildiği anda demo kendiliğinden kapanır, kart bankanın gerçek (önce test) sayfasına
 gider. Sunumu gerçek alan adında, `https://` (SSL açık) adresle yapın.

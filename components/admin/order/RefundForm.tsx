@@ -2,8 +2,8 @@
 
 /**
  * İade kaydı (R-07). Site para göndermez: para bankadan (kart iadesi) ya da havaleyle iade edildikten SONRA
- * buraya kaydedilir. Kayıt silinemez; müşteriye iade e-postası gider. Tam iadede sipariş kapatılabilir
- * (kargolanmamış → iptal, kargolanmış → iade edildi).
+ * buraya kaydedilir. Kayıt silinemez; müşteriye iade e-postası gider. Tam iadede sipariş kendiliğinden kapanır
+ * (kargolanmamış → iptal, kargolanmış → iade edildi); kısmi iadede sipariş sürer.
  */
 
 import { useState } from "react";
@@ -42,7 +42,6 @@ export default function RefundForm({
   const [method, setMethod] = useState<Method>(paymentMethod === "CARD" ? "CARD_PROVIDER" : "BANK_TRANSFER");
   const [reference, setReference] = useState("");
   const [reason, setReason] = useState("");
-  const [close, setClose] = useState(true);
   const [restock, setRestock] = useState(false);
 
   const kurus = parseTlInput(amount);
@@ -62,11 +61,12 @@ export default function RefundForm({
       setError("İade sebebini yazın.");
       return;
     }
-    const closes = full && close;
     const question =
       `${formatPrice(kurus)} iade kaydı girilecek.\n\n` +
       "Parayı bankadan ya da havaleyle iade ettiniz mi? Bu kayıt silinemez; müşteriye iade e-postası gider." +
-      (closes ? `\n\nSipariş ${shipped ? "“iade edildi”" : "“iptal edildi”"} olarak kapanacak.` : "");
+      (full
+        ? `\n\nTam iade: sipariş ${shipped ? "“iade edildi”" : "“iptal edildi”"} olarak kapanacak, başka işlem yapılamayacak.`
+        : "\n\nKısmi iade: sipariş devam edecek.");
     if (!window.confirm(question)) return;
     const ok = await send(
       `/api/admin/orders/${orderId}/refund`,
@@ -75,8 +75,7 @@ export default function RefundForm({
         method,
         reference: reference.trim() || null,
         reason: reason.trim(),
-        close: closes,
-        restock: shipped ? restock : undefined,
+        restock: shipped && full ? restock : undefined,
       },
       { success: "İade kaydedildi." }
     );
@@ -123,14 +122,14 @@ export default function RefundForm({
         />
       </label>
       {full ? (
-        <label className={f.check}>
-          <input type="checkbox" checked={close} onChange={(e) => setClose(e.target.checked)} />
-          <span>Siparişi kapat ({shipped ? "“iade edildi”" : "“iptal edildi”; ayrılan stok geri eklenir"})</span>
-        </label>
+        <p className={f.hint}>
+          Tam iade: sipariş {shipped ? "“iade edildi”" : "“iptal edildi” (ayrılan stok geri eklenir)"} olarak kapanır; sonra
+          hazırlama, kargo ya da teslim işlemi yapılamaz.
+        </p>
       ) : (
-        <p className={f.hint}>Kısmi iade: sipariş açık kalır.</p>
+        <p className={f.hint}>Kısmi iade: sipariş devam eder (ör. eksik/hasarlı ürün bedeli).</p>
       )}
-      {shipped && full && close && (
+      {shipped && full && (
         <label className={f.check}>
           <input type="checkbox" checked={restock} onChange={(e) => setRestock(e.target.checked)} />
           <span>Geri gelen ürünler satılabilir durumda — stoğa ekle</span>
