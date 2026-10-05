@@ -22,6 +22,16 @@ const NAV_LINKS = [
   { label: "Tüm Ürünler", href: "/urunler" },
 ];
 
+/**
+ * Müşteri hizmetleri sayfaları. Geniş ekranda (≥1280 px) kategori çubuğunun sağında; daha dar masaüstü/tablette
+ * kategorilere yer kalsın diye üst şeritte; telefonda menünün sonunda.
+ */
+const PAGE_LINKS = [
+  { label: "Sipariş Takibi", href: "/siparis-takip" },
+  { label: "Mağazamız", href: "/magaza" },
+  { label: "İletişim", href: "/iletisim" },
+];
+
 export default function Header() {
   const { cart, isHydrated } = useCart();
   const cartCount = isHydrated ? cart.itemCount : 0;
@@ -92,6 +102,13 @@ export default function Header() {
             >
               {STORE.contact.phoneFormatted}
             </a>
+            <nav className={styles.utilityLinks} aria-label="Müşteri hizmetleri">
+              {PAGE_LINKS.map((link) => (
+                <Link key={link.href} href={link.href} className={styles.utilityLink}>
+                  {link.label}
+                </Link>
+              ))}
+            </nav>
           </div>
         </div>
 
@@ -165,11 +182,20 @@ export default function Header() {
         {/* ---- DESKTOP: Category Nav ---- */}
         <nav
           className={`${styles.categoryNav} desktop-only`}
-          aria-label="Kategori navigasyonu"
+          aria-label="Ana menü"
         >
           <div className={styles.categoryInner}>
             <ul className={styles.categoryList} role="list">
               {NAV_LINKS.map((link) => (
+                <li key={link.href}>
+                  <Link href={link.href} className={styles.categoryLink}>
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <ul className={styles.pageList} role="list">
+              {PAGE_LINKS.map((link) => (
                 <li key={link.href}>
                   <Link href={link.href} className={styles.categoryLink}>
                     {link.label}
@@ -239,15 +265,17 @@ export default function Header() {
                 </li>
               </>
             )}
-            <li className={styles.mobileNavItem}>
-              <Link
-                href="/magaza"
-                className={styles.mobileNavLink}
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Mağazamız
-              </Link>
-            </li>
+            {PAGE_LINKS.map((link) => (
+              <li key={link.href} className={styles.mobileNavItem}>
+                <Link
+                  href={link.href}
+                  className={styles.mobileNavLink}
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  {link.label}
+                </Link>
+              </li>
+            ))}
           </ul>
         </nav>
         <div className={styles.mobileNavFooter}>
