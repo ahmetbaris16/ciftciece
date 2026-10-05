@@ -14,6 +14,7 @@ import { createAuditLog } from "@/lib/security/audit";
 import { getProductsForAdmin } from "@/lib/repositories";
 import { z } from "zod";
 import { revalidateStorefront } from "@/lib/cache/revalidate";
+import { firstFreeSlug, slugify } from "@/lib/catalog/slug";
 
 const USE_DB = !!process.env.DATABASE_URL;
 
@@ -36,7 +37,8 @@ export async function GET() {
 
 const CreateProductSchema = z.object({
   name: z.string().min(1).max(200),
-  slug: z.string().min(1).max(200).regex(/^[a-z0-9-]+$/, "Slug sadece küçük harf, rakam ve tire içerebilir"),
+  // Boşsa ürün adından üretilir (panel göndermez)
+  slug: z.string().min(1).max(200).regex(/^[a-z0-9-]+$/, "Slug sadece küçük harf, rakam ve tire içerebilir").optional(),
   description: z.string().max(2000).optional(),
   categoryId: z.string().min(1),
   isPublished: z.boolean().default(false),
@@ -79,16 +81,15 @@ export async function POST(request: NextRequest) {
   const data = parsed.data;
 
   try {
-    // Slug benzersizliği kontrolü
-    const existing = await prisma.product.findUnique({ where: { slug: data.slug } });
-    if (existing) {
-      return NextResponse.json({ error: "Bu slug zaten kullanılıyor" }, { status: 409 });
-    }
+    // Ürün adresi: verilmediyse addan; aynısı varsa sonuna -2, -3…
+    const base = data.slug ?? slugify(data.name);
+    const taken = await prisma.product.findMany({ where: { slug: { startsWith: base } }, select: { slug: true } });
+    const slug = firstFreeSlug(base, taken.map((p) => p.slug));
 
     const product = await prisma.product.create({
       data: {
         name: data.name,
-        slug: data.slug,
+        slug,
         description: data.description,
         categoryId: data.categoryId,
         isPublished: data.isPublished,

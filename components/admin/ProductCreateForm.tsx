@@ -17,7 +17,6 @@ interface Props {
 
 interface VariantInput {
   name: string;
-  sku: string;
   priceTL: string;
   stockQuantity: number;
 }
@@ -27,7 +26,6 @@ export default function ProductCreateForm({ categories }: Props) {
   const categoryOptions = categories.filter((c) => c.isPublished);
   const router = useRouter();
   const [name, setName] = useState("");
-  const [slug, setSlug] = useState("");
   const [description, setDescription] = useState("");
   const [categoryId, setCategoryId] = useState(categoryOptions[0]?.id ?? "");
   const [isPublished, setIsPublished] = useState(false);
@@ -38,30 +36,11 @@ export default function ProductCreateForm({ categories }: Props) {
   const [message, setMessage] = useState("");
 
   const [variants, setVariants] = useState<VariantInput[]>([
-    { name: "", sku: "", priceTL: "", stockQuantity: 0 },
+    { name: "", priceTL: "", stockQuantity: 0 },
   ]);
 
-  // İsimden otomatik slug üret
-  function generateSlug(text: string) {
-    return text
-      .toLowerCase()
-      .replace(/ğ/g, "g").replace(/ü/g, "u").replace(/ş/g, "s")
-      .replace(/ı/g, "i").replace(/ö/g, "o").replace(/ç/g, "c")
-      .replace(/[^a-z0-9\s-]/g, "")
-      .replace(/\s+/g, "-")
-      .replace(/-+/g, "-")
-      .trim();
-  }
-
-  function handleNameChange(value: string) {
-    setName(value);
-    if (!slug || slug === generateSlug(name)) {
-      setSlug(generateSlug(value));
-    }
-  }
-
   function addVariant() {
-    setVariants((prev) => [...prev, { name: "", sku: "", priceTL: "", stockQuantity: 0 }]);
+    setVariants((prev) => [...prev, { name: "", priceTL: "", stockQuantity: 0 }]);
   }
 
   function removeVariant(index: number) {
@@ -93,7 +72,6 @@ export default function ProductCreateForm({ categories }: Props) {
     }
     const apiVariants = named.map((v, i) => ({
       name: v.name,
-      sku: v.sku || undefined,
       priceKurus: decimalToKurus(v.priceTL || "0")!,
       isAvailable: true,
       sortOrder: i,
@@ -111,7 +89,7 @@ export default function ProductCreateForm({ categories }: Props) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name, slug, description: description || undefined,
+          name, description: description || undefined,
           categoryId, isPublished, isFeatured, sortOrder: 0,
           vatRateBps: vat.bps,
           variants: apiVariants,
@@ -148,15 +126,9 @@ export default function ProductCreateForm({ categories }: Props) {
 
       <div style={styles.section}>
         <h2 style={{ ...styles.sectionTitle, marginBottom: "1rem" }}>Ürün Bilgileri</h2>
-        <div style={styles.grid2}>
-          <div style={styles.field}>
-            <label style={styles.label}>Ürün Adı *</label>
-            <input style={styles.input} value={name} onChange={(e) => handleNameChange(e.target.value)} required placeholder="Naturel Sızma Zeytinyağı" />
-          </div>
-          <div style={styles.field}>
-            <label style={styles.label}>Slug (URL) *</label>
-            <input style={styles.input} value={slug} onChange={(e) => setSlug(e.target.value)} required placeholder="naturel-sizma-zeytinyagi" />
-          </div>
+        <div style={styles.field}>
+          <label style={styles.label}>Ürün Adı *</label>
+          <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} required placeholder="Naturel Sızma Zeytinyağı" />
         </div>
 
         <div style={styles.field}>
@@ -178,7 +150,7 @@ export default function ProductCreateForm({ categories }: Props) {
               <input type="checkbox" checked={isPublished} onChange={(e) => setIsPublished(e.target.checked)} /> Yayında
             </label>
             <label style={styles.checkbox}>
-              <input type="checkbox" checked={isFeatured} onChange={(e) => setIsFeatured(e.target.checked)} /> Öne Çıkan
+              <input type="checkbox" checked={isFeatured} onChange={(e) => setIsFeatured(e.target.checked)} /> Ana sayfada göster
             </label>
           </div>
         </div>
@@ -207,15 +179,11 @@ export default function ProductCreateForm({ categories }: Props) {
                 <label style={styles.labelSmall}>Stok</label>
                 <input style={styles.input} type="number" value={v.stockQuantity} onChange={(e) => updateVariant(i, "stockQuantity", parseInt(e.target.value || "0"))} />
               </div>
-              <div style={{ display: "flex", alignItems: "flex-end", gap: "0.5rem", minWidth: 0 }}>
-                <div style={{ ...styles.field, flex: 1 }}>
-                  <label style={styles.labelSmall}>SKU</label>
-                  <input style={styles.input} value={v.sku} onChange={(e) => updateVariant(i, "sku", e.target.value)} />
+              {variants.length > 1 && (
+                <div style={{ display: "flex", alignItems: "flex-end", minWidth: 0 }}>
+                  <button type="button" onClick={() => removeVariant(i)} style={styles.removeBtn} aria-label="Varyantı kaldır">✕</button>
                 </div>
-                {variants.length > 1 && (
-                  <button type="button" onClick={() => removeVariant(i)} style={styles.removeBtn}>✕</button>
-                )}
-              </div>
+              )}
             </div>
           </div>
         ))}

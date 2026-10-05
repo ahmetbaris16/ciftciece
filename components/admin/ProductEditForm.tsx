@@ -21,7 +21,6 @@ interface Props {
 export default function ProductEditForm({ product, categories }: Props) {
   const router = useRouter();
   const [name, setName] = useState(product.name);
-  const [slug, setSlug] = useState(product.slug);
   const [description, setDescription] = useState(product.description ?? "");
   const [categoryId, setCategoryId] = useState(product.categoryId);
   const [isPublished, setIsPublished] = useState(product.isPublished);
@@ -73,7 +72,7 @@ export default function ProductEditForm({ product, categories }: Props) {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name, slug, description: description || null,
+          name, description: description || null,
           categoryId, isPublished, isFeatured,
           vatRateBps: vat.bps,
         }),
@@ -154,15 +153,9 @@ export default function ProductEditForm({ product, categories }: Props) {
       <div style={styles.section}>
         <h2 style={styles.sectionTitle}>Ürün Bilgileri</h2>
 
-        <div style={styles.grid2}>
-          <div style={styles.field}>
-            <label style={styles.label}>Ürün Adı</label>
-            <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} required />
-          </div>
-          <div style={styles.field}>
-            <label style={styles.label}>Slug (URL)</label>
-            <input style={styles.input} value={slug} onChange={(e) => setSlug(e.target.value)} required />
-          </div>
+        <div style={styles.field}>
+          <label style={styles.label}>Ürün Adı</label>
+          <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} required />
         </div>
 
         <div style={styles.field}>
@@ -191,7 +184,7 @@ export default function ProductEditForm({ product, categories }: Props) {
             </label>
             <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.875rem", color: "rgba(232,228,217,0.7)", cursor: "pointer" }}>
               <input type="checkbox" checked={isFeatured} onChange={(e) => setIsFeatured(e.target.checked)} />
-              Öne Çıkan
+              Ana sayfada göster
             </label>
           </div>
         </div>
@@ -221,10 +214,6 @@ export default function ProductEditForm({ product, categories }: Props) {
                 <label style={styles.labelSmall}>Stok</label>
                 <input style={styles.input} type="number" value={v.stockQuantity}
                   onChange={(e) => updateVariant(i, "stockQuantity", parseInt(e.target.value || "0"))} />
-              </div>
-              <div style={styles.field}>
-                <label style={styles.labelSmall}>SKU</label>
-                <input style={styles.input} value={v.sku} onChange={(e) => updateVariant(i, "sku", e.target.value)} />
               </div>
             </div>
           </div>

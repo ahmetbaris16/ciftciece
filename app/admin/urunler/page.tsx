@@ -73,9 +73,6 @@ export default async function AdminUrunlerPage() {
                       >
                         {product.name}
                       </Link>
-                      <div style={{ fontSize: "0.75rem", color: "rgba(232,228,217,0.4)", marginTop: "0.125rem" }}>
-                        /{product.slug}
-                      </div>
                     </td>
                     <td style={{ padding: "0.75rem", fontSize: "0.875rem", color: "rgba(232,228,217,0.6)" }}>
                       {categoryMap.get(product.categoryId) ?? "—"}
