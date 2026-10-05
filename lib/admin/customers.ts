@@ -379,15 +379,6 @@ export interface AdminCustomerDetail {
     createdAt: Date;
   }>;
   messages: Array<{ id: string; subject: string; status: string; orderReference: string | null; createdAt: Date }>;
-  emails: Array<{
-    id: string;
-    kind: string;
-    subject: string;
-    status: string;
-    orderId: string | null;
-    sentAt: Date | null;
-    createdAt: Date;
-  }>;
   /** Bu e-postayla başka üye hesaplarından verilmiş siparişler (o üyelerin sayfasında) */
   otherAccounts: Array<{ userId: string; name: string | null; email: string; orders: number }>;
 }
@@ -458,19 +449,11 @@ export async function loadAdminCustomer(key: string): Promise<CustomerLookup> {
   if (!member && orders.length === 0) return null;
   const orderIds = orders.map((o) => o.id);
 
-  const [attempts, refunds, emails, messages, reviews, lastToken, staffAccount, elsewhere] = await Promise.all([
+  const [attempts, refunds, messages, reviews, lastToken, staffAccount, elsewhere] = await Promise.all([
     orderIds.length
       ? prisma.paymentAttempt.findMany({ where: { orderId: { in: orderIds }, status: "SUCCEEDED" }, select: ATTEMPT_SELECT })
       : [],
     orderIds.length ? prisma.refund.findMany({ where: { orderId: { in: orderIds } }, select: { orderId: true, amountKurus: true } }) : [],
-    orderIds.length
-      ? prisma.emailMessage.findMany({
-          where: { orderId: { in: orderIds }, audience: "customer" },
-          orderBy: { createdAt: "desc" },
-          take: 30,
-          select: { id: true, kind: true, subject: true, status: true, orderId: true, sentAt: true, createdAt: true },
-        })
-      : [],
     prisma.contactMessage.findMany({
       where: { email },
       orderBy: { createdAt: "desc" },
@@ -617,7 +600,6 @@ export async function loadAdminCustomer(key: string): Promise<CustomerLookup> {
       createdAt: r.createdAt,
     })),
     messages,
-    emails,
     otherAccounts: otherUsers.map((u) => ({
       userId: u.id,
       name: u.name,

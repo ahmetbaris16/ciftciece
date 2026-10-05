@@ -42,8 +42,7 @@ export default async function AdminMusterilerPage({ searchParams }: Props) {
       <div style={st.page}>
         <h1 style={st.h1}>Müşteriler</h1>
         <p style={st.sub}>
-          {q || filter !== "tum" ? `${total} sonuç` : `${total} müşteri`} · {members} üye hesabı. Müşteri verisi yalnız sipariş ve iletişim için
-          kullanılır; kampanya e-postası için ayrıca açık onay ve İYS kaydı gerekir.
+          {q || filter !== "tum" ? `${total} sonuç` : `${total} müşteri`} · {members} üye
         </p>
 
         <form method="get" action="/admin/musteriler" style={st.search}>

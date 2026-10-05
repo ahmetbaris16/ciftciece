@@ -12,7 +12,6 @@ import ResetLinkButton from "@/components/admin/customer/ResetLinkButton";
 import { loadAdminCustomer, type CustomerOrderRow } from "@/lib/admin/customers";
 import { formatPrice } from "@/types";
 import { PAYMENT_METHOD_LABELS } from "@/lib/payment/methods";
-import { EMAIL_STATUS_TR, emailKindLabel } from "@/lib/email/kinds";
 import { formatPhoneTr } from "@/lib/business/info";
 import rows_ from "@/components/admin/AdminRows.module.css";
 import s from "./customer.module.css";
@@ -88,8 +87,6 @@ export default async function AdminMusteriDetay({ params }: Props) {
   const pastRequests = c.requests.filter((r) => r.status !== "OPEN");
   const shownOrders = c.orders.slice(0, 100);
   const refundedOrders = c.orders.filter((o) => !o.testPayment && o.refundedKurus > 0).length;
-  const failedEmails = c.emails.filter((m) => m.status === "FAILED").length;
-  const referenceOf = (orderId: string | null) => c.orders.find((o) => o.id === orderId)?.reference ?? null;
 
   return (
     <AdminShell user={user} activeSection="musteriler">
@@ -277,37 +274,33 @@ export default async function AdminMusteriDetay({ params }: Props) {
               </section>
             )}
 
-            {c.kind === "member" && (
+            {c.reviews.length > 0 && (
               <section className={s.card}>
-                <h2 className={s.h2}>Ürün değerlendirmeleri</h2>
-                {c.reviews.length === 0 ? (
-                  <p className={s.muted}>Değerlendirme yazmadı.</p>
-                ) : (
-                  <ul className={s.list}>
-                    {c.reviews.map((r) => {
-                      const st = REVIEW_STATUS[r.status] ?? { label: r.status, color: "#999" };
-                      return (
-                        <li key={r.id} className={s.item}>
-                          <div className={s.itemHead}>
-                            <span className={s.stars} role="img" aria-label={`5 üzerinden ${r.rating} puan`}>
-                              {"★".repeat(r.rating)}
-                              {"☆".repeat(Math.max(0, 5 - r.rating))}
-                            </span>
-                            <span style={{ color: st.color, fontWeight: 700 }}>{st.label}</span>
-                            <span>· {dateTr(r.createdAt)}</span>
-                          </div>
-                          <p className={s.text}>
-                            <a href={`/urun/${r.productSlug}`} target="_blank" rel="noopener noreferrer">
-                              {r.productName}
-                            </a>
-                            {r.title ? `: ${r.title}` : ""}
-                          </p>
-                          <p className={s.muted}>{excerpt(r.text)}</p>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
+                <h2 className={s.h2}>Ürün yorumları</h2>
+                <ul className={s.list}>
+                  {c.reviews.map((r) => {
+                    const st = REVIEW_STATUS[r.status] ?? { label: r.status, color: "#999" };
+                    return (
+                      <li key={r.id} className={s.item}>
+                        <div className={s.itemHead}>
+                          <span className={s.stars} role="img" aria-label={`5 üzerinden ${r.rating} puan`}>
+                            {"★".repeat(r.rating)}
+                            {"☆".repeat(Math.max(0, 5 - r.rating))}
+                          </span>
+                          <span style={{ color: st.color, fontWeight: 700 }}>{st.label}</span>
+                          <span>· {dateTr(r.createdAt)}</span>
+                        </div>
+                        <p className={s.text}>
+                          <a href={`/urun/${r.productSlug}`} target="_blank" rel="noopener noreferrer">
+                            {r.productName}
+                          </a>
+                          {r.title ? `: ${r.title}` : ""}
+                        </p>
+                        <p className={s.muted}>{excerpt(r.text)}</p>
+                      </li>
+                    );
+                  })}
+                </ul>
                 {c.reviews.some((r) => r.status === "PENDING") && (
                   <p className={s.more}>
                     <Link href="/admin/yorumlar">Onay bekleyenleri Yorumlar sayfasında yayınlayın ›</Link>
@@ -339,38 +332,6 @@ export default async function AdminMusteriDetay({ params }: Props) {
               </section>
             )}
 
-            {c.emails.length > 0 && (
-              <section className={s.card}>
-                <details className={s.details}>
-                  <summary>
-                    Müşteriye giden e-postalar ({c.emails.length})
-                    {failedEmails > 0 && <span className={s.failed}> · {failedEmails} gönderilemedi</span>}
-                  </summary>
-                  <ul className={s.list}>
-                    {c.emails.map((m) => {
-                      const st = EMAIL_STATUS_TR[m.status] ?? { label: m.status, color: "#999" };
-                      const ref = referenceOf(m.orderId);
-                      return (
-                        <li key={m.id} className={s.item}>
-                          <div className={s.itemHead}>
-                            <span style={{ color: st.color, fontWeight: 700 }}>{st.label}</span>
-                            <span>{emailKindLabel(m.kind)}</span>
-                            <span>· {dateTimeTr(m.sentAt ?? m.createdAt)}</span>
-                            {ref && (
-                              <span>
-                                · <Link href={`/admin/siparisler/${m.orderId}`}>#{ref}</Link>
-                              </span>
-                            )}
-                          </div>
-                          <p className={s.text}>{m.subject}</p>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                  {c.emails.length >= 30 && <p className={s.more}>Son 30 e-posta gösteriliyor.</p>}
-                </details>
-              </section>
-            )}
           </div>
 
           <aside className={s.side}>

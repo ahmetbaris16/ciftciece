@@ -33,9 +33,7 @@ export default async function AdminYorumlarPage() {
             )}
           </h2>
           <p style={{ fontSize: "0.875rem", color: "rgba(232,228,217,0.5)", margin: "0 0 1rem", maxWidth: 820 }}>
-            Üye müşterilerin ürün sayfalarından yazdığı puan ve yorumlar. Onayladığınız değerlendirme ürün sayfasında
-            &quot;Ad S.&quot; biçiminde yayınlanır; e-posta hiçbir yerde gösterilmez. &quot;Satın aldı&quot;, müşterinin ürünü üye
-            girişiyle satın aldığını gösterir.
+            Üyelerin ürün sayfalarından yazdığı yorumlar. Onayladığınız yorum ürün sayfasında &quot;Ad S.&quot; biçiminde yayınlanır.
           </p>
           <ProductReviewsManager initial={productReviews} />
         </section>
@@ -44,9 +42,8 @@ export default async function AdminYorumlarPage() {
           <h2 id="magaza-yorumlari" style={{ fontSize: "1.125rem", fontWeight: 700, color: "#e8e4d9", margin: "0 0 0.25rem" }}>
             Mağaza yorumları (ana sayfa)
           </h2>
-          <p style={{ fontSize: "0.875rem", color: "rgba(232,228,217,0.5)", margin: "0 0 1.5rem", maxWidth: 820 }}>
-            {reviews.length} yorum · Google yorumlarını aktarırken yazar adını, puanı, metni ve
-            tarihi Google&apos;daki hâliyle aynen girin. Doğrulanmamış yorumu yayınlamayın.
+          <p style={{ fontSize: "0.875rem", color: "rgba(232,228,217,0.5)", margin: "0 0 1rem", maxWidth: 820 }}>
+            Ana sayfada görünen yorumlar. Google yorumlarını Google&apos;daki hâliyle aynen girin.
           </p>
           <ReviewsManager
             initial={reviews

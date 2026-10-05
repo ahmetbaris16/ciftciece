@@ -1,9 +1,8 @@
 "use client";
 
 /**
- * Admin — Yorum yönetimi
- * Yorum ekle, düzenle (yazar, puan, metin, tarih, kaynak, sıra), yayınla/gizle, sil.
- * Google yorumlarını aktarırken tarih, Google'daki yorum tarihiyle aynı girilmeli.
+ * Admin — Mağaza yorumları (ana sayfa). Kısa liste; düzenleme ve yeni yorum formu tıklayınca açılır.
+ * Google yorumlarını aktarırken yazar, puan, metin ve tarih Google'daki hâliyle aynen girilmeli.
  */
 
 import { useState } from "react";
@@ -28,14 +27,22 @@ const EMPTY: Draft = {
   text: "",
   date: new Date().toISOString().slice(0, 10),
   source: "google",
-  isPublished: false,
+  isPublished: true,
   sortOrder: 0,
+};
+
+const SOURCE_TR: Record<string, string> = { google: "Google", manual: "Mağaza müşterisi" };
+
+const dateTr = (iso: string) => {
+  const d = new Date(`${iso}T12:00:00`);
+  return Number.isNaN(d.getTime()) ? iso : new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium" }).format(d);
 };
 
 export default function ReviewsManager({ initial }: { initial: AdminReview[] }) {
   const router = useRouter();
   const [reviews, setReviews] = useState(initial);
   const [draft, setDraft] = useState<Draft>(EMPTY);
+  const [editing, setEditing] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -50,12 +57,14 @@ export default function ReviewsManager({ initial }: { initial: AdminReview[] }) 
     return data;
   };
 
-  const save = async (r: AdminReview) => {
+  const save = async (r: AdminReview, after?: string) => {
     setBusy(r.id);
     setMsg(null);
     try {
       await call("PUT", { ...r, source: r.source || null });
-      setMsg({ ok: true, text: `${r.authorName} kaydedildi.` });
+      setReviews((list) => list.map((x) => (x.id === r.id ? r : x)));
+      setEditing(null);
+      setMsg({ ok: true, text: after ?? `${r.authorName} kaydedildi.` });
       router.refresh();
     } catch (e) {
       setMsg({ ok: false, text: (e as Error).message });
@@ -67,6 +76,7 @@ export default function ReviewsManager({ initial }: { initial: AdminReview[] }) 
   const remove = async (r: AdminReview) => {
     if (!window.confirm(`${r.authorName} yorumunu silmek istiyor musunuz?`)) return;
     setBusy(r.id);
+    setMsg(null);
     try {
       await call("DELETE", undefined, `?id=${encodeURIComponent(r.id)}`);
       setReviews((list) => list.filter((x) => x.id !== r.id));
@@ -83,11 +93,9 @@ export default function ReviewsManager({ initial }: { initial: AdminReview[] }) 
     setMsg(null);
     try {
       const { review } = await call("POST", { ...draft, source: draft.source || undefined });
-      setReviews((list) => [
-        ...list,
-        { ...draft, id: review.id },
-      ]);
+      setReviews((list) => [...list, { ...draft, id: review.id }]);
       setDraft(EMPTY);
+      setEditing(null);
       setMsg({ ok: true, text: "Yorum eklendi." });
       router.refresh();
     } catch (e) {
@@ -108,29 +116,78 @@ export default function ReviewsManager({ initial }: { initial: AdminReview[] }) 
         </p>
       )}
 
-      {reviews.map((r) => (
-        <div key={r.id} style={s.card}>
-          <Fields value={r} onChange={(p) => patch(r.id, p)} />
+      <ul style={s.list}>
+        {reviews.map((r) => (
+          <li key={r.id} style={s.row}>
+            <div style={s.rowHead}>
+              <span style={s.stars} aria-label={`5 üzerinden ${r.rating}`}>
+                {"★".repeat(r.rating)}
+                {"☆".repeat(Math.max(0, 5 - r.rating))}
+              </span>
+              <strong style={{ color: "#e8e4d9" }}>{r.authorName}</strong>
+              <span style={s.meta}>
+                {r.source ? `${SOURCE_TR[r.source] ?? r.source} · ` : ""}
+                {dateTr(r.date)}
+              </span>
+              <span style={{ ...s.pill, ...(r.isPublished ? s.pillOn : {}) }}>{r.isPublished ? "Yayında" : "Gizli"}</span>
+            </div>
+            {r.text && editing !== r.id && <p style={s.text}>{r.text.length > 180 ? `${r.text.slice(0, 180).trimEnd()}…` : r.text}</p>}
+            {editing === r.id ? (
+              <>
+                <Fields value={r} onChange={(p) => patch(r.id, p)} />
+                <div style={s.actions}>
+                  <button type="button" style={s.primary} disabled={busy === r.id} onClick={() => save(r)}>
+                    {busy === r.id ? "Kaydediliyor…" : "Kaydet"}
+                  </button>
+                  <button type="button" style={s.ghost} onClick={() => setEditing(null)}>
+                    Vazgeç
+                  </button>
+                  <button type="button" style={s.danger} disabled={busy === r.id} onClick={() => remove(r)}>
+                    Sil
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div style={s.actions}>
+                <button type="button" style={s.ghost} onClick={() => setEditing(r.id)}>
+                  Düzenle
+                </button>
+                <button
+                  type="button"
+                  style={s.ghost}
+                  disabled={busy === r.id}
+                  onClick={() =>
+                    save({ ...r, isPublished: !r.isPublished }, r.isPublished ? "Yorum sitede gizlendi." : "Yorum sitede yayınlandı.")
+                  }
+                >
+                  {r.isPublished ? "Sitede gizle" : "Sitede yayınla"}
+                </button>
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+
+      {editing === "new" ? (
+        <div style={{ ...s.row, borderStyle: "dashed" }}>
+          <p style={s.title}>Yeni yorum</p>
+          <Fields value={draft} onChange={(p) => setDraft((d) => ({ ...d, ...p }))} />
           <div style={s.actions}>
-            <button type="button" style={s.primary} disabled={busy === r.id} onClick={() => save(r)}>
-              {busy === r.id ? "Kaydediliyor…" : "Kaydet"}
+            <button type="button" style={s.primary} disabled={busy === "new"} onClick={add}>
+              {busy === "new" ? "Ekleniyor…" : "Ekle"}
             </button>
-            <button type="button" style={s.danger} disabled={busy === r.id} onClick={() => remove(r)}>
-              Sil
+            <button type="button" style={s.ghost} onClick={() => setEditing(null)}>
+              Vazgeç
             </button>
           </div>
         </div>
-      ))}
-
-      <div style={{ ...s.card, borderStyle: "dashed" }}>
-        <p style={s.title}>Yeni yorum ekle</p>
-        <Fields value={draft} onChange={(p) => setDraft((d) => ({ ...d, ...p }))} />
-        <div style={s.actions}>
-          <button type="button" style={s.primary} disabled={busy === "new"} onClick={add}>
-            {busy === "new" ? "Ekleniyor…" : "Ekle"}
+      ) : (
+        <div>
+          <button type="button" style={s.ghost} onClick={() => setEditing("new")}>
+            + Yeni yorum ekle
           </button>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -165,22 +222,12 @@ function Fields({ value, onChange }: { value: Draft; onChange: (p: Partial<Draft
         </select>
       </label>
       <label style={{ ...s.field, gridColumn: "1 / -1" }}>
-        <span style={s.label}>Yorum metni (boş bırakılabilir — sadece yıldız)</span>
+        <span style={s.label}>Yorum metni (boş bırakılabilir: yalnız yıldız)</span>
         <textarea style={{ ...s.input, minHeight: 64 }} value={value.text} onChange={(e) => onChange({ text: e.target.value })} />
       </label>
       <label style={s.check}>
         <input type="checkbox" checked={value.isPublished} onChange={(e) => onChange({ isPublished: e.target.checked })} />
         Sitede yayınla
-      </label>
-      <label style={s.field}>
-        <span style={s.label}>Sıra</span>
-        <input
-          type="number"
-          min={0}
-          style={s.input}
-          value={value.sortOrder}
-          onChange={(e) => onChange({ sortOrder: Math.max(0, Number(e.target.value) || 0) })}
-        />
       </label>
     </div>
   );
@@ -188,9 +235,24 @@ function Fields({ value, onChange }: { value: Draft; onChange: (p: Partial<Draft
 
 const s: Record<string, React.CSSProperties> = {
   wrap: { display: "flex", flexDirection: "column", gap: "0.75rem", maxWidth: 820 },
-  card: { padding: "1.25rem", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12 },
+  list: { listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 },
+  row: { padding: "0.9rem 1rem", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10 },
+  rowHead: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem", fontSize: "0.875rem" },
+  stars: { color: "#e8c07a", letterSpacing: "0.04em" },
+  meta: { fontSize: "0.8125rem", color: "rgba(232,228,217,0.5)" },
+  pill: {
+    marginLeft: "auto",
+    padding: "0.1rem 0.5rem",
+    borderRadius: 999,
+    fontSize: "0.75rem",
+    fontWeight: 600,
+    background: "rgba(255,255,255,0.07)",
+    color: "rgba(232,228,217,0.6)",
+  },
+  pillOn: { background: "rgba(159,211,159,0.12)", color: "#9fd39f" },
+  text: { margin: "0.4rem 0 0", fontSize: "0.875rem", lineHeight: 1.5, color: "rgba(232,228,217,0.8)" },
   title: { margin: "0 0 0.75rem", fontWeight: 600, color: "#e8e4d9" },
-  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "0.75rem", alignItems: "end" },
+  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "0.75rem", alignItems: "end", marginTop: "0.75rem" },
   field: { display: "flex", flexDirection: "column", gap: "0.3rem" },
   label: { fontSize: "0.75rem", color: "rgba(232,228,217,0.55)" },
   input: {
@@ -203,8 +265,17 @@ const s: Record<string, React.CSSProperties> = {
     fontFamily: "inherit",
   },
   check: { display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.875rem", color: "rgba(232,228,217,0.8)" },
-  actions: { display: "flex", gap: "0.75rem", marginTop: "1rem" },
-  primary: { padding: "0.5rem 1rem", background: "#c4d68e", color: "#15180f", border: 0, borderRadius: 8, fontWeight: 600, fontSize: "0.8125rem" },
-  danger: { padding: "0.5rem 1rem", background: "rgba(239,68,68,0.12)", color: "#fca5a5", border: "1px solid rgba(239,68,68,0.25)", borderRadius: 8, fontSize: "0.8125rem" },
+  actions: { display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.75rem" },
+  primary: { padding: "0.45rem 0.95rem", background: "#c4d68e", color: "#15180f", border: 0, borderRadius: 8, fontWeight: 600, fontSize: "0.8125rem" },
+  ghost: {
+    padding: "0.45rem 0.95rem",
+    background: "transparent",
+    color: "#c4d68e",
+    border: "1px solid rgba(196,214,142,0.4)",
+    borderRadius: 8,
+    fontWeight: 600,
+    fontSize: "0.8125rem",
+  },
+  danger: { padding: "0.45rem 0.95rem", background: "rgba(239,68,68,0.12)", color: "#fca5a5", border: "1px solid rgba(239,68,68,0.25)", borderRadius: 8, fontSize: "0.8125rem" },
   msg: { margin: 0, fontSize: "0.875rem" },
 };

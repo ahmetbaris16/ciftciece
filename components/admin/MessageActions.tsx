@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * İletişim mesajı işlemleri: okundu / arşivle / geri al ve işletmenin e-posta adresinden yanıt. Yanıt
- * kuyruktan gider; aynı form açılışında çift gönderim olmaz (tek kullanımlık anahtar).
+ * İletişim mesajı işlemleri: işletmenin e-posta adresinden yanıt, arşivle / arşivden çıkar. Yanıtlanana ya da
+ * arşivlenene kadar mesaj "bekleyen" sayılır. Yanıt kuyruktan gider; aynı form açılışında çift gönderim olmaz.
  */
 
 import { useState } from "react";
@@ -52,11 +52,6 @@ export default function MessageActions({ id, status, email }: { id: string; stat
         {!replying && (
           <button type="button" className={f.primary} onClick={() => setReplying(true)} disabled={busy}>
             Yanıtla
-          </button>
-        )}
-        {status === "NEW" && (
-          <button type="button" className={f.secondary} onClick={() => setStatus("READ")} disabled={busy}>
-            Okundu
           </button>
         )}
         {status !== "ARCHIVED" ? (
