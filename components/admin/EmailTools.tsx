@@ -19,7 +19,7 @@ async function post(url: string, body: unknown): Promise<{ ok: boolean; data: { 
   return { ok: res.ok, data: await res.json().catch(() => null) };
 }
 
-export default function EmailTools({ defaultTo }: { defaultTo: string }) {
+export default function EmailTools({ defaultTo, showRun = true }: { defaultTo: string; showRun?: boolean }) {
   const router = useRouter();
   const [to, setTo] = useState(defaultTo);
   const [busy, setBusy] = useState<"test" | "run" | null>(null);
@@ -91,9 +91,11 @@ export default function EmailTools({ defaultTo }: { defaultTo: string }) {
         <button type="submit" className={f.secondary} disabled={busy !== null || !to.trim()}>
           {busy === "test" ? "Gönderiliyor…" : "Deneme e-postası gönder"}
         </button>
-        <button type="button" className={f.primary} onClick={runNow} disabled={busy !== null}>
-          {busy === "run" ? "Gönderiliyor…" : "Kuyruktakileri şimdi gönder"}
-        </button>
+        {showRun && (
+          <button type="button" className={f.primary} onClick={runNow} disabled={busy !== null}>
+            {busy === "run" ? "Gönderiliyor…" : "Kuyruktakileri şimdi gönder"}
+          </button>
+        )}
       </form>
       {message && <p className={message.ok ? f.ok : f.error}>{message.text}</p>}
     </div>

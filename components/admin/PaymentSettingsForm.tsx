@@ -2,21 +2,25 @@
 
 /**
  * Admin — Ödeme yöntemleri
- *  - Kart (Akbank Sanal POS): açık/kapalı + durum (demo / test / canlı) ve canlıya geçiş adımları. Banka bilgileri
- *    sunucu ortam değişkenlerinde (hPanel); burada yalnız durum gösterilir.
  *  - Havale/EFT: banka adı, hesap sahibi, IBAN, ödeme süresi. IBAN girilmeden müşteriye gösterilmez.
  *  - Kapıda ödeme: varsayılan kapalı; hizmet bedeli ve üst tutar sınırı.
+ *  - Kart (Akbank Sanal POS): göster/gizle + durum (demo / test / canlı). Banka bilgileri sunucu ortam
+ *    değişkenlerinde (hPanel; kurulum: docs/YAYIN.md, docs/AKBANK_TEST.md); burada yalnız durum görünür.
  */
 
 import { useState } from "react";
-import { INSTALLMENT_CHOICES, formatIban, isValidTrIban, normalizeIban, type PaymentSettings } from "@/lib/payment/methods";
+import { formatIban, isValidTrIban, normalizeIban, type PaymentSettings } from "@/lib/payment/methods";
 import type { ProviderStatus } from "@/lib/payment/provider";
 
-const MODE_BADGE: Record<ProviderStatus["mode"], { label: string; color: string; bg: string }> = {
-  off: { label: "KAPALI — ödeme sağlayıcısı ayarı geçersiz", color: "#f3a0a0", bg: "rgba(243,160,160,0.12)" },
-  demo: { label: "DEMO — sanal POS bağlı değil, banka sayfası demo kopyası", color: "#e8c07a", bg: "rgba(232,192,122,0.12)" },
-  test: { label: "TEST ORTAMI — gerçek para çekilmez", color: "#9ec5f0", bg: "rgba(158,197,240,0.12)" },
-  live: { label: "CANLI — gerçek tahsilat", color: "#9fd39f", bg: "rgba(159,211,159,0.12)" },
+const CARD_STATUS: Record<ProviderStatus["mode"], { label: string; color: string; text: string }> = {
+  off: { label: "Kapalı", color: "#f3a0a0", text: "Ödeme sağlayıcısı ayarı geçersiz; müşteriler kartı “yakında” görür." },
+  demo: {
+    label: "Demo",
+    color: "#e8c07a",
+    text: "Sanal POS henüz bağlı değil. Müşteriler kartı “yakında” görür; siz yönetici girişiyle demo ödeme deneyebilirsiniz.",
+  },
+  test: { label: "Test", color: "#9ec5f0", text: "Banka test ortamı: kartı yalnız siz görürsünüz, gerçek para çekilmez." },
+  live: { label: "Canlı", color: "#9fd39f", text: "Kartla ödemeler gerçek tahsilattır." },
 };
 
 const parseTl = (text: string): number | null => {
@@ -35,7 +39,7 @@ export default function PaymentSettingsForm({
   provider: ProviderStatus;
 }) {
   const [cardEnabled, setCardEnabled] = useState(initial.card.enabled);
-  const [maxInstallment, setMaxInstallment] = useState(initial.card.maxInstallment);
+  const maxInstallment = initial.card.maxInstallment;
   const [bankEnabled, setBankEnabled] = useState(initial.bankTransfer.enabled);
   const [bankName, setBankName] = useState(initial.bankTransfer.bankName);
   const [holder, setHolder] = useState(initial.bankTransfer.accountHolder);
@@ -94,73 +98,13 @@ export default function PaymentSettingsForm({
     }
   };
 
+  const card = CARD_STATUS[provider.mode];
+
   return (
     <div style={s.wrap}>
       <p style={s.summary} role="status">
-        Müşteriye şu an gösterilen yöntemler:{" "}
-        <strong>{visible.length ? visible.join(" · ") : "hiçbiri — çevrimiçi sipariş alınamaz"}</strong>
+        Müşteriye açık: <strong>{visible.length ? visible.join(" · ") : "hiçbiri — çevrimiçi sipariş alınamaz"}</strong>
       </p>
-
-      {/* Kart */}
-      <fieldset style={s.box}>
-        <legend style={s.legend}>Kredi / Banka Kartı ({provider.name})</legend>
-        <p style={{ ...s.badge, color: MODE_BADGE[provider.mode].color, background: MODE_BADGE[provider.mode].bg }}>
-          {MODE_BADGE[provider.mode].label}
-        </p>
-        <p style={s.hint}>{provider.note}</p>
-        <label style={s.check}>
-          <input type="checkbox" checked={cardEnabled} onChange={(e) => setCardEnabled(e.target.checked)} />
-          Kartla ödeme seçeneğini ödeme sayfasında göster
-        </label>
-        {provider.mode === "demo" && (
-          <div style={s.demoBox}>
-            <p style={{ ...s.hint, color: "rgba(232,228,217,0.75)" }}>
-              <strong>Banka sunumu / deneme:</strong> bu tarayıcıda yönetici girişi açıkken mağazadan sipariş verin, ödeme
-              yönteminde “Kredi / Banka Kartı (DEMO)” seçin. Bankanın ödeme sayfasının demo kopyası açılır: kart bilgileri
-              girilir (“Test kartıyla doldur”), telefona gelmiş gibi gösterilen 6 haneli kod yazılır, sipariş “Ödendi” olarak
-              Siparişler’e düşer. Gerçek para çekilmez; siparişte “Demo ödeme” uyarısı görünür.
-            </p>
-            <p style={s.hint}>
-              Müşteriler bu sırada kart seçeneğini “Kartla ödeme çok yakında” notuyla görür, seçemez. Akbank bilgileri hPanel’e
-              girilince demo kendiliğinden kapanır.
-            </p>
-          </div>
-        )}
-        <details style={s.details}>
-          <summary style={s.summaryToggle}>Akbank sanal POS bağlama ve canlıya geçiş adımları</summary>
-          <ol style={s.steps}>
-            <li>Akbank&apos;tan sanal POS bilgilerini alın: Güvenli İş Yeri No (merchantSafeId), Terminal Safe ID ve gizli anahtar (Akbank POS portalı → Yönetim).</li>
-            <li>
-              hPanel → Node.js uygulaması → Ortam değişkenleri: <code>PAYMENT_PROVIDER=akbank</code>,{" "}
-              <code>AKBANK_MERCHANT_SAFE_ID</code>, <code>AKBANK_TERMINAL_SAFE_ID</code>, <code>AKBANK_SECRET_KEY</code>,{" "}
-              <code>AKBANK_ENV=test</code>. Kaydedince site yeniden başlar; bu sayfada “TEST ORTAMI” görünür.
-            </li>
-            <li>Yönetici girişi açıkken sitede bir test siparişi verin, Akbank&apos;ın test kartıyla ödeyin; sipariş “Ödendi” olmalı. Başarısız kart da deneyin.</li>
-            <li>Sorun yoksa canlı bilgileri girip <code>AKBANK_ENV=prod</code> yapın. Bu sayfada “CANLI” görünür; kartla ödeme herkese açılır.</li>
-          </ol>
-          <p style={s.hint}>Ayrıntı: docs/AKBANK_TEST.md ve docs/YAYIN.md. Banka bilgileri asla bu panele ya da koda yazılmaz.</p>
-        </details>
-        <label style={s.field}>
-          <span style={s.label}>En yüksek taksit</span>
-          <select
-            style={s.input}
-            value={maxInstallment}
-            onChange={(e) => setMaxInstallment(Number(e.target.value))}
-            disabled={provider.name.startsWith("Akbank")}
-          >
-            {INSTALLMENT_CHOICES.map((n) => (
-              <option key={n} value={n}>
-                {n === 1 ? "Yalnız tek çekim" : `${n} taksite kadar`}
-              </option>
-            ))}
-          </select>
-          <span style={s.hint}>
-            {provider.name.startsWith("Akbank")
-              ? "Akbank ödeme sayfasında şimdilik tek çekim. Taksit, Akbank'tan taksit yetkisi ve teknik doküman gelince açılır."
-              : "Vade farkını müşteriye yansıtıp yansıtmamayı ödeme kuruluşunun panelinden ayarlarsınız."}
-          </span>
-        </label>
-      </fieldset>
 
       {/* Havale */}
       <fieldset style={s.box}>
@@ -175,7 +119,7 @@ export default function PaymentSettingsForm({
             <input style={s.input} value={bankName} onChange={(e) => setBankName(e.target.value)} />
           </label>
           <label style={s.field}>
-            <span style={s.label}>Hesap sahibi (ad soyad / unvan)</span>
+            <span style={s.label}>Hesap sahibi</span>
             <input style={s.input} value={holder} onChange={(e) => setHolder(e.target.value)} />
           </label>
           <label style={{ ...s.field, gridColumn: "1 / -1" }}>
@@ -195,16 +139,12 @@ export default function PaymentSettingsForm({
             <input style={s.input} inputMode="numeric" value={windowHours} onChange={(e) => setWindowHours(e.target.value)} />
           </label>
         </div>
-        <p style={s.hint}>
-          Müşteri siparişten sonra IBAN’ı ve açıklamaya yazacağı sipariş numarasını görür. Parayı gördüğünüzde sipariş
-          sayfasında <strong>“Havale ödemesi alındı”</strong> deyin. Süresinde ödenmeyen sipariş kendiliğinden iptal olur,
-          stok geri döner. Bilgiler eksikken müşteriye gösterilmez.
-        </p>
+        <p style={s.hint}>Bu sürede ödenmeyen sipariş kendiliğinden iptal olur, stok geri döner.</p>
       </fieldset>
 
       {/* Kapıda ödeme */}
       <fieldset style={s.box}>
-        <legend style={s.legend}>Kapıda Ödeme</legend>
+        <legend style={s.legend}>Kapıda ödeme</legend>
         <label style={s.check}>
           <input type="checkbox" checked={codEnabled} onChange={(e) => setCodEnabled(e.target.checked)} />
           Kapıda ödemeyi sun
@@ -219,11 +159,20 @@ export default function PaymentSettingsForm({
             <input style={s.input} inputMode="decimal" value={codMax} placeholder="Sınır yok" onChange={(e) => setCodMax(e.target.value)} />
           </label>
         </div>
-        <p style={s.hint}>
-          Açmadan önce Yurtiçi Kargo ile “tahsilatlı teslimat” anlaşması yapın. Teslim alınmayan paketin gidiş-dönüş
-          kargosu size kalır; bunu dengelemek için hizmet bedeli ve üst sınır koyabilirsiniz. Kapıda ödemeli sipariş
-          doğrudan “Hazırlanıyor” olarak düşer.
+        <p style={s.hint}>Açmadan önce Yurtiçi Kargo ile tahsilatlı teslimat anlaşması yapın.</p>
+      </fieldset>
+
+      {/* Kart */}
+      <fieldset style={s.box}>
+        <legend style={s.legend}>Kredi / Banka kartı</legend>
+        <p style={s.cardStatus}>
+          <span style={{ ...s.badge, color: card.color, background: `${card.color}1f` }}>{card.label}</span>
+          <span style={s.hint}>{card.text}</span>
         </p>
+        <label style={s.check}>
+          <input type="checkbox" checked={cardEnabled} onChange={(e) => setCardEnabled(e.target.checked)} />
+          Kartla ödeme seçeneğini ödeme sayfasında göster
+        </label>
       </fieldset>
 
       <div style={s.footer}>
@@ -269,19 +218,8 @@ const s = {
     minWidth: 0,
   },
   footer: { display: "flex", alignItems: "center", gap: "1rem" },
-  badge: { margin: 0, padding: "0.375rem 0.625rem", borderRadius: 6, fontSize: "0.75rem", fontWeight: 700, letterSpacing: "0.03em", alignSelf: "flex-start" },
-  details: { border: "1px solid rgba(255,255,255,0.08)", borderRadius: 6, padding: "0.5rem 0.75rem" },
-  demoBox: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "0.375rem",
-    padding: "0.625rem 0.75rem",
-    borderRadius: 6,
-    background: "rgba(232,192,122,0.06)",
-    border: "1px solid rgba(232,192,122,0.18)",
-  },
-  summaryToggle: { cursor: "pointer", fontSize: "0.8125rem", color: "#e8e4d9" },
-  steps: { margin: "0.5rem 0 0.5rem 1.1rem", padding: 0, fontSize: "0.8125rem", lineHeight: 1.6, color: "rgba(232,228,217,0.75)" },
+  badge: { flexShrink: 0, padding: "0.15rem 0.55rem", borderRadius: 999, fontSize: "0.75rem", fontWeight: 700 },
+  cardStatus: { display: "flex", alignItems: "center", gap: "0.6rem", margin: 0 },
   primaryBtn: {
     padding: "0.625rem 1.25rem",
     background: "#c4d68e",

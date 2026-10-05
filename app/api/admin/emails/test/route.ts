@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
       return { mode: result.mode };
     } catch (err) {
       if (err instanceof EmailNotConfiguredError) {
-        throw new AdminActionError("E-posta gönderimi ayarlı değil (SMTP_HOST, SMTP_USER, SMTP_PASS ortam değişkenleri).", 503);
+        throw new AdminActionError("E-posta gönderimi henüz ayarlı değil; hosting'de e-posta (SMTP) bilgileri girilince çalışır.", 503);
       }
       throw new AdminActionError(`Gönderilemedi: ${err instanceof Error ? err.message : String(err)}`, 502);
     }

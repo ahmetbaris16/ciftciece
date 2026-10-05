@@ -14,6 +14,7 @@ const toTl = (kurus: number | null) => (kurus === null ? "" : (kurus / 100).toLo
 export default function ShippingSettingsForm({ initial }: { initial: ShippingSettings }) {
   const [fee, setFee] = useState(toTl(initial.feeKurus));
   const [threshold, setThreshold] = useState(toTl(initial.freeThresholdKurus));
+  const [savedFee, setSavedFee] = useState(initial.feeKurus);
   const [status, setStatus] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -35,6 +36,7 @@ export default function ShippingSettingsForm({ initial }: { initial: ShippingSet
       if (!res.ok) return setStatus({ kind: "error", text: data?.error ?? "Kaydedilemedi." });
       const saved = data.result as ShippingSettings;
       setFee(toTl(saved.feeKurus));
+      setSavedFee(saved.feeKurus);
       setThreshold(toTl(saved.freeThresholdKurus));
       setStatus({ kind: "ok", text: "Kaydedildi. Sepet ve ödeme sayfası yeni ücreti kullanır." });
     } catch {
@@ -49,7 +51,7 @@ export default function ShippingSettingsForm({ initial }: { initial: ShippingSet
 
   return (
     <div style={s.wrap}>
-      {initial.feeKurus === null && (
+      {savedFee === null && (
         <p style={s.warn} role="status">
           Kargo ücreti girilmedi. Girilene kadar siparişler alıcı ödemeli gider (müşteri kargoyu teslimatta öder).
         </p>

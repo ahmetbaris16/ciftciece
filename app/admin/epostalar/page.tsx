@@ -79,8 +79,11 @@ export default async function AdminEpostalarPage({ searchParams }: { searchParam
   };
 
   return (
-    <AdminShell user={user} activeSection="epostalar">
+    <AdminShell user={user} activeSection="ayarlar">
       <div style={st.page}>
+        <Link href="/admin/ayarlar#eposta" style={st.back}>
+          ‹ Ayarlar
+        </Link>
         <h1 style={st.h1}>E-postalar</h1>
         <p style={st.sub}>Siteden müşterilere ve size giden tüm e-postalar. Hata olursa sistem kendisi yeniden dener.</p>
 
@@ -177,6 +180,7 @@ export default async function AdminEpostalarPage({ searchParams }: { searchParam
 }
 
 const st: Record<string, React.CSSProperties> = {
+  back: { display: "inline-block", marginBottom: "0.75rem", color: "rgba(232,228,217,0.6)", fontSize: "0.875rem", textDecoration: "none" },
   page: { padding: "1.5rem clamp(1rem, 3vw, 2rem)", maxWidth: 980, color: "#e8e4d9" },
   h1: { margin: 0, fontSize: "1.5rem", fontWeight: 700 },
   sub: { margin: "0.25rem 0 1rem", fontSize: "0.875rem", color: "rgba(232,228,217,0.55)" },

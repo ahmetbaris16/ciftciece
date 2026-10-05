@@ -126,6 +126,8 @@ export interface CheckItem {
   state: CheckState;
   detail: string;
   href?: string;
+  /** Sunucu/hosting ya da banka tarafında yapılan iş: Panel'de değil, Ayarlar'daki yayın öncesi listede görünür */
+  technical?: boolean;
 }
 
 /** Yayın ve banka (sanal POS) incelemesi kontrol listesi */
@@ -165,6 +167,7 @@ export async function getLaunchChecklist(): Promise<CheckItem[]> {
     },
     {
       label: "Kartla ödeme (Akbank sanal POS)",
+      technical: true,
       state: provider.mode === "live" ? "ok" : "todo",
       detail:
         provider.mode === "live"
@@ -181,12 +184,13 @@ export async function getLaunchChecklist(): Promise<CheckItem[]> {
       state: mail === "smtp" ? "ok" : "todo",
       detail:
         mail === "smtp"
-          ? "Hostinger e-postası bağlı; sipariş e-postaları gidiyor. E-postalar sayfasından deneme gönderebilirsiniz."
-          : "SMTP ayarları girilmedi: sipariş e-postaları kuyrukta bekliyor (yasal sipariş teyidi gitmiyor).",
-      href: "/admin/epostalar",
+          ? "Hostinger e-postası bağlı; sipariş e-postaları gidiyor."
+          : "E-posta (SMTP) bilgileri hosting'e girilmedi: sipariş e-postaları müşterilere gitmiyor.",
+      href: "/admin/ayarlar#eposta",
     },
     {
       label: "Zamanlanmış iş (cron)",
+      technical: true,
       state: cronKey && cronFresh ? "ok" : "todo",
       detail: !cronKey
         ? "CRON_SECRET tanımlı değil: süresi dolan siparişler ve e-posta yeniden denemeleri yalnız site trafiğiyle çalışır."
@@ -212,6 +216,7 @@ export async function getLaunchChecklist(): Promise<CheckItem[]> {
     },
     {
       label: "Site adresi ve SSL",
+      technical: true,
       state: appUrl.startsWith("https://") ? "ok" : "manual",
       detail: appUrl.startsWith("https://")
         ? `${appUrl} — tarayıcıda kilit simgesini kontrol edin.`
@@ -219,6 +224,7 @@ export async function getLaunchChecklist(): Promise<CheckItem[]> {
     },
     {
       label: "Yasal metinler ve ETBİS",
+      technical: true,
       state: "manual",
       detail:
         "Sözleşme, KVKK ve iade metinleri sitede. Bir hukukçuya/mali müşavire okutun; ETBİS kaydını yapın (işletmenin yükümlülüğü).",

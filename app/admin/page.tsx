@@ -1,34 +1,29 @@
 /**
- * Admin — Panel: bekleyen işler, özet, azalan stok ve yayın / banka incelemesi kontrol listesi.
+ * Admin — Panel: bekleyen işler, kısa özet, azalan stok ve (varsa) yönetici panelinden tamamlanacak kurulum
+ * eksikleri. Sunucu/banka tarafındaki teknik kontroller Ayarlar'ın sonundaki yayın öncesi listededir.
  */
 
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth/session";
 import AdminShell from "@/components/admin/AdminShell";
-import { getAdminBadges, getDashboardStats, getLaunchChecklist, type CheckState } from "@/lib/admin/dashboard";
+import { getAdminBadges, getDashboardStats, getLaunchChecklist } from "@/lib/admin/dashboard";
 import { formatPrice } from "@/types";
 
 export const dynamic = "force-dynamic";
 
-const STATE_STYLE: Record<CheckState, { label: string; color: string; bg: string }> = {
-  ok: { label: "Tamam", color: "#9fd39f", bg: "rgba(159,211,159,0.12)" },
-  todo: { label: "Yapılacak", color: "#e8c07a", bg: "rgba(232,192,122,0.12)" },
-  manual: { label: "Elle kontrol", color: "#9ec5f0", bg: "rgba(158,197,240,0.12)" },
-};
-
 export default async function AdminDashboardPage() {
   const user = await requireAdmin();
   const [badges, stats, checklist] = await Promise.all([getAdminBadges(), getDashboardStats(), getLaunchChecklist()]);
-  const todo = checklist.filter((c) => c.state === "todo").length;
+  const setup = checklist.filter((c) => c.state === "todo" && !c.technical);
 
   const tasks = [
-    { n: badges.attention, text: "ödeme uyarısı — karar bekliyor", href: "/admin/siparisler?durum=dikkat", urgent: true },
+    { n: badges.attention, text: "ödeme uyarısı: karar bekliyor", href: "/admin/siparisler?durum=dikkat", urgent: true },
     { n: badges.toShip, text: "sipariş hazırlanıp kargolanacak", href: "/admin/siparisler?durum=kargolanacak" },
-    { n: badges.pendingTransfers, text: "sipariş havale bekliyor — hesabınızı kontrol edin", href: "/admin/siparisler?durum=havale" },
+    { n: badges.pendingTransfers, text: "sipariş havale bekliyor: hesabınızı kontrol edin", href: "/admin/siparisler?durum=havale" },
     { n: badges.openRequests, text: "müşteri iptal/iade talebi", href: "/admin/siparisler?durum=talep" },
-    { n: badges.newMessages, text: "okunmamış mesaj", href: "/admin/mesajlar" },
-    { n: badges.pendingReviews, text: "onay bekleyen ürün değerlendirmesi", href: "/admin/yorumlar" },
-    { n: badges.failedEmails, text: "gönderilemeyen e-posta", href: "/admin/epostalar?durum=FAILED", urgent: true },
+    { n: badges.newMessages, text: "yeni mesaj", href: "/admin/mesajlar" },
+    { n: badges.pendingReviews, text: "onay bekleyen ürün yorumu", href: "/admin/yorumlar" },
+    { n: badges.failedEmails, text: "e-posta gönderilemedi", href: "/admin/epostalar?durum=FAILED", urgent: true },
   ].filter((t) => t.n > 0);
 
   return (
@@ -40,7 +35,7 @@ export default async function AdminDashboardPage() {
         <section style={s.card}>
           <h2 style={s.h2}>Bekleyen işler</h2>
           {tasks.length === 0 ? (
-            <p style={s.muted}>Bekleyen iş yok. 🎉</p>
+            <p style={s.muted}>Bekleyen iş yok.</p>
           ) : (
             <ul style={s.tasks}>
               {tasks.map((t) => (
@@ -48,7 +43,9 @@ export default async function AdminDashboardPage() {
                   <Link href={t.href} style={{ ...s.task, ...(t.urgent ? s.taskUrgent : {}) }}>
                     <strong style={s.taskN}>{t.n}</strong>
                     <span>{t.text}</span>
-                    <span aria-hidden="true" style={s.chev}>›</span>
+                    <span aria-hidden="true" style={s.chev}>
+                      ›
+                    </span>
                   </Link>
                 </li>
               ))}
@@ -61,7 +58,7 @@ export default async function AdminDashboardPage() {
           <Tile
             label="Bu ay alınan ödeme"
             value={formatPrice(stats.monthRevenueKurus)}
-            hint={`${stats.monthPaidOrders} ödeme${stats.monthRefundKurus > 0 ? ` · iade ${formatPrice(stats.monthRefundKurus)}` : ""}`}
+            hint={stats.monthRefundKurus > 0 ? `iade ${formatPrice(stats.monthRefundKurus)}` : undefined}
           />
           <Tile label="Kargoda" value={String(stats.shipped)} />
         </div>
@@ -85,38 +82,21 @@ export default async function AdminDashboardPage() {
           </section>
         )}
 
-        <section style={s.card}>
-          <h2 style={s.h2}>Yayın ve banka incelemesi kontrol listesi</h2>
-          <p style={s.muted}>
-            {todo === 0 ? "Kodla denetlenebilen maddeler tamam." : `${todo} madde yapılacak.`} Akbank sanal POS incelemesinden önce bu
-            listeyi tamamlayın.
-          </p>
-          <ul style={s.list}>
-            {checklist.map((c) => {
-              const st = STATE_STYLE[c.state];
-              const body = (
-                <>
-                  <span style={{ ...s.pill, color: st.color, background: st.bg }}>{st.label}</span>
-                  <span style={{ flex: 1 }}>
-                    <strong style={{ display: "block", color: "#e8e4d9" }}>{c.label}</strong>
+        {setup.length > 0 && (
+          <section style={s.card}>
+            <h2 style={s.h2}>Kurulumu tamamlayın</h2>
+            <ul style={s.list}>
+              {setup.map((c) => (
+                <li key={c.label}>
+                  <Link href={c.href ?? "/admin/ayarlar"} style={s.setupRow}>
+                    <strong style={{ color: "#e8e4d9" }}>{c.label}</strong>
                     <span style={s.muted}>{c.detail}</span>
-                  </span>
-                </>
-              );
-              return (
-                <li key={c.label} style={s.checkRow}>
-                  {c.href ? (
-                    <Link href={c.href} style={s.checkLink}>
-                      {body}
-                    </Link>
-                  ) : (
-                    <div style={s.checkLink}>{body}</div>
-                  )}
+                  </Link>
                 </li>
-              );
-            })}
-          </ul>
-        </section>
+              ))}
+            </ul>
+          </section>
+        )}
       </div>
     </AdminShell>
   );
@@ -172,7 +152,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   tileLabel: { fontSize: "0.8125rem", color: "rgba(232,228,217,0.55)" },
   tileValue: { fontSize: "1.5rem", color: "#e8e4d9" },
-  list: { listStyle: "none", margin: "0.5rem 0 0.75rem", padding: 0, display: "flex", flexDirection: "column", gap: 4 },
+  list: { listStyle: "none", margin: "0.25rem 0 0.75rem", padding: 0, display: "flex", flexDirection: "column", gap: 4 },
   listRow: {
     display: "flex",
     justifyContent: "space-between",
@@ -181,16 +161,15 @@ const s: Record<string, React.CSSProperties> = {
     borderBottom: "1px solid rgba(255,255,255,0.05)",
     fontSize: "0.875rem",
   },
-  link: { color: "#c4d68e", fontSize: "0.875rem" },
-  checkRow: { borderBottom: "1px solid rgba(255,255,255,0.05)" },
-  checkLink: {
+  setupRow: {
     display: "flex",
-    gap: "0.75rem",
-    alignItems: "flex-start",
-    padding: "0.75rem 0",
+    flexDirection: "column",
+    gap: 2,
+    padding: "0.6rem 0",
+    borderBottom: "1px solid rgba(255,255,255,0.05)",
     color: "inherit",
     textDecoration: "none",
     fontSize: "0.875rem",
   },
-  pill: { flexShrink: 0, padding: "0.125rem 0.5rem", borderRadius: 999, fontSize: "0.6875rem", fontWeight: 700, marginTop: 2 },
+  link: { color: "#c4d68e", fontSize: "0.875rem" },
 };
