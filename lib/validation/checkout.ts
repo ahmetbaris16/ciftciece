@@ -19,7 +19,7 @@ export const CHECKOUT_MESSAGES = {
   city: "Şehir bilgisini girin.",
   postalCode: "Posta kodu 5 haneli olmalıdır.",
   shippingUnknown:
-    "Siparişinizin kargo ücreti henüz hesaplanamıyor, bu yüzden sipariş şu anda çevrimiçi tamamlanamıyor. Siparişinizi telefon ya da WhatsApp ile verebilirsiniz: 0532 682 53 72",
+    "Kargo ücreti şu anda alınamadı. Sayfayı yenileyin; sorun sürerse siparişinizi telefon ya da WhatsApp ile verebilirsiniz: 0532 682 53 72",
   paymentMethod: "Bir ödeme yöntemi seçin.",
   companyName: "Şirket unvanını girin.",
   taxOffice: "Vergi dairesini girin.",
@@ -142,7 +142,7 @@ export const ShippingSchema = z.object({
     .refine((v) => v === undefined || isValidTrPostalCode(v), {
       error: CHECKOUT_MESSAGES.postalCode,
     }),
-  // Kargo firması seçilmez (yalnız Yurtiçi Kargo); ücret sunucuda lib/shipping/quote ile hesaplanır
+  // Kargo firması seçilmez (yalnız Yurtiçi Kargo); sabit ücret sunucuda lib/shipping/quote ile eklenir
 });
 
 /**

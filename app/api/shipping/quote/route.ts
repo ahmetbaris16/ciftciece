@@ -1,18 +1,17 @@
 /**
- * POST /api/shipping/quote — sepet için Yurtiçi Kargo ücreti (sepet ve ödeme ekranı gösterimi).
- * Girdi: { items: [{ variantId, quantity }] }. Fiyat ve SKU sunucudan okunur; istemci fiyatına güvenilmez.
+ * POST /api/shipping/quote — sepet için kargo ücreti (sepet ve ödeme ekranı gösterimi).
+ * Girdi: { items: [{ variantId, quantity }] }. Fiyatlar sunucudan okunur; istemci fiyatına güvenilmez.
  * Sipariş anında tutar /api/checkout'ta aynı fonksiyonla (quoteShipping) yeniden hesaplanır.
  *
- * Yanıt: { quote: { status: "free" | "priced" | "recipient" | "unknown", carrierName, feeKurus?, parcelCount? } }
- * "recipient" = ücret hesaplanamadı, gönderi alıcı ödemeli (kargo teslimatta ödenir).
- * Tarife/ölçü ayrıntısı ve eksik SKU listesi müşteriye gönderilmez (yalnız sunucu loguna).
+ * Yanıt: { quote: { status: "free" | "priced" | "recipient", carrierName, feeKurus } }
+ * "recipient" = kargo ücreti henüz girilmemiş, gönderi alıcı ödemeli (kargo teslimatta ödenir).
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getVariantById } from "@/lib/repositories";
 import { getShippingSettings } from "@/lib/shipping/shipping.repository";
-import { quoteShipping, type ShippingLine } from "@/lib/shipping/quote";
+import { quoteShipping } from "@/lib/shipping/quote";
 import { CheckoutItemSchema } from "@/lib/validation/checkout";
 
 export const dynamic = "force-dynamic";
@@ -24,28 +23,17 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: "Geçersiz istek." }, { status: 400 });
 
   try {
-    const lines: ShippingLine[] = [];
     let subtotalKurus = 0;
     for (const item of parsed.data.items) {
       const found = await getVariantById(item.variantId);
-      // Satışta olmayan ürün siparişe giremez; kargo hesabına da katılmaz (ödeme adımı ayrıca uyarır)
+      // Satışta olmayan ürün siparişe giremez; ücretsiz kargo sınırına da sayılmaz (ödeme adımı ayrıca uyarır)
       if (!found || !found.product.isPublished || !found.variant.isAvailable) continue;
       subtotalKurus += found.variant.priceKurus * item.quantity;
-      lines.push({ sku: found.variant.sku, quantity: item.quantity });
     }
 
-    const quote = await quoteShipping({ lines, subtotalKurus }, await getShippingSettings());
-    if (quote.status === "unknown" || quote.status === "recipient") {
-      console.info(`[/api/shipping/quote] ücret hesaplanamadı: ${quote.reason}${quote.skus ? ` (${quote.skus.join(", ")})` : ""}`);
-    }
-
+    const quote = quoteShipping({ subtotalKurus }, await getShippingSettings());
     return NextResponse.json({
-      quote: {
-        status: quote.status,
-        carrierName: quote.carrier.name,
-        ...(quote.status !== "unknown" && { feeKurus: quote.feeKurus }),
-        ...(quote.status === "priced" && { parcelCount: quote.parcels.length }),
-      },
+      quote: { status: quote.status, carrierName: quote.carrier.name, feeKurus: quote.feeKurus },
     });
   } catch (err) {
     console.error("[/api/shipping/quote]", err);

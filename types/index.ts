@@ -120,15 +120,6 @@ export interface ShippingAddress {
    * "free" = ücretsiz kargo, "prepaid" = siparişte tahsil edildi, "recipient" = alıcı ödemeli (teslimatta ödenir)
    */
   shippingMode?: "free" | "prepaid" | "recipient";
-  /** Ücretli kargoda sipariş anındaki koli planı (paketleme için; ücretsiz kargoda yok) */
-  parcels?: Array<{
-    box: string;
-    items: number;
-    grossGrams: number;
-    desi: number;
-    billableDesi: number;
-    feeKurus: number;
-  }>;
 }
 
 /** Fatura bilgisi (sipariş anı). Kurumsal faturada unvan + vergi dairesi + vergi no zorunlu. */

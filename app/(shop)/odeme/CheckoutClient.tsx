@@ -34,7 +34,7 @@ import {
 import { useShippingSettings } from "@/lib/shipping/useShippingSettings";
 import { useShippingQuote } from "@/lib/shipping/useShippingQuote";
 import { remainingForFreeShipping } from "@/lib/shipping/settings";
-import { RECIPIENT_PAYS_NOTE, SHIPPING_BASIS_NOTE } from "@/lib/shipping/quote";
+import { RECIPIENT_PAYS_NOTE } from "@/lib/shipping/quote";
 import { usePaymentOptions } from "@/lib/payment/usePaymentOptions";
 import { PAYMENT_METHOD_LABELS, isOptionAllowed, type PaymentMethodId, type PaymentOption } from "@/lib/payment/methods";
 import { CHECKOUT_TERMS_VERSION, LEGAL_DOCUMENTS } from "@/lib/legal/documents";
@@ -172,8 +172,8 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
   const freeShipping = quote?.status === "free";
   const recipientPays = quote?.status === "recipient";
   const shippingKnown = quote?.status === "free" || quote?.status === "priced" || recipientPays;
-  const shippingUnknown = quote?.status === "unknown" || quoteState.status === "error";
-  const shippingKurus = quote && quote.status !== "unknown" ? quote.feeKurus : 0;
+  const shippingUnknown = quoteState.status === "error";
+  const shippingKurus = quote ? quote.feeKurus : 0;
   const options: PaymentOption[] = paymentOptionsState.status === "ready" ? paymentOptionsState.options : [];
   const selectable = options.filter((o) => isOptionAllowed(o, cart.subtotalKurus + shippingKurus));
   const comingSoon = options.filter((o) => !o.available);
@@ -185,7 +185,7 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
   const shippingLabel =
     quoteState.status === "loading"
       ? "Hesaplanıyor…"
-      : !quote || quote.status === "unknown"
+      : !quote
         ? "Hesaplanamadı"
         : quote.status === "free"
           ? "Ücretsiz"
@@ -551,7 +551,6 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
                   <TruckIcon />
                   <div>
                     <p className={styles.carrierName}>{carrierName}</p>
-                    <p className={styles.muted}>{SHIPPING_BASIS_NOTE}</p>
                     {recipientPays && <p className={styles.recipientNote}>{RECIPIENT_PAYS_NOTE}</p>}
                   </div>
                   <span className={`${styles.carrierPrice} ${freeShipping ? styles.free : ""}`} aria-live="polite">

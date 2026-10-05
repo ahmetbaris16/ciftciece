@@ -578,16 +578,6 @@ export default async function AdminSiparisDetay({ params }: Props) {
                 {addr?.postalCode ? ` ${addr.postalCode}` : ""}
               </p>
               {addr?.phone && <p className={s.muted}>{formatPhoneTr(addr.phone)}</p>}
-              {addr?.parcels && addr.parcels.length > 0 && (
-                <div style={{ marginTop: "0.75rem" }}>
-                  <p className={s.muted}>Koli planı (sipariş anı):</p>
-                  {addr.parcels.map((p, i) => (
-                    <p key={i} className={s.muted}>
-                      {i + 1}. {p.box}: {p.items} ürün · {(p.grossGrams / 1000).toFixed(1)} kg · {p.desi} desi
-                    </p>
-                  ))}
-                </div>
-              )}
             </section>
 
             {order.customerNote && (

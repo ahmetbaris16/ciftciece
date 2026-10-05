@@ -173,7 +173,7 @@ export function preInformationSections(business: BusinessInfo, order?: OrderCont
         DELIVERY_TERMS.dispatch,
         DELIVERY_TERMS.carrierTransit,
         DELIVERY_TERMS.legalMax,
-        "Gönderim yalnız yurt içine, Yurtiçi Kargo ile yapılır. Kargo ücreti ürünlerin ağırlığına ve paket boyutuna göre hesaplanır ve sipariş onayından önce gösterilir; ücret hesaplanamayan siparişlerde kargo alıcı ödemelidir (teslimatta kargo firmasına ödenir) ve bu durum siparişten önce belirtilir.",
+        "Gönderim yalnız yurt içine, Yurtiçi Kargo ile yapılır. Kargo ücreti sipariş başına sabittir (ürün sayısından bağımsız), ücretsiz kargo sınırının üzerindeki siparişlerde alınmaz ve sipariş onayından önce gösterilir. Kargo ücretinin teslimatta kargo firmasına ödendiği (alıcı ödemeli) siparişlerde bu durum siparişten önce belirtilir.",
         "Stok tükenmesi ya da teslimatın imkânsızlaşması hâlinde Alıcı bilgilendirilir ve ödenen tutar en geç 14 gün içinde iade edilir.",
       ],
     },

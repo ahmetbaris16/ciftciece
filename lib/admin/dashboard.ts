@@ -146,8 +146,7 @@ export async function getLaunchChecklist(): Promise<CheckItem[]> {
   const unpricedVat = USE_DB
     ? await prisma.product.count({ where: { isPublished: true, vatRateBps: null } })
     : 0;
-  // Ücret hesaplanabilmesi için tarife, en az bir koli ve paket ölçüleri gerekir (lib/shipping/quote)
-  const hasTariff = shipping.tariff.bands.length > 0 && shipping.boxes.length > 0 && Object.keys(shipping.packaging).length > 0;
+  const hasShippingFee = shipping.feeKurus !== null;
 
   const items: CheckItem[] = [
     {
@@ -198,11 +197,11 @@ export async function getLaunchChecklist(): Promise<CheckItem[]> {
             : "Henüz hiç çalışmadı: hPanel → Cron Jobs'ta 5 dakikalık görevi kurun (docs/YAYIN.md).",
     },
     {
-      label: "Kargo tarifesi",
-      state: hasTariff ? "ok" : "todo",
-      detail: hasTariff
-        ? "Tarife, koli ve paket ölçüleri girildi; kargo ücreti siparişte hesaplanıyor."
-        : "Tarife, koli ya da paket ölçüleri eksik: ücreti hesaplanamayan sipariş alıcı ödemeli gidiyor (teslimatta ödenir).",
+      label: "Kargo ücreti",
+      state: hasShippingFee ? "ok" : "todo",
+      detail: hasShippingFee
+        ? "Sabit kargo ücreti girildi."
+        : "Kargo ücreti girilmedi: siparişler alıcı ödemeli gidiyor (müşteri kargoyu teslimatta öder).",
       href: "/admin/ayarlar#kargo",
     },
     {

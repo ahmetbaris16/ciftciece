@@ -108,17 +108,6 @@ export default async function PackingSlip({ params }: { params: Promise<{ id: st
         </tfoot>
       </table>
 
-      {a?.parcels && a.parcels.length > 0 && (
-        <section style={{ marginTop: 16 }}>
-          <h2 style={st.h2}>Koli planı</h2>
-          {a.parcels.map((p, idx) => (
-            <p key={idx} style={st.p}>
-              {idx + 1}. {p.box}: {p.items} ürün · {(p.grossGrams / 1000).toFixed(1)} kg · {p.desi} desi
-            </p>
-          ))}
-        </section>
-      )}
-
       {order.customerNote && (
         <section style={{ ...st.box, marginTop: 16 }}>
           <h2 style={st.h2}>Müşteri notu</h2>

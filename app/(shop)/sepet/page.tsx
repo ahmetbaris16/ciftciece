@@ -5,7 +5,7 @@
  * /sepet
  *
  * localStorage sepet state'ini okur ve gösterir.
- * Kargo: Yurtiçi Kargo; ücret sunucudan (sepetin ağırlık/desisi) gelir, bilinmiyorsa rakam gösterilmez.
+ * Kargo: Yurtiçi Kargo; sabit ücret sunucudan gelir (ücretsiz kargo sınırı aşıldıysa ücretsiz).
  */
 
 import Link from "next/link";
@@ -15,7 +15,7 @@ import { formatPrice } from "@/types";
 import { unitPriceLabel } from "@/lib/catalog/unit-price";
 import { useShippingSettings } from "@/lib/shipping/useShippingSettings";
 import { useShippingQuote } from "@/lib/shipping/useShippingQuote";
-import { RECIPIENT_PAYS_NOTE, SHIPPING_BASIS_NOTE } from "@/lib/shipping/quote";
+import { RECIPIENT_PAYS_NOTE } from "@/lib/shipping/quote";
 import FreeShippingProgress from "@/components/cart/FreeShippingProgress";
 import CartSuggestions from "@/components/cart/CartSuggestions";
 import CartChanges from "@/components/cart/CartChanges";
@@ -45,11 +45,11 @@ export default function SepetPage() {
   const isEmpty = cart.items.length === 0;
   const recipientPays = quote?.status === "recipient";
   const shippingKnown = quote?.status === "free" || quote?.status === "priced" || recipientPays;
-  const shippingKurus = quote && quote.status !== "unknown" ? quote.feeKurus : 0;
+  const shippingKurus = quote ? quote.feeKurus : 0;
   const shippingLabel =
     quoteState.status === "loading"
       ? "Hesaplanıyor…"
-      : !quote || quote.status === "unknown"
+      : !quote
         ? "Hesaplanamadı"
         : quote.status === "free"
           ? "Ücretsiz"
@@ -191,10 +191,7 @@ export default function SepetPage() {
                       {shippingLabel}
                     </span>
                   </div>
-                  <p className={styles.shippingBasis}>
-                    {SHIPPING_BASIS_NOTE}
-                    {recipientPays && <> {RECIPIENT_PAYS_NOTE}</>}
-                  </p>
+                  {recipientPays && <p className={styles.shippingBasis}>{RECIPIENT_PAYS_NOTE}</p>}
                 </div>
 
                 <div className={styles.freeShipNote}>

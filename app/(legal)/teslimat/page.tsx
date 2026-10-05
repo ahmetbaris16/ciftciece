@@ -28,7 +28,7 @@ export default async function TeslimatPage() {
           </nav>
           <span className={styles.category}>Müşteri Hizmetleri</span>
           <h1 className={styles.title}>Teslimat Bilgileri</h1>
-          <p className={styles.meta}>Son güncelleme: 2 Ekim 2026</p>
+          <p className={styles.meta}>Son güncelleme: 5 Ekim 2026</p>
         </header>
 
         <div className={styles.content}>
@@ -57,10 +57,10 @@ export default async function TeslimatPage() {
           <h3>Kargo Bedeli</h3>
           <p>
             <strong>{formatPrice(shipping.freeThresholdKurus)} ve üzeri</strong> siparişlerde
-            kargo ücretsizdir. Bu tutarın altındaki siparişlerde kargo bedeli,
-            siparişinizin ağırlığı ve paket boyutuna (desi) göre hesaplanır ve siparişi
-            onaylamadan önce ödeme sayfasında gösterilir. Aynı pakete sığan ürünler
-            için ayrı ayrı kargo ücreti alınmaz.
+            kargo ücretsizdir.{" "}
+            {shipping.feeKurus !== null
+              ? `Bu tutarın altındaki siparişlerde sipariş başına ${formatPrice(shipping.feeKurus)} kargo bedeli alınır (ürün sayısından bağımsız); tutar siparişi onaylamadan önce ödeme sayfasında gösterilir.`
+              : "Bu tutarın altındaki siparişlerde kargo bedeli siparişi onaylamadan önce ödeme sayfasında gösterilir."}
           </p>
           <p>Siparişler yalnızca yurt içine, {CARRIER.name} ile gönderilir.</p>
 

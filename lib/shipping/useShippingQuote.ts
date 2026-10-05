@@ -2,17 +2,16 @@
 
 /**
  * Sepetin Yurtiçi Kargo ücretini /api/shipping/quote'tan alır; sepet değişince (adet artır/azalt)
- * kısa bir beklemeyle yeniden sorar, eski istek iptal edilir.
- * İstemci tutar hesaplamaz: "unknown" dönerse ekranda rakam gösterilmez.
+ * kısa bir beklemeyle yeniden sorar, eski istek iptal edilir. İstemci tutar hesaplamaz; istek başarısızsa
+ * ekranda rakam gösterilmez.
  */
 
 import { useEffect, useState } from "react";
 
 export type ClientShippingQuote =
   | { status: "free"; carrierName: string; feeKurus: 0 }
-  | { status: "priced"; carrierName: string; feeKurus: number; parcelCount: number }
-  | { status: "recipient"; carrierName: string; feeKurus: 0 }
-  | { status: "unknown"; carrierName: string };
+  | { status: "priced"; carrierName: string; feeKurus: number }
+  | { status: "recipient"; carrierName: string; feeKurus: 0 };
 
 export type ShippingQuoteState =
   | { status: "loading" }

@@ -10,7 +10,7 @@ export const LEGAL_DOCUMENTS = {
   PRE_INFORMATION_FORM: {
     title: "Ön Bilgilendirme Formu",
     path: "/on-bilgilendirme",
-    version: "2026-10-02",
+    version: "2026-10-05",
   },
   DISTANCE_SALES_CONTRACT: {
     title: "Mesafeli Satış Sözleşmesi",

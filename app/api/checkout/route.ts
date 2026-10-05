@@ -9,8 +9,8 @@
  *    Idempotency: aynı `idempotencyKey` ile daha önce sipariş açıldıysa yeni sipariş açılmaz, o döner
  *    (orders.idempotencyKey UNIQUE; içerik farklıysa 409)
  * 2. Her varyant için server'dan fiyat ve stok kontrol (Prisma)
- * 3. Kargo: Yurtiçi Kargo ücreti koli planı + tarifeyle (lib/shipping/quote) hesaplanır;
- *    hesaplanamıyorsa alıcı ödemeli (ayar açıksa) ya da sipariş açılmaz
+ * 3. Kargo: sabit Yurtiçi Kargo ücreti; ücretsiz kargo sınırı aşıldıysa ücretsiz (lib/shipping/quote);
+ *    ücret henüz girilmemişse gönderi alıcı ödemeli
  * 4. Ödeme yöntemi (kart / havale / kapıda ödeme) ayara ve tutar sınırına göre doğrulanır
  * 5. Toplam = ara toplam + kargo + yöntem ücreti (kapıda ödeme bedeli)
  * 6. DB'ye order kaydet (createOrder — transaction + stok düş)
@@ -33,7 +33,7 @@ import { checkoutRequestHash } from "@/lib/checkout/idempotency";
 import type { BillingInfo, Order } from "@/types";
 import { getShippingSettings } from "@/lib/shipping/shipping.repository";
 import { getCurrentCustomer } from "@/lib/auth/session";
-import { isQuoteFinal, quoteShipping, shippingModeOf, type ShippingLine } from "@/lib/shipping/quote";
+import { quoteShipping, shippingModeOf } from "@/lib/shipping/quote";
 import { getPaymentSettings } from "@/lib/payment/settings.repository";
 import { availablePaymentOptions, isOptionAllowed } from "@/lib/payment/methods";
 import { cardAvailabilityForRequest } from "@/lib/payment/availability";
@@ -184,7 +184,6 @@ export async function POST(request: NextRequest) {
     discountKurus: number;
   }> = [];
   let subtotalKurus = 0;
-  const shippingLines: ShippingLine[] = [];
   const stockErrors: string[] = [];
 
   for (const item of items) {
@@ -236,7 +235,6 @@ export async function POST(request: NextRequest) {
       vatRateBps: product.vatRateBps ?? null, // Katalogda yoksa boş — oran uydurulmaz
       discountKurus,
     });
-    shippingLines.push({ sku: variant.sku, quantity: item.quantity });
   }
 
   if (stockErrors.length > 0) {
@@ -247,24 +245,15 @@ export async function POST(request: NextRequest) {
     return fail(400, "EMPTY", CHECKOUT_MESSAGES.productUnavailable);
   }
 
-  // ── Kargo — Yurtiçi Kargo, ağırlık/desi ve paketlemeye göre SUNUCUDA hesaplanır ──
-  let quote: Awaited<ReturnType<typeof quoteShipping>>;
+  // ── Kargo — sabit ücret, SUNUCUDAKİ ayardan (istemcinin gönderdiği tutar yok sayılır) ──
+  let quote: ReturnType<typeof quoteShipping>;
   try {
-    quote = await quoteShipping(
-      { lines: shippingLines, subtotalKurus, destination: { city: shipping.city, district: shipping.district } },
-      await getShippingSettings()
-    );
+    quote = quoteShipping({ subtotalKurus }, await getShippingSettings());
   } catch (err) {
     console.error("[/api/checkout] shipping quote error:", err);
     return fail(503, "UNAVAILABLE", CHECKOUT_MESSAGES.serviceUnavailable);
   }
-  if (!isQuoteFinal(quote)) {
-    console.info(`[/api/checkout] kargo ücreti hesaplanamadı: ${quote.reason}${quote.skus ? ` (${quote.skus.join(", ")})` : ""}`);
-    return fail(409, "SHIPPING_UNKNOWN", CHECKOUT_MESSAGES.shippingUnknown);
-  }
-  if (quote.status === "recipient") {
-    console.info(`[/api/checkout] kargo alıcı ödemeli: ${quote.reason}${quote.skus ? ` (${quote.skus.join(", ")})` : ""}`);
-  }
+  if (quote.status === "recipient") console.info("[/api/checkout] kargo ücreti girilmemiş: gönderi alıcı ödemeli");
   const shippingKurus = quote.feeKurus;
 
   // ── Ödeme yöntemi — ayar + tutar sınırı SUNUCUDA kontrol edilir ──
@@ -311,16 +300,6 @@ export async function POST(request: NextRequest) {
         postalCode: shipping.postalCode,
         carrier: { id: quote.carrier.id, name: quote.carrier.name },
         shippingMode: shippingModeOf(quote),
-        ...(quote.status === "priced" && {
-          parcels: quote.parcels.map((p) => ({
-            box: p.boxName,
-            items: p.itemCount,
-            grossGrams: p.grossGrams,
-            desi: p.desi,
-            billableDesi: p.billableDesi,
-            feeKurus: p.feeKurus,
-          })),
-        }),
       },
       items: orderItems,
       billingInfo: billingInfoOf(billing, `${contact.firstName} ${contact.lastName}`),

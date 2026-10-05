@@ -19,7 +19,16 @@ export async function getShippingSettings(): Promise<ShippingSettings> {
 }
 
 export async function saveShippingSettings(settings: ShippingSettings): Promise<ShippingSettings> {
-  const value = JSON.stringify(settings);
+  // Eski sürümün alanları (desi tarifesi, koliler, paket ölçüleri) silinmez, yalnız yeni alanlar yazılır
+  const row = await prisma.siteSetting.findUnique({ where: { key: SHIPPING_SETTING_KEY } });
+  let previous: Record<string, unknown> = {};
+  try {
+    const parsed: unknown = row ? JSON.parse(row.value) : {};
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) previous = parsed as Record<string, unknown>;
+  } catch {
+    // bozuk eski değer: üzerine yazılır
+  }
+  const value = JSON.stringify({ ...previous, feeKurus: settings.feeKurus, freeThresholdKurus: settings.freeThresholdKurus });
   await prisma.siteSetting.upsert({
     where: { key: SHIPPING_SETTING_KEY },
     update: { value },

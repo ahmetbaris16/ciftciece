@@ -385,8 +385,14 @@ export default async function UrunDetayPage({ params }: Props) {
               <h3>Kargo</h3>
               <p>
                 Siparişler Yurtiçi Kargo ile gönderilir. <strong>{formatPrice(shipping.freeThresholdKurus)}</strong> ve üzeri
-                siparişlerde kargo ücretsizdir. Altındaki siparişlerde kargo ücreti, siparişinizin ağırlığı ve paket boyutuna
-                göre hesaplanır ve ödeme sayfasında gösterilir.
+                siparişlerde kargo ücretsizdir
+                {shipping.feeKurus !== null ? (
+                  <>
+                    ; altındaki siparişlerde kargo ücreti <strong>{formatPrice(shipping.feeKurus)}</strong>.
+                  </>
+                ) : (
+                  "."
+                )}
               </p>
             </div>
             <div className={styles.infoCard}>
