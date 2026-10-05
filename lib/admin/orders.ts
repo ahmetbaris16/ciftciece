@@ -10,12 +10,12 @@ export const ORDER_FILTERS = {
   tum: "Tümü",
   kargolanacak: "Kargolanacak",
   havale: "Havale bekleyen",
-  dikkat: "Dikkat",
   talep: "Müşteri talebi",
-  "odeme-bekleyen": "Ödeme bekleyen",
   kargoda: "Kargoda",
   teslim: "Teslim edildi",
   iptal: "İptal / iade",
+  // Listede yalnız böyle sipariş varken görünür (panelden de bağlantı verilir)
+  dikkat: "Dikkat",
 } as const;
 
 export type OrderFilter = keyof typeof ORDER_FILTERS;
@@ -35,8 +35,6 @@ function whereFor(filter: OrderFilter): Prisma.OrderWhereInput {
       return { needsAttention: true };
     case "talep":
       return { requests: { some: { status: "OPEN" } } };
-    case "odeme-bekleyen":
-      return { status: "PENDING" };
     case "kargoda":
       return { status: "SHIPPED" };
     case "teslim":

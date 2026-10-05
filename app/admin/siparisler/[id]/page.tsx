@@ -89,9 +89,7 @@ function nextStep(order: Order, c: StepContext): string {
     return "Ödemenin tamamı iade edilmiş ama sipariş açık kalmış (eski kayıt). Aşağıdaki düğmeyle siparişi kapatın; hazırlanamaz ve kargolanamaz.";
   }
   if (!closed && c.openCancel) {
-    return c.paidKurus > 0
-      ? "Müşteri iptal istedi; sipariş karar verilene kadar hazırlanamaz ve kargolanamaz. Kabul ediyorsanız parayı iade edip aşağıdaki İade bölümünden tam iade kaydı girin: sipariş iptal edilir. Kabul etmiyorsanız yukarıdaki talebi reddedin; sipariş devam eder."
-      : "Müşteri iptal istedi; sipariş karar verilene kadar kargolanamaz. Kabul ediyorsanız “İptal et”e basın. Kabul etmiyorsanız yukarıdaki talebi reddedin; sipariş devam eder.";
+    return "Müşterinin iptal isteğine yukarıdan karar verin. Karar verilene kadar sipariş hazırlanamaz ve kargolanamaz.";
   }
   switch (order.status) {
     case "PENDING":
@@ -217,11 +215,8 @@ export default async function AdminSiparisDetay({ params }: Props) {
               {testPaid === "demo" ? "Demo ödeme: gerçek para alınmadı" : "Test ödemesi: gerçek para alınmadı"}
             </h2>
             <p className={s.muted}>
-              {testPaid === "demo"
-                ? "Bu sipariş, sanal POS bağlanmadan önce banka ödeme sayfasının demo kopyasıyla “ödendi”. "
-                : "Bu sipariş bankanın test ortamında ödendi. "}
-              Gerçek sipariş gibi kargolamayın. Deneme bittiyse aşağıdaki iade formundan “Diğer” yöntemiyle, sebep “
-              {testPaid === "demo" ? "demo ödeme" : "test ödemesi"}” yazıp tam iade kaydı girin; sipariş kendiliğinden kapanır.
+              Gerçek sipariş gibi kargolamayın. Deneme bittiyse aşağıdaki İade bölümünden “Diğer” yöntemiyle tam iade kaydı
+              girin; sipariş kendiliğinden kapanır.
             </p>
           </div>
         )}
@@ -240,11 +235,11 @@ export default async function AdminSiparisDetay({ params }: Props) {
             <p className={s.muted} style={{ margin: "0.5rem 0 0.75rem" }}>
               {r.type === "CANCEL"
                 ? d.paidKurus > 0
-                  ? "Kabul: parayı iade edip İade bölümünde tam iade kaydını girin; sipariş iptal edilir, talep kendiliğinden kapanır. Ret: sipariş hazırlanmaya devam eder."
-                  : "Kabul: “İptal et”e basın; talep kendiliğinden kapanır. Ret: sipariş devam eder."
+                  ? "Kabul: parayı iade edip aşağıya iade kaydını girin, sipariş iptal edilir. Ret: sipariş devam eder."
+                  : "Kabul: “İptal et”e basın. Ret: sipariş devam eder."
                 : d.paidKurus > 0
-                  ? "Kabul: ürün size geri ulaşınca (en geç 14 gün içinde) parayı iade edip İade bölümünde iade kaydını girin; talep kendiliğinden kapanır, tam iadede sipariş “iade edildi” olur. Ret: iade yapılmaz."
-                  : "Kabul: gönderi size geri dönünce “İptal et (gönderi geri döndü)”ye basın; talep kendiliğinden kapanır. Ret: iade yapılmaz."}
+                  ? "Kabul: ürün geri gelince parayı iade edip aşağıya iade kaydını girin. Ret: iade yapılmaz."
+                  : "Kabul: gönderi geri dönünce “İptal et (gönderi geri döndü)”ye basın. Ret: iade yapılmaz."}
             </p>
             <RequestActions requestId={r.id} type={r.type} acceptHref={d.paidKurus > 0 ? "#iade" : "#siradaki-adim"} />
           </div>
@@ -345,17 +340,12 @@ export default async function AdminSiparisDetay({ params }: Props) {
                 <span>Toplam</span>
                 <span>{formatPrice(order.totalKurus)}</span>
               </div>
-              <div className={s.money}>
-                <div className={s.moneyCell}>
-                  Alınan ödeme<strong>{formatPrice(d.paidKurus)}</strong>
+              {d.refundedKurus > 0 && (
+                <div className={s.line} style={{ borderBottom: 0 }}>
+                  <span className={s.muted}>İade edilen</span>
+                  <span className={s.muted}>−{formatPrice(d.refundedKurus)}</span>
                 </div>
-                <div className={s.moneyCell}>
-                  İade edilen<strong>{formatPrice(d.refundedKurus)}</strong>
-                </div>
-                <div className={s.moneyCell}>
-                  İade edilebilir<strong>{formatPrice(remaining)}</strong>
-                </div>
-              </div>
+              )}
             </section>
 
             {(d.paidKurus > 0 || d.refunds.length > 0) && (
@@ -377,165 +367,184 @@ export default async function AdminSiparisDetay({ params }: Props) {
                   </ul>
                 )}
                 {remaining > 0 && !order.needsAttention ? (
-                  <RefundForm
-                    key={remaining}
-                    orderId={order.id}
-                    remainingKurus={remaining}
-                    paymentMethod={order.paymentMethod}
-                    shipped={shipped}
-                  />
+                  <details className={s.details} open={openRequests.length > 0 || !!testPaid}>
+                    <summary>İade kaydı gir (iade edilebilir {formatPrice(remaining)})</summary>
+                    <div style={{ marginTop: "0.75rem" }}>
+                      <RefundForm
+                        key={remaining}
+                        orderId={order.id}
+                        remainingKurus={remaining}
+                        paymentMethod={order.paymentMethod}
+                        shipped={shipped}
+                      />
+                    </div>
+                  </details>
                 ) : remaining > 0 ? (
                   <p className={s.muted}>Ödeme uyarısı çözülmeden iade kaydı girilmez.</p>
                 ) : (
-                  <p className={s.muted}>Alınan ödemenin tamamı iade kaydına geçti.</p>
+                  <p className={s.muted}>Alınan ödemenin tamamı iade edildi.</p>
                 )}
               </section>
             )}
 
-            <section className={s.card}>
-              <h2 className={s.h2}>Ödeme</h2>
-              <p className={s.text}>{PAYMENT_METHOD_LABELS[order.paymentMethod]}</p>
-              {order.paymentMethod === "CASH_ON_DELIVERY" && (
-                <p className={s.muted}>Kapıda tahsil edilecek: {formatPrice(order.totalKurus)}</p>
-              )}
-              <h3 className={s.h3}>Ödeme denemeleri</h3>
-              {d.attempts.length === 0 ? (
-                <p className={s.muted}>Deneme kaydı yok.</p>
-              ) : (
-                <ul className={s.list}>
-                  {d.attempts.map((a, i) => {
-                    const st = ATTEMPT_STATUS_TR[a.status] ?? { label: a.status, color: "#999" };
-                    return (
-                      <li key={a.id} className={s.item}>
-                        <p className={s.text}>
-                          {i + 1}. {PROVIDER_LABELS[a.provider] ?? a.provider} · <span style={{ color: st.color, fontWeight: 600 }}>{st.label}</span>{" "}
-                          · beklenen {formatPrice(a.amountKurus)}
-                        </p>
-                        <p className={s.muted}>
-                          Açıldı {dateTimeTr(a.createdAt)}
-                          {a.verifiedAt && <> · doğrulandı {dateTimeTr(a.verifiedAt)}</>}
-                          {a.providerPaymentId && (
-                            <>
-                              {" "}
-                              · {a.provider === "demo" ? "demo onay kodu" : "banka işlem no"}{" "}
-                              {a.provider.startsWith("akbank") || a.provider === "demo" ? a.providerPaymentId.split(":").pop() : a.providerPaymentId}
-                            </>
-                          )}
-                        </p>
-                        {a.method === "CARD" && (a.paidAmountKurus !== null || a.chargedAmountKurus !== null) && (
-                          <p className={s.muted}>
-                            Bankanın bildirdiği: tutar {a.paidAmountKurus !== null ? formatPrice(a.paidAmountKurus) : "—"} · çekilen{" "}
-                            {a.chargedAmountKurus !== null ? formatPrice(a.chargedAmountKurus) : "—"}
-                            {a.paidCurrency && <> · {a.paidCurrency}</>}
-                            {a.installment && a.installment > 1 && <> · {a.installment} taksit</>}
-                            {a.fraudStatus !== null && <> · fraud {a.fraudStatus}</>}
-                          </p>
-                        )}
-                        {a.failureReason && (
-                          <p className={s.muted} style={{ color: "#f3a0a0" }}>
-                            {a.failureReason}
-                          </p>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-              {d.legacyPayment && (
-                <p className={s.muted} style={{ marginTop: "0.5rem" }}>
-                  Eski ödeme kaydı: {d.legacyPayment.provider} · {d.legacyPayment.status}
-                </p>
-              )}
-              {order.paymentMethod === "CARD" && (
-                <ReconcileButton
-                  orderId={order.id}
-                  label={
-                    provider === "demo"
-                      ? "Demo bankadan sorgula"
-                      : provider === "akbank"
-                        ? "Akbank'tan sorgula"
-                        : provider === "iyzico"
-                          ? "iyzico'dan sorgula"
-                          : "Bankadan sorgula"
-                  }
-                />
-              )}
-              <details className={s.details} style={{ marginTop: "1rem" }}>
-                <summary>Ödeme olayları ({d.paymentEvents.length})</summary>
-                {d.paymentEvents.length === 0 ? (
-                  <p className={s.muted}>Kayıt yok.</p>
-                ) : (
-                  d.paymentEvents.map((e) => (
-                    <div key={e.id} className={s.line}>
-                      <span className={s.muted}>
-                        {dateTimeTr(e.processedAt)} · {e.source ? SOURCE_TR[e.source] ?? e.source : "—"} · {e.eventType}
-                        {e.actorId && <> · admin {e.actorId.slice(0, 8)}</>}
-                        {e.signatureValid === false && <span style={{ color: "#f3a0a0" }}> · imza geçersiz</span>}
-                        {e.error && <span style={{ color: "#f3a0a0" }}> · {e.error}</span>}
-                      </span>
-                      <span className={s.muted}>{e.outcome ?? e.status}</span>
-                    </div>
-                  ))
-                )}
+            <section className={`${s.card} ${s.more}`}>
+              <details className={s.moreItem}>
+                <summary>Müşteriye e-posta yaz</summary>
+                <div className={s.moreBody}>
+                  <CustomerEmailForm orderId={order.id} to={order.guestEmail ?? null} />
+                </div>
               </details>
-            </section>
-
-            <section className={s.card}>
-              <h2 className={s.h2}>Müşteriye e-posta</h2>
-              <CustomerEmailForm orderId={order.id} to={order.guestEmail ?? null} />
-              <h3 className={s.h3}>
-                Bu siparişin e-postaları
-                {failedEmails > 0 && <span style={{ color: "#f3a0a0" }}> · {failedEmails} gönderilemedi</span>}
-              </h3>
-              {d.emails.length === 0 ? (
-                <p className={s.muted}>Henüz e-posta yok.</p>
-              ) : (
-                <ul className={s.list}>
-                  {d.emails.map((m) => {
-                    const st = EMAIL_STATUS_TR[m.status] ?? { label: m.status, color: "#999" };
-                    return (
-                      <li key={m.id} className={s.item}>
+              <details className={s.moreItem}>
+                <summary>Sipariş geçmişi ve iç notlar ({d.events.length})</summary>
+                <div className={s.moreBody}>
+                  <NoteForm orderId={order.id} />
+                  <ul className={s.list} style={{ marginTop: "0.75rem" }}>
+                    {d.events.map((e) => (
+                      <li key={e.id} className={s.item}>
                         <div className={s.eventHead}>
-                          <span style={{ color: st.color, fontWeight: 700 }}>{st.label}</span>
-                          <span>{emailKindLabel(m.kind)}</span>
-                          <span>· {m.audience === "store" ? "işletmeye" : m.toAddress}</span>
-                          <span>· {dateTimeTr(m.sentAt ?? m.createdAt)}</span>
+                          <span>{dateTimeTr(e.createdAt)}</span>
+                          <span>· {ACTOR_TR[e.actorType] ?? e.actorType}</span>
+                          <span className={e.visibleToCustomer ? `${s.tag} ${s.tagPublic}` : s.tag}>
+                            {e.visibleToCustomer ? "müşteri görür" : e.type === "NOTE" ? "iç not" : "iç kayıt"}
+                          </span>
                         </div>
-                        <p className={s.text} style={{ marginTop: "0.2rem" }}>
-                          {m.subject}
+                        <p className={s.text} style={{ marginTop: "0.2rem", whiteSpace: "pre-wrap" }}>
+                          {e.message}
                         </p>
-                        {m.status !== "SENT" && m.lastError && (
-                          <p className={s.muted} style={{ color: "#f3a0a0" }}>
-                            {m.attempts} deneme · {m.lastError}
-                          </p>
-                        )}
-                        {(m.status === "FAILED" || m.status === "CANCELLED") && <EmailRequeueButton emailId={m.id} />}
                       </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </section>
-
-            <section className={s.card}>
-              <h2 className={s.h2}>Sipariş geçmişi</h2>
-              <NoteForm orderId={order.id} />
-              <ul className={s.list} style={{ marginTop: "0.75rem" }}>
-                {d.events.map((e) => (
-                  <li key={e.id} className={s.item}>
-                    <div className={s.eventHead}>
-                      <span>{dateTimeTr(e.createdAt)}</span>
-                      <span>· {ACTOR_TR[e.actorType] ?? e.actorType}</span>
-                      <span className={e.visibleToCustomer ? `${s.tag} ${s.tagPublic}` : s.tag}>
-                        {e.visibleToCustomer ? "müşteri görür" : e.type === "NOTE" ? "iç not" : "iç kayıt"}
-                      </span>
-                    </div>
-                    <p className={s.text} style={{ marginTop: "0.2rem", whiteSpace: "pre-wrap" }}>
-                      {e.message}
+                    ))}
+                  </ul>
+                  {d.consents.length > 0 && (
+                    <p className={s.muted} style={{ marginTop: "0.75rem" }}>
+                      Onaylanan sözleşmeler:{" "}
+                      {d.consents
+                        .map(
+                          (c) =>
+                            `${LEGAL_DOCUMENTS[c.document as LegalDocumentId]?.title ?? c.document} (sürüm ${c.version}, ${dateTimeTr(c.acceptedAt)}, IP ${c.ipAddress ?? "bilinmiyor"})`
+                        )
+                        .join("; ")}
                     </p>
-                  </li>
-                ))}
-              </ul>
+                  )}
+                </div>
+              </details>
+              <details className={s.moreItem} open={order.needsAttention}>
+                <summary>Ödeme kayıtları</summary>
+                <div className={s.moreBody}>
+                  {d.attempts.length === 0 ? (
+                    <p className={s.muted}>Deneme kaydı yok.</p>
+                  ) : (
+                    <ul className={s.list}>
+                      {d.attempts.map((a, i) => {
+                        const st = ATTEMPT_STATUS_TR[a.status] ?? { label: a.status, color: "#999" };
+                        return (
+                          <li key={a.id} className={s.item}>
+                            <p className={s.text}>
+                              {i + 1}. {PROVIDER_LABELS[a.provider] ?? a.provider} · <span style={{ color: st.color, fontWeight: 600 }}>{st.label}</span>{" "}
+                              · beklenen {formatPrice(a.amountKurus)}
+                            </p>
+                            <p className={s.muted}>
+                              Açıldı {dateTimeTr(a.createdAt)}
+                              {a.verifiedAt && <> · doğrulandı {dateTimeTr(a.verifiedAt)}</>}
+                              {a.providerPaymentId && (
+                                <>
+                                  {" "}
+                                  · {a.provider === "demo" ? "demo onay kodu" : "banka işlem no"}{" "}
+                                  {a.provider.startsWith("akbank") || a.provider === "demo" ? a.providerPaymentId.split(":").pop() : a.providerPaymentId}
+                                </>
+                              )}
+                            </p>
+                            {a.method === "CARD" && (a.paidAmountKurus !== null || a.chargedAmountKurus !== null) && (
+                              <p className={s.muted}>
+                                Bankanın bildirdiği: tutar {a.paidAmountKurus !== null ? formatPrice(a.paidAmountKurus) : "—"} · çekilen{" "}
+                                {a.chargedAmountKurus !== null ? formatPrice(a.chargedAmountKurus) : "—"}
+                                {a.paidCurrency && <> · {a.paidCurrency}</>}
+                                {a.installment && a.installment > 1 && <> · {a.installment} taksit</>}
+                                {a.fraudStatus !== null && <> · fraud {a.fraudStatus}</>}
+                              </p>
+                            )}
+                            {a.failureReason && (
+                              <p className={s.muted} style={{ color: "#f3a0a0" }}>
+                                {a.failureReason}
+                              </p>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                  {d.legacyPayment && (
+                    <p className={s.muted} style={{ marginTop: "0.5rem" }}>
+                      Eski ödeme kaydı: {d.legacyPayment.provider} · {d.legacyPayment.status}
+                    </p>
+                  )}
+                  {order.paymentMethod === "CARD" && (
+                    <ReconcileButton
+                      orderId={order.id}
+                      label={
+                        provider === "demo"
+                          ? "Demo bankadan sorgula"
+                          : provider === "akbank"
+                            ? "Akbank'tan sorgula"
+                            : provider === "iyzico"
+                              ? "iyzico'dan sorgula"
+                              : "Bankadan sorgula"
+                      }
+                    />
+                  )}
+                  <h3 className={s.h3}>Ödeme olayları ({d.paymentEvents.length})</h3>
+                  {d.paymentEvents.length === 0 ? (
+                    <p className={s.muted}>Kayıt yok.</p>
+                  ) : (
+                    d.paymentEvents.map((e) => (
+                      <div key={e.id} className={s.line}>
+                        <span className={s.muted}>
+                          {dateTimeTr(e.processedAt)} · {e.source ? SOURCE_TR[e.source] ?? e.source : "—"} · {e.eventType}
+                          {e.actorId && <> · admin {e.actorId.slice(0, 8)}</>}
+                          {e.signatureValid === false && <span style={{ color: "#f3a0a0" }}> · imza geçersiz</span>}
+                          {e.error && <span style={{ color: "#f3a0a0" }}> · {e.error}</span>}
+                        </span>
+                        <span className={s.muted}>{e.outcome ?? e.status}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </details>
+              <details className={s.moreItem} open={failedEmails > 0}>
+                <summary>
+                  Gönderilen e-postalar ({d.emails.length})
+                  {failedEmails > 0 && <span style={{ color: "#f3a0a0" }}> · {failedEmails} gönderilemedi</span>}
+                </summary>
+                <div className={s.moreBody}>
+                  {d.emails.length === 0 ? (
+                    <p className={s.muted}>Henüz e-posta yok.</p>
+                  ) : (
+                    <ul className={s.list}>
+                      {d.emails.map((m) => {
+                        const st = EMAIL_STATUS_TR[m.status] ?? { label: m.status, color: "#999" };
+                        return (
+                          <li key={m.id} className={s.item}>
+                            <div className={s.eventHead}>
+                              <span style={{ color: st.color, fontWeight: 700 }}>{st.label}</span>
+                              <span>{emailKindLabel(m.kind)}</span>
+                              <span>· {m.audience === "store" ? "işletmeye" : m.toAddress}</span>
+                              <span>· {dateTimeTr(m.sentAt ?? m.createdAt)}</span>
+                            </div>
+                            <p className={s.text} style={{ marginTop: "0.2rem" }}>
+                              {m.subject}
+                            </p>
+                            {m.status !== "SENT" && m.lastError && (
+                              <p className={s.muted} style={{ color: "#f3a0a0" }}>
+                                {m.attempts} deneme · {m.lastError}
+                              </p>
+                            )}
+                            {(m.status === "FAILED" || m.status === "CANCELLED") && <EmailRequeueButton emailId={m.id} />}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              </details>
             </section>
           </div>
 
@@ -556,15 +565,20 @@ export default async function AdminSiparisDetay({ params }: Props) {
               <p className={s.muted} style={{ marginTop: "0.5rem" }}>
                 <Link href={`/admin/musteriler/${order.id}`}>Müşteri sayfası (tüm siparişleri) ›</Link>
               </p>
-              {d.requests.length > openRequests.length && (
-                <p className={s.muted} style={{ marginTop: "0.5rem" }}>
-                  Kapanmış talepler:{" "}
-                  {d.requests
-                    .filter((r) => r.status !== "OPEN")
-                    .map((r) => `${r.type === "CANCEL" ? "iptal" : "iade"} (${r.status === "RESOLVED" ? "sonuçlandı" : "reddedildi"})`)
-                    .join(", ")}
-                </p>
-              )}
+            </section>
+
+            <section className={s.card}>
+              <h2 className={s.h2}>Ödeme</h2>
+              <p className={s.text}>{PAYMENT_METHOD_LABELS[order.paymentMethod]}</p>
+              <p className={s.muted}>
+                {d.paidKurus > 0
+                  ? `Alındı: ${formatPrice(d.paidKurus)}${testPaid ? " (demo/test, gerçek para değil)" : ""}`
+                  : order.paymentMethod === "CASH_ON_DELIVERY"
+                    ? `Kapıda tahsil edilecek: ${formatPrice(order.totalKurus)}`
+                    : closed
+                      ? "Ödeme alınmadı."
+                      : "Ödeme bekleniyor."}
+              </p>
             </section>
 
             <section className={s.card}>
@@ -632,19 +646,6 @@ export default async function AdminSiparisDetay({ params }: Props) {
               <InvoiceForm orderId={order.id} current={order.invoiceNumber} />
             </section>
 
-            <section className={s.card}>
-              <h2 className={s.h2}>Sözleşme onayı</h2>
-              {d.consents.length === 0 ? (
-                <p className={s.muted}>Kayıt yok (bu sürümden önce verilmiş sipariş).</p>
-              ) : (
-                d.consents.map((c) => (
-                  <p key={c.id} className={s.muted} style={{ marginBottom: "0.35rem" }}>
-                    {LEGAL_DOCUMENTS[c.document as LegalDocumentId]?.title ?? c.document} · sürüm {c.version} · {dateTimeTr(c.acceptedAt)} · IP{" "}
-                    {c.ipAddress ?? "bilinmiyor"}
-                  </p>
-                ))
-              )}
-            </section>
           </aside>
         </div>
       </div>

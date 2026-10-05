@@ -160,27 +160,8 @@
   font-weight: 700;
 }
 
-.money {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.5rem;
-  margin-top: 0.9rem;
-}
 
-.moneyCell {
-  padding: 0.6rem 0.75rem;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
-  font-size: 0.8125rem;
-  color: rgba(232, 228, 217, 0.6);
-}
 
-.moneyCell strong {
-  display: block;
-  margin-top: 0.15rem;
-  font-size: 0.9375rem;
-  color: #e8e4d9;
-}
 
 .list {
   list-style: none;
@@ -263,8 +244,32 @@
   }
 }
 
-@media (max-width: 520px) {
-  .money {
-    grid-template-columns: minmax(0, 1fr);
-  }
+/* Az kullanılan bölümler: tek kartta katlanır satırlar */
+.more {
+  padding-top: 0.35rem;
+  padding-bottom: 0.35rem;
+}
+
+.moreItem {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.moreItem:last-child {
+  border-bottom: 0;
+}
+
+.moreItem > summary {
+  padding: 0.8rem 0;
+  cursor: pointer;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #e8e4d9;
+}
+
+.moreItem > summary:hover {
+  color: #c4d68e;
+}
+
+.moreBody {
+  padding: 0 0 1rem;
 }

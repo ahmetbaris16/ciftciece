@@ -10,6 +10,7 @@ import AdminShell from "@/components/admin/AdminShell";
 import { formatPrice } from "@/types";
 import { PAYMENT_METHOD_LABELS } from "@/lib/payment/methods";
 import { ORDER_FILTERS, parseFilter, searchOrdersForAdmin, type OrderFilter } from "@/lib/admin/orders";
+import { getAdminBadges } from "@/lib/admin/dashboard";
 import rows_ from "@/components/admin/AdminRows.module.css";
 
 export const dynamic = "force-dynamic";
@@ -39,7 +40,9 @@ export default async function AdminSiparislerPage({ searchParams }: Props) {
   const page = Number(params.sayfa) || 1;
   // Süresi dolan ödenmemiş siparişler listede güncel görünsün (stok iade edilir)
   await releaseExpiredOrders().catch((err) => console.error("[admin/siparisler]", err));
-  const { rows, total, pages } = await searchOrdersForAdmin({ q, filter, page });
+  const [{ rows, total, pages }, badges] = await Promise.all([searchOrdersForAdmin({ q, filter, page }), getAdminBadges()]);
+  // "Dikkat" filtresi yalnız ödeme uyarılı sipariş varken (ya da seçiliyken) görünür
+  const filters = (Object.keys(ORDER_FILTERS) as OrderFilter[]).filter((f) => f !== "dikkat" || badges.attention > 0 || filter === "dikkat");
 
   const href = (next: { durum?: OrderFilter; sayfa?: number; q?: string }) => {
     const sp = new URLSearchParams();
@@ -72,7 +75,7 @@ export default async function AdminSiparislerPage({ searchParams }: Props) {
         </form>
 
         <nav style={st.filters} aria-label="Sipariş filtreleri">
-          {(Object.keys(ORDER_FILTERS) as OrderFilter[]).map((f) => (
+          {filters.map((f) => (
             <Link key={f} href={href({ durum: f, sayfa: 1 })} style={{ ...st.filter, ...(filter === f ? st.filterOn : {}) }}>
               {ORDER_FILTERS[f]}
             </Link>

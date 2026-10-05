@@ -87,10 +87,7 @@ export default function RefundForm({
 
   return (
     <form className={f.form} onSubmit={submit} noValidate>
-      <p className={f.hint}>
-        Önce parayı iade edin (kart: Akbank sanal POS panelinden iade; havale: müşterinin IBAN&apos;ına), sonra buraya kaydedin. İade
-        edilebilir: <strong>{formatPrice(remainingKurus)}</strong>.
-      </p>
+      <p className={f.hint}>Önce parayı iade edin (kart: banka sanal POS panelinden, havale: müşterinin IBAN&apos;ına), sonra buraya kaydedin.</p>
       <div className={f.row}>
         <label className={f.field}>
           <span className={f.label}>Tutar (TL)</span>
@@ -123,11 +120,10 @@ export default function RefundForm({
       </label>
       {full ? (
         <p className={f.hint}>
-          Tam iade: sipariş {shipped ? "“iade edildi”" : "“iptal edildi” (ayrılan stok geri eklenir)"} olarak kapanır; sonra
-          hazırlama, kargo ya da teslim işlemi yapılamaz.
+          Tam iade: sipariş {shipped ? "“iade edildi”" : "“iptal edildi” (stok geri eklenir)"} olarak kapanır.
         </p>
       ) : (
-        <p className={f.hint}>Kısmi iade: sipariş devam eder (ör. eksik/hasarlı ürün bedeli).</p>
+        <p className={f.hint}>Kısmi iade: sipariş devam eder.</p>
       )}
       {shipped && full && (
         <label className={f.check}>
