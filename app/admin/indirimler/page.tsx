@@ -1,6 +1,6 @@
 /**
- * Admin — İndirimler: istediği an seçtiği ürünlerde yüzde indirim başlatır (bitiş günü zorunlu), süren indirimi
- * bitirir. Sitede indirimli ürün "%X İndirim" etiketi, üstü çizili eski fiyat ve kampanya tarihleriyle görünür.
+ * Admin — İndirimler: istediği an seçtiği ürünlerde istediği oranda indirim başlatır (bitiş günü zorunlu, en uzun süre
+ * yok), süren indirimin bitiş gününü değiştirir ya da bitirir. Sitede indirimli ürün "%X İndirim" etiketi, üstü çizili eski fiyat ve kampanya tarihleriyle görünür.
  * Eski fiyat: son 10 günde uygulanan en düşük satış fiyatı (lib/pricing/discount.ts).
  */
 
@@ -8,7 +8,7 @@ import { requireAdmin } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { getProductsForAdmin } from "@/lib/repositories";
 import { getActiveDiscountsByProduct, listDiscountsForAdmin, referencePrices } from "@/lib/repositories/discount.repository";
-import { MAX_DISCOUNT_DAYS, istanbulDate } from "@/lib/pricing/discount";
+import { istanbulDate } from "@/lib/pricing/discount";
 import AdminShell from "@/components/admin/AdminShell";
 import DiscountManager, { type DiscountRow, type PickerProduct } from "@/components/admin/DiscountManager";
 import type { AdminDiscountRow } from "@/lib/repositories/discount.repository";
@@ -70,7 +70,6 @@ export default async function AdminIndirimlerPage() {
           past={discounts.past.map(toRow)}
           today={istanbulDate(now)}
           defaultEnd={istanbulDate(new Date(now.getTime() + 7 * DAY))}
-          maxEnd={istanbulDate(new Date(now.getTime() + (MAX_DISCOUNT_DAYS - 1) * DAY))}
         />
       </div>
     </AdminShell>

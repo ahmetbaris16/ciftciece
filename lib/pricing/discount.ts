@@ -11,10 +11,13 @@
 export const REFERENCE_WINDOW_DAYS = 10;
 export const REFERENCE_WINDOW_MS = REFERENCE_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 
-/** Yönetici için sınırlar: oran %1–90, kampanya en çok 60 gün */
+/**
+ * Oranı ve süreyi yönetici belirler (kullanıcı kararı: panelde sayıyla sınır yok). Kalan sınırlar yalnız mantık
+ * gereği: oran tam sayı ve %1–99 (%100 ürünü bedava yapar, 0 TL'lik satır ödenemez); bitiş tarihi zorunlu ve
+ * gelecekte (yönetmelik kampanya tarihlerinin yazılmasını ister), en uzun süre yok.
+ */
 export const MIN_PERCENT = 1;
-export const MAX_PERCENT = 90;
-export const MAX_DISCOUNT_DAYS = 60;
+export const MAX_PERCENT = 99;
 
 /** İndirimli fiyat: eski fiyat × (100 − oran) / 100, kuruşa yuvarlanır */
 export function salePrice(referenceKurus: number, percent: number): number {

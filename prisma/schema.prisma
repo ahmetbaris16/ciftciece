@@ -166,10 +166,11 @@ model ProductDiscount {
   id          String                @id @default(cuid())
   productId   String
   product     Product               @relation(fields: [productId], references: [id], onDelete: Cascade)
-  // İndirim oranı, % (1–90)
+  // İndirim oranı, % (1–99; yönetici belirler)
   percent     Int
   startsAt    DateTime
-  // Kampanyanın bitişi (müşteriye yazılan tarih); bu andan sonra kendiliğinden biter
+  // Kampanyanın bitişi (müşteriye yazılan tarih); bu andan sonra kendiliğinden biter. Süren indirimde yönetici
+  // değiştirebilir (uzatma/kısaltma; fiyatlar aynı kalır)
   endsAt      DateTime
   // Bitişten önce elle durdurulduysa
   endedAt     DateTime?

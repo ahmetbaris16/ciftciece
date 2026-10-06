@@ -333,6 +333,42 @@
   font-family: inherit;
 }
 
+.neutralBtn {
+  flex-shrink: 0;
+  padding: 0.45rem 0.9rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: transparent;
+  color: #e8e4d9;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-family: inherit;
+}
+
+.neutralBtn:disabled,
+.secondaryBtn:disabled {
+  opacity: 0.6;
+}
+
+.rowActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 0.5rem 0.75rem;
+  flex-shrink: 0;
+}
+
+.endField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.endField .input {
+  width: 11rem;
+}
+
 .summary {
   cursor: pointer;
   font-weight: 650;
@@ -346,5 +382,9 @@
   .row {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .rowActions {
+    justify-content: flex-start;
   }
 }

@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * Admin — İndirimler: süren indirimler (Bitir), yeni indirim (oran, bitiş günü, ürün seçimi, fiyat önizlemesi) ve
- * geçmiş. Önizlemedeki eski fiyat sunucunun hesapladığı "son 10 günün en düşük fiyatı"dır; indirim başlarken sunucu
+ * Admin — İndirimler: süren indirimler (bitiş gününü değiştir / Bitir), yeni indirim (oran, bitiş günü, ürün seçimi,
+ * fiyat önizlemesi) ve geçmiş. Oranı ve süreyi yönetici belirler (yalnız %1–99 ve gelecekte bir bitiş günü). Önizlemedeki eski fiyat sunucunun hesapladığı "son 10 günün en düşük fiyatı"dır; indirim başlarken sunucu
  * aynı hesabı yeniden yapar (istemcinin gönderdiği fiyat kullanılmaz).
  */
 
@@ -10,7 +10,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { formatPrice } from "@/types";
-import { MAX_DISCOUNT_DAYS, MAX_PERCENT, MIN_PERCENT, formatDiscountPeriod, salePrice } from "@/lib/pricing/discount";
+import { MAX_PERCENT, MIN_PERCENT, formatDiscountPeriod, istanbulDate, salePrice } from "@/lib/pricing/discount";
 import s from "./DiscountManager.module.css";
 
 export interface PickerProduct {
@@ -43,15 +43,13 @@ export default function DiscountManager({
   past,
   today,
   defaultEnd,
-  maxEnd,
 }: {
   products: PickerProduct[];
   active: DiscountRow[];
   past: DiscountRow[];
-  /** İstanbul takviminde bugün / varsayılan bitiş / en geç bitiş (YYYY-MM-DD) */
+  /** İstanbul takviminde bugün / varsayılan bitiş (YYYY-MM-DD) */
   today: string;
   defaultEnd: string;
-  maxEnd: string;
 }) {
   const router = useRouter();
   const [percentText, setPercentText] = useState("10");
@@ -61,6 +59,9 @@ export default function DiscountManager({
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [ending, setEnding] = useState<string | null>(null);
+  // Bitiş günü değiştirilen süren indirim
+  const [endEdit, setEndEdit] = useState<{ id: string; value: string } | null>(null);
+  const [savingEnd, setSavingEnd] = useState(false);
 
   const percent = Number(percentText.replace(",", "."));
   const percentValid = Number.isInteger(percent) && percent >= MIN_PERCENT && percent <= MAX_PERCENT;
@@ -85,7 +86,7 @@ export default function DiscountManager({
 
   const start = async () => {
     setStatus(null);
-    if (!percentValid) return setStatus({ kind: "error", text: `İndirim oranını %${MIN_PERCENT}–%${MAX_PERCENT} arasında bir tam sayı olarak yazın.` });
+    if (!percentValid) return setStatus({ kind: "error", text: `İndirim oranını %${MIN_PERCENT} ile %${MAX_PERCENT} arasında bir tam sayı olarak yazın.` });
     if (selected.length === 0) return setStatus({ kind: "error", text: "İndirim yapılacak ürünü seçin." });
     if (!endsOn) return setStatus({ kind: "error", text: "Bitiş tarihini seçin." });
     const replacing = products.filter((p) => selected.includes(p.id) && p.activePercent !== null).length;
@@ -137,6 +138,29 @@ export default function DiscountManager({
     }
   };
 
+  const saveEnd = async (row: DiscountRow) => {
+    if (!endEdit || endEdit.id !== row.id) return;
+    if (!endEdit.value) return setStatus({ kind: "error", text: "Yeni bitiş gününü seçin." });
+    setSavingEnd(true);
+    setStatus(null);
+    try {
+      const res = await fetch(`/api/admin/discounts/${row.id}/end-date`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endsOn: endEdit.value }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) return setStatus({ kind: "error", text: data?.error ?? "Bitiş günü değiştirilemedi." });
+      setStatus({ kind: "ok", text: `“${row.productName}” indirimi ${formatEnd(endEdit.value)} bitecek; sitede yeni tarih yazıyor.` });
+      setEndEdit(null);
+      router.refresh();
+    } catch {
+      setStatus({ kind: "error", text: "Bağlantı hatası. Tekrar deneyin." });
+    } finally {
+      setSavingEnd(false);
+    }
+  };
+
   return (
     <div className={s.wrap}>
       {status && (
@@ -167,9 +191,39 @@ export default function DiscountManager({
                     {row.items.map((i) => `${i.variantName}: ${formatPrice(i.referenceKurus)} → ${formatPrice(i.saleKurus)}`).join(" · ")}
                   </p>
                 </div>
-                <button type="button" className={s.secondaryBtn} onClick={() => end(row)} disabled={ending === row.id}>
-                  {ending === row.id ? "Bitiriliyor…" : "Bitir"}
-                </button>
+                {endEdit?.id === row.id ? (
+                  <div className={s.rowActions}>
+                    <label className={s.endField}>
+                      <span className={s.label}>Yeni bitiş günü</span>
+                      <input
+                        className={s.input}
+                        type="date"
+                        value={endEdit.value}
+                        min={today}
+                        onChange={(e) => setEndEdit({ id: row.id, value: e.target.value })}
+                      />
+                    </label>
+                    <button type="button" className={s.neutralBtn} onClick={() => saveEnd(row)} disabled={savingEnd}>
+                      {savingEnd ? "Kaydediliyor…" : "Kaydet"}
+                    </button>
+                    <button type="button" className={s.linkBtn} onClick={() => setEndEdit(null)} disabled={savingEnd}>
+                      Vazgeç
+                    </button>
+                  </div>
+                ) : (
+                  <div className={s.rowActions}>
+                    <button
+                      type="button"
+                      className={s.neutralBtn}
+                      onClick={() => setEndEdit({ id: row.id, value: istanbulDate(new Date(row.endsAt)) })}
+                    >
+                      Bitiş gününü değiştir
+                    </button>
+                    <button type="button" className={s.secondaryBtn} onClick={() => end(row)} disabled={ending === row.id}>
+                      {ending === row.id ? "Bitiriliyor…" : "Bitir"}
+                    </button>
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -201,7 +255,7 @@ export default function DiscountManager({
           </label>
           <label className={s.field}>
             <span className={s.label}>Bitiş günü (o günün sonunda biter)</span>
-            <input className={s.input} type="date" value={endsOn} min={today} max={maxEnd} onChange={(e) => setEndsOn(e.target.value)} />
+            <input className={s.input} type="date" value={endsOn} min={today} onChange={(e) => setEndsOn(e.target.value)} />
           </label>
         </div>
 
@@ -258,7 +312,7 @@ export default function DiscountManager({
             {busy ? "Başlatılıyor…" : selected.length > 0 ? `${selected.length} üründe indirimi başlat` : "İndirimi başlat"}
           </button>
           <p className={s.hint}>
-            İndirim hemen başlar ve seçtiğiniz günün sonunda (en çok {MAX_DISCOUNT_DAYS} gün) kendiliğinden biter. Sitede eski fiyat
+            İndirim hemen başlar ve seçtiğiniz günün sonunda kendiliğinden biter; bitiş gününü sonra da değiştirebilirsiniz. Sitede eski fiyat
             üstü çizili, yeni fiyat ve &quot;%{percentValid ? percent : "…"} İndirim&quot; etiketiyle görünür; kampanya tarihleri ürün
             sayfasında yazar. Eski fiyat olarak ürünün son 10 gündeki en düşük satış fiyatı kullanılır (yasal kural).
           </p>

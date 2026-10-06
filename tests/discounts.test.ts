@@ -3,7 +3,8 @@
  * - Hesaplar: indirimli fiyat, "son 10 günün en düşük fiyatı" (fiyat artışı ve önceki indirim dahil), tarih yardımcıları.
  * - Başlatınca vitrin (ürün sayfası, listeler), sepet eşitleme ve ödeme indirimli fiyatı kullanır; sipariş kalemine
  *   indirimden önceki fiyat + kalem indirimi yazılır. Bitirince eski fiyata döner.
- * - Bir üründe tek etkin indirim; yönetici sınırları; fiyat değişikliği geçmişe yazılır.
+ * - Bir üründe tek etkin indirim; oran ve süre yöneticinin (yalnız %1–99 ve gelecekte bitiş); süren indirimin bitiş
+ *   günü değiştirilir; fiyat değişikliği geçmişe yazılır.
  */
 
 import { test } from "node:test";
@@ -12,6 +13,7 @@ import { prisma } from "@/lib/db/prisma";
 import { POST as checkout } from "@/app/api/checkout/route";
 import { getProductBySlug, getCartVariants } from "@/lib/repositories";
 import {
+  changeDiscountEnd,
   discountsEndedRecently,
   endDiscount,
   startDiscounts,
@@ -125,6 +127,33 @@ test("indirim başlar: vitrin, sepet ve ödeme indirimli fiyatı kullanır; kale
   assert.ok((await discountsEndedRecently(15 * 60_000)) >= 1);
 });
 
+test("süren indirimin bitiş günü değiştirilir (uzatma/kısaltma); fiyatlar aynı kalır; biten indirim değiştirilmez", async () => {
+  const { product } = await createProduct({ priceKurus: 35_000, stock: 5 });
+  await startDiscounts({ productIds: [product.id], percent: 20, endsAt: days(3), adminId: "admin-1" });
+  const d = await prisma.productDiscount.findFirstOrThrow({ where: { productId: product.id }, include: { items: true } });
+
+  // Uzat: 200 gün sonra (sınır yok)
+  const later = days(200);
+  const changed = await changeDiscountEnd(d.id, later);
+  assert.equal(changed?.productId, product.id);
+  assert.equal(changed?.previousEndsAt.getTime(), d.endsAt.getTime());
+  const shown = await getProductBySlug(product.slug);
+  assert.equal(shown?.discount?.endsAt, later.toISOString());
+  assert.equal(shown?.variants[0].priceKurus, 28_000); // fiyat değişmedi
+  assert.equal(shown?.variants[0].compareAtPriceKurus, 35_000);
+  const items = await prisma.productDiscountItem.findMany({ where: { discountId: d.id } });
+  assert.deepEqual(items.map((i) => [i.referenceKurus, i.saleKurus]), d.items.map((i) => [i.referenceKurus, i.saleKurus]));
+
+  // Kısalt: yarın; geçmiş tarih reddedilir
+  assert.ok(await changeDiscountEnd(d.id, days(1)));
+  await assert.rejects(changeDiscountEnd(d.id, days(-1)), AdminActionError);
+
+  // Biten indirim uzatılmaz (canlanmaz)
+  assert.ok(await endDiscount(d.id, "admin-1"));
+  assert.equal(await changeDiscountEnd(d.id, days(30)), null);
+  assert.equal((await getProductBySlug(product.slug))?.discount ?? null, null);
+});
+
 test("eski fiyat son 10 günün en düşüğü: yakında artırılan fiyatta eski fiyat, önceki indirimde onun fiyatı esas", async () => {
   // A: 3 gün önce 30.000 → 40.000 yapıldı; %10 indirimde eski fiyat 30.000 (40.000 değil)
   const a = await createProduct({ priceKurus: 40_000, stock: 5 });
@@ -150,7 +179,7 @@ test("eski fiyat son 10 günün en düşüğü: yakında artırılan fiyatta esk
   assert.equal(shownB?.variants[0].priceKurus, 36_000);
 });
 
-test("tek etkin indirim (yenisi eskisini bitirir); sınırlar; fiyatı olmayan ürün atlanır; fiyat değişikliği geçmişe yazılır", async () => {
+test("tek etkin indirim (yenisi eskisini bitirir); oran %1–99, süre sınırı yok; fiyatı olmayan ürün atlanır; fiyat geçmişi", async () => {
   const { product, variant } = await createProduct({ priceKurus: 35_000, stock: 5 });
   await startDiscounts({ productIds: [product.id], percent: 10, endsAt: days(5), adminId: "admin-1" });
   await startDiscounts({ productIds: [product.id], percent: 20, endsAt: days(5), adminId: "admin-1" });
@@ -163,11 +192,21 @@ test("tek etkin indirim (yenisi eskisini bitirir); sınırlar; fiyatı olmayan �
   assert.equal(shown?.variants[0].compareAtPriceKurus, 31_500);
   assert.equal(shown?.variants[0].priceKurus, 25_200);
 
+  // Yalnız mantık sınırları: %0, %100, kesirli oran, geçmiş bitiş, ürünsüz istek reddedilir
   await assert.rejects(startDiscounts({ productIds: [product.id], percent: 0, endsAt: days(5), adminId: "a" }), AdminActionError);
-  await assert.rejects(startDiscounts({ productIds: [product.id], percent: 91, endsAt: days(5), adminId: "a" }), AdminActionError);
+  await assert.rejects(startDiscounts({ productIds: [product.id], percent: 100, endsAt: days(5), adminId: "a" }), AdminActionError);
+  await assert.rejects(startDiscounts({ productIds: [product.id], percent: 12.5, endsAt: days(5), adminId: "a" }), AdminActionError);
   await assert.rejects(startDiscounts({ productIds: [product.id], percent: 10, endsAt: days(-1), adminId: "a" }), AdminActionError);
-  await assert.rejects(startDiscounts({ productIds: [product.id], percent: 10, endsAt: days(61), adminId: "a" }), AdminActionError);
   await assert.rejects(startDiscounts({ productIds: [], percent: 10, endsAt: days(5), adminId: "a" }), AdminActionError);
+
+  // Yüksek oran ve uzun süre serbest (eskiden %90 ve 60 gün üst sınırı vardı); veritabanı denetimi de %95'i kabul eder
+  const big = await createProduct({ priceKurus: 20_000, stock: 5 });
+  const r95 = await startDiscounts({ productIds: [big.product.id], percent: 95, endsAt: days(400), adminId: "admin-1" });
+  assert.deepEqual(r95.started.map((x) => x.productId), [big.product.id]);
+  const shownBig = await getProductBySlug(big.product.slug);
+  assert.equal(shownBig?.variants[0].priceKurus, 1_000);
+  assert.equal(shownBig?.variants[0].compareAtPriceKurus, 20_000);
+  assert.equal(shownBig?.discount?.percent, 95);
 
   const free = await createProduct({ priceKurus: 0, stock: 5 });
   const r = await startDiscounts({ productIds: [free.product.id], percent: 10, endsAt: days(5), adminId: "admin-1" });

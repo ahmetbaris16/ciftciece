@@ -14,7 +14,6 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { USE_DB } from "@/lib/data/source";
 import {
-  MAX_DISCOUNT_DAYS,
   MAX_PERCENT,
   MIN_PERCENT,
   REFERENCE_WINDOW_MS,
@@ -237,9 +236,6 @@ export async function startDiscounts(
     throw new AdminActionError(`İndirim oranı %${MIN_PERCENT} ile %${MAX_PERCENT} arasında bir tam sayı olmalı.`);
   }
   if (endsAt.getTime() <= now.getTime()) throw new AdminActionError("Bitiş tarihi bugünden sonra olmalı.");
-  if (endsAt.getTime() - now.getTime() > MAX_DISCOUNT_DAYS * 24 * 60 * 60 * 1000) {
-    throw new AdminActionError(`İndirim en çok ${MAX_DISCOUNT_DAYS} gün sürebilir.`);
-  }
   const productIds = [...new Set(input.productIds)];
   if (productIds.length === 0) throw new AdminActionError("İndirim yapılacak ürünü seçin.");
 
@@ -292,6 +288,30 @@ export async function endDiscount(id: string, adminId: string, now = new Date())
     data: { endedAt: now, endedById: adminId },
   });
   return count === 1 ? { productId: d.productId } : null;
+}
+
+/**
+ * Süren indirimin bitiş anını değiştirir (uzatma ya da kısaltma). Fiyatlar değişmez: eski fiyat indirimin başladığı
+ * andaki hesaptır, kampanya tarihleri sitede yeni bitişle yazar. Etkin değilse (bitmiş/bulunamadı) null.
+ */
+export async function changeDiscountEnd(
+  id: string,
+  endsAt: Date,
+  now = new Date()
+): Promise<{ productId: string; previousEndsAt: Date } | null> {
+  if (!USE_DB || discountsUnavailable()) return null;
+  if (endsAt.getTime() <= now.getTime()) throw new AdminActionError("Bitiş tarihi bugünden sonra olmalı.");
+  const d = await prisma.productDiscount.findFirst({
+    where: { id, ...activeDiscountWhere(now) },
+    select: { productId: true, endsAt: true },
+  });
+  if (!d) return null;
+  // Bu arada biten indirim uzatılmaz (koşul güncellemenin kendisinde de var)
+  const { count } = await prisma.productDiscount.updateMany({
+    where: { id, ...activeDiscountWhere(now) },
+    data: { endsAt },
+  });
+  return count === 1 ? { productId: d.productId, previousEndsAt: d.endsAt } : null;
 }
 
 export interface AdminDiscountRow {
