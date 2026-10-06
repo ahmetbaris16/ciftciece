@@ -3,7 +3,7 @@
 /**
  * Admin iskeleti — yan menü (geniş ekran) / üst menü (telefon) + içerik.
  * Menüde bekleyen işler rozetle görünür (/api/admin/summary): kargolanacak siparişler, havale bekleyenler,
- * ödeme uyarısı, açık müşteri talepleri, okunmamış mesajlar, gönderilemeyen e-postalar, onay bekleyen yorumlar.
+ * ödeme uyarısı, açık müşteri talepleri, okunmamış mesajlar, gönderilemeyen e-postalar.
  */
 
 import Link from "next/link";
@@ -35,7 +35,6 @@ const NAV_ITEMS: Array<{ key: string; label: string; href: string; icon: string;
   { key: "urunler", label: "Ürünler", href: "/admin/urunler", icon: "📦" },
   { key: "musteriler", label: "Müşteriler", href: "/admin/musteriler", icon: "👥" },
   { key: "mesajlar", label: "Mesajlar", href: "/admin/mesajlar", icon: "✉️", badge: (b) => b.newMessages },
-  { key: "yorumlar", label: "Yorumlar", href: "/admin/yorumlar", icon: "⭐", badge: (b) => b.pendingReviews },
   { key: "ayarlar", label: "Ayarlar", href: "/admin/ayarlar", icon: "⚙️" },
 ];
 

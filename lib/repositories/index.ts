@@ -33,8 +33,4 @@ export {
   releaseExpiredOrders,
 } from "./order.repository";
 
-export {
-  getPublishedReviews,
-  getAllReviews,
-  type ReviewData,
-} from "./review.repository";
+export { getPublishedReviews, type ReviewData } from "./review.repository";

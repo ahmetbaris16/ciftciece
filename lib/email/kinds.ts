@@ -19,6 +19,8 @@ export const EMAIL_KIND_TR: Record<string, string> = {
   STORE_CUSTOMER_REQUEST: "Müşteri talebi (işletmeye)",
   STORE_ORDER_CANCELLED_BY_CUSTOMER: "Müşteri iptali (işletmeye)",
   STORE_CONTACT_MESSAGE: "İletişim mesajı (işletmeye)",
+  STORE_REVIEW_PUBLISHED: "Yeni ürün değerlendirmesi (işletmeye)",
+  // Eski kurallar (değerlendirme onaya düşüyordu): geçmiş kayıtların etiketi
   STORE_REVIEW_PENDING: "Yorum onayı (işletmeye)",
 };
 

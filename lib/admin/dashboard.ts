@@ -31,8 +31,6 @@ export interface AdminBadges {
   newMessages: number;
   /** Gönderilemeyen e-postalar */
   failedEmails: number;
-  /** Onay bekleyen ürün değerlendirmeleri */
-  pendingReviews: number;
 }
 
 const EMPTY: AdminBadges = {
@@ -42,12 +40,11 @@ const EMPTY: AdminBadges = {
   openRequests: 0,
   newMessages: 0,
   failedEmails: 0,
-  pendingReviews: 0,
 };
 
 export async function getAdminBadges(): Promise<AdminBadges> {
   if (!USE_DB) return EMPTY;
-  const [attention, pendingTransfers, toShip, openRequests, newMessages, failedEmails, pendingReviews] = await Promise.all([
+  const [attention, pendingTransfers, toShip, openRequests, newMessages, failedEmails] = await Promise.all([
     prisma.order.count({ where: { needsAttention: true } }),
     prisma.order.count({ where: { status: "PENDING", paymentMethod: "BANK_TRANSFER" } }),
     prisma.order.count({
@@ -56,9 +53,8 @@ export async function getAdminBadges(): Promise<AdminBadges> {
     prisma.customerRequest.count({ where: { status: "OPEN" } }),
     prisma.contactMessage.count({ where: { status: "NEW" } }),
     prisma.emailMessage.count({ where: { status: "FAILED" } }),
-    prisma.productReview.count({ where: { status: "PENDING" } }),
   ]);
-  return { attention, pendingTransfers, toShip, openRequests, newMessages, failedEmails, pendingReviews };
+  return { attention, pendingTransfers, toShip, openRequests, newMessages, failedEmails };
 }
 
 export interface DashboardStats {

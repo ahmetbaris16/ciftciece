@@ -1,6 +1,6 @@
 /**
  * Ürün sayfası → Değerlendirmeler bölümü (sunucu bileşeni)
- * Solda puan özeti ve dağılım, sağda yazma formu + onaylı yorumlar.
+ * Solda puan özeti ve dağılım, sağda yazma formu + yayındaki yorumlar (yalnız satın alanlar yazar, hemen yayınlanır).
  */
 
 import type { PublicProductReview, ReviewSummary } from "@/lib/repositories/product-review.repository";
@@ -55,8 +55,9 @@ export default function ProductReviews({ productId, productSlug, summary, review
           </div>
         )}
         <p className={styles.policy}>
-          Değerlendirmeleri yalnızca üye müşterilerimiz yazabilir; yayından önce kontrol edilir. &quot;Satın aldı&quot;
-          rozeti, ürünü üye girişiyle sitemizden satın alanlarda görünür.
+          Değerlendirmeleri yalnız bu ürünü sitemizden üye girişiyle satın alan müşterilerimiz yazar; sipariş kargoya
+          verildikten sonra yazılır ve hemen yayınlanır. Mağaza yalnız hakaret, kişisel bilgi ya da ürünle ilgisi olmayan
+          içeriği yayından kaldırır.
         </p>
       </aside>
 

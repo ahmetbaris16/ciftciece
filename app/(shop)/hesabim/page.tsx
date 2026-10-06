@@ -4,7 +4,7 @@
  *
  * Bölümler (?bolum=): siparisler (varsayılan) | degerlendirmeler | bilgiler
  * - Siparişlerim: üye girişliyken verilen siparişler (misafir siparişleri e-postayla eşleştirilmez)
- * - Değerlendirmelerim: yazdığı ürün yorumları ve onay durumları
+ * - Değerlendirmelerim: yazdığı ürün yorumları (yayında / yayından kaldırıldı)
  * - Hesap Bilgileri: ad, telefon, şifre
  */
 
@@ -37,10 +37,11 @@ const ORDER_STATUS: Record<string, { label: string; tone: "wait" | "ok" | "info"
   REFUNDED: { label: "İade edildi", tone: "bad" },
 };
 
+// PENDING: eski kurallarla (onaylı yayın) yazılmış, yayında olmayan değerlendirme; düzenlenince yayınlanır
 const REVIEW_STATUS: Record<string, { label: string; tone: "wait" | "ok" | "bad" }> = {
-  PENDING: { label: "Onay bekliyor", tone: "wait" },
+  PENDING: { label: "Yayında değil", tone: "wait" },
   APPROVED: { label: "Yayında", tone: "ok" },
-  REJECTED: { label: "Yayınlanmadı", tone: "bad" },
+  REJECTED: { label: "Yayından kaldırıldı", tone: "bad" },
 };
 
 const dateFmt = new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "long", year: "numeric" });
@@ -209,8 +210,8 @@ async function ReviewsSection({ userId }: { userId: string }) {
       <div className={styles.empty}>
         <p className={styles.emptyTitle}>Henüz değerlendirme yazmadınız</p>
         <p className={styles.emptyText}>
-          Ürün sayfalarındaki &quot;Değerlendirmeler&quot; bölümünden puan verip yorum yazabilirsiniz. Yorumlar
-          onaylandıktan sonra yayınlanır.
+          Satın aldığınız ürünleri, siparişiniz kargoya verildikten sonra ürün sayfasındaki &quot;Değerlendirmeler&quot;
+          bölümünden puanlayıp yorumlayabilirsiniz. Değerlendirmeniz hemen yayınlanır.
         </p>
         <Link href="/urunler" className={styles.cta}>
           Ürünlere Göz At

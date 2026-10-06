@@ -147,22 +147,27 @@ export function customerRequestStoreEmail(opts: {
   });
 }
 
-export function reviewPendingStoreEmail(opts: {
+/** Satın alan müşterinin değerlendirmesi yayınlandı (bilgi; onay gerekmez) */
+export function reviewPublishedStoreEmail(opts: {
   business: BusinessInfo;
   productName: string;
+  productSlug: string;
   rating: number;
   excerpt: string;
 }): RenderedEmail {
   return storeEmail({
     business: opts.business,
-    subject: `Onay bekleyen değerlendirme: ${opts.productName} (${opts.rating}/5)`,
+    subject: `Yeni değerlendirme: ${opts.productName} (${opts.rating}/5)`,
     preheader: opts.excerpt.slice(0, 120),
     eyebrow: "Ürün değerlendirmesi",
-    title: `${opts.productName} için yeni değerlendirme`,
+    title: `${opts.productName} için yeni değerlendirme yayınlandı`,
     blocks: [
       paragraph(`Puan: ${"★".repeat(opts.rating)}${"☆".repeat(5 - opts.rating)}`),
       paragraph(opts.excerpt),
-      button("Yorumları panelde aç", `${siteUrl()}/admin/yorumlar`),
+      paragraph(
+        "Değerlendirmeyi ürünü satın alan müşteriniz yazdı ve hemen yayınlandı. Hakaret, kişisel bilgi ya da ürünle ilgisi olmayan içerik varsa ürün sayfasında (yönetici girişiyle) “Yayından kaldır”a basabilirsiniz."
+      ),
+      button("Ürün sayfasında gör", `${siteUrl()}/urun/${opts.productSlug}#degerlendirmeler`),
     ],
   });
 }

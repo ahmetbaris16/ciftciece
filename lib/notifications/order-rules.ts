@@ -15,7 +15,7 @@
  * | order.payment_reminder    | Havale hatırlatma (son ödeme sonrası gitmez) | —                          |
  * | order.customer_request    | Talebiniz alındı                             | Müşteri talebi             |
  * | contact.received          | —                                            | İletişim mesajı (yanıtla → müşteri) |
- * | review.submitted          | —                                            | Onay bekleyen değerlendirme |
+ * | review.submitted          | —                                            | Yeni değerlendirme yayınlandı |
  */
 
 import type { OutboxEvent } from "@prisma/client";
@@ -38,7 +38,7 @@ import {
   contactMessageStoreEmail,
   customerRequestStoreEmail,
   newOrderStoreEmail,
-  reviewPendingStoreEmail,
+  reviewPublishedStoreEmail,
 } from "@/lib/email/templates/store";
 import type { RenderedEmail } from "@/lib/email/templates/account";
 import { addressText, loadOrderEmailData, type OrderEmailData } from "./order-data";
@@ -248,12 +248,19 @@ const contactReceived: Handler = async (event, ctx) => {
 
 const reviewSubmitted: Handler = async (event, ctx) => {
   const id = str(payloadOf(event).reviewId) ?? event.aggregateId;
-  const r = await prisma.productReview.findUnique({ where: { id }, include: { product: { select: { name: true } } } });
-  if (!r || r.status !== "PENDING") return [];
+  const r = await prisma.productReview.findUnique({ where: { id }, include: { product: { select: { name: true, slug: true } } } });
+  // Bu arada yayından kaldırıldıysa bildirilmez
+  if (!r || r.status !== "APPROVED") return [];
   return toStore(
     ctx,
-    "STORE_REVIEW_PENDING",
-    reviewPendingStoreEmail({ business: ctx.business, productName: r.product.name, rating: r.rating, excerpt: r.text.slice(0, 400) })
+    "STORE_REVIEW_PUBLISHED",
+    reviewPublishedStoreEmail({
+      business: ctx.business,
+      productName: r.product.name,
+      productSlug: r.product.slug,
+      rating: r.rating,
+      excerpt: r.text.slice(0, 400),
+    })
   );
 };
 

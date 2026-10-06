@@ -29,7 +29,6 @@ export default async function AdminDashboardPage() {
     { n: badges.pendingTransfers, text: "sipariş havale bekliyor: hesabınızı kontrol edin", href: "/admin/siparisler?durum=odeme" },
     { n: badges.openRequests, text: "müşteri iptal/iade talebi", href: "/admin/siparisler?durum=talep" },
     { n: badges.newMessages, text: "yeni mesaj", href: "/admin/mesajlar" },
-    { n: badges.pendingReviews, text: "onay bekleyen ürün yorumu", href: "/admin/yorumlar" },
     { n: badges.failedEmails, text: "e-posta gönderilemedi", href: "/admin/epostalar?durum=FAILED", urgent: true },
   ].filter((t) => t.n > 0);
 

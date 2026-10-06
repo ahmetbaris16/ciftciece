@@ -36,10 +36,11 @@ const REQUEST_STATUS: Record<string, { label: string; color: string }> = {
   REJECTED: { label: "Reddedildi", color: "#f3a0a0" },
 };
 
+// PENDING: eski kurallarla yazılmış, yayında olmayan (değerlendirmeler artık yazılınca yayınlanır)
 const REVIEW_STATUS: Record<string, { label: string; color: string }> = {
-  PENDING: { label: "Onay bekliyor", color: "#f5d27a" },
+  PENDING: { label: "Yayında değil", color: "rgba(232,228,217,0.5)" },
   APPROVED: { label: "Yayında", color: "#9fd39f" },
-  REJECTED: { label: "Yayınlanmadı", color: "rgba(232,228,217,0.5)" },
+  REJECTED: { label: "Yayından kaldırıldı", color: "rgba(232,228,217,0.5)" },
 };
 
 const MESSAGE_STATUS: Record<string, { label: string; color: string }> = {
@@ -301,11 +302,6 @@ export default async function AdminMusteriDetay({ params }: Props) {
                     );
                   })}
                 </ul>
-                {c.reviews.some((r) => r.status === "PENDING") && (
-                  <p className={s.more}>
-                    <Link href="/admin/yorumlar">Onay bekleyenleri Yorumlar sayfasında yayınlayın ›</Link>
-                  </p>
-                )}
               </section>
             )}
 

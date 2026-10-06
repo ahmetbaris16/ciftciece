@@ -1,7 +1,6 @@
 /**
- * Review Repository
- *
- * Müşteri yorumları — yayınlananlar ve admin yönetimi.
+ * Mağaza yorumları (ana sayfadaki telefon sahnesi: Google yorumları). Kayıtlar prisma/catalog.ts'den tohumlanır;
+ * panelden yönetilmez (ürün değerlendirmeleri ayrı: lib/repositories/product-review.repository.ts).
  * DATABASE_URL yoksa (sadece development) mock veri — bkz. lib/data/source.ts.
  */
 
@@ -45,28 +44,3 @@ export async function getPublishedReviews(): Promise<ReviewData[]> {
     sortOrder: r.sortOrder,
   }));
 }
-
-export async function getAllReviews(): Promise<ReviewData[]> {
-  if (!USE_DB) {
-    const mock = await getMock();
-    return mock.MOCK_REVIEWS;
-  }
-
-  const reviews = await prisma.review.findMany({
-    orderBy: { createdAt: "desc" },
-  });
-
-  return reviews.map((r) => ({
-    id: r.id,
-    authorName: r.authorName,
-    authorAvatar: r.authorAvatar,
-    rating: r.rating,
-    text: r.text,
-    date: r.date,
-    source: r.source,
-    sourceUrl: r.sourceUrl,
-    isPublished: r.isPublished,
-    sortOrder: r.sortOrder,
-  }));
-}
-

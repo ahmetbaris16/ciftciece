@@ -1,18 +1,22 @@
 /**
- * Ürün değerlendirmeleri — üye müşteriler yazar, admin onaylar, yalnız onaylılar yayında.
+ * Ürün değerlendirmeleri — yalnız ürünü satın almış üye müşteri yazar; yazınca hemen yayınlanır (onay yok).
  *
- * - Müşteri başına ürün başına tek değerlendirme; yeniden gönderilirse güncellenir ve tekrar onaya düşer.
- * - "Satın aldı" rozeti gönderim anında hesaplanır: müşterinin üye girişliyken verdiği ve ödemesi
- *   alınmış bir siparişte bu ürün varsa.
+ * - Hak: üye girişliyken verilmiş, kargoya verilmiş ya da teslim edilmiş bir siparişte bu ürün olmalı (misafir
+ *   siparişi e-postayla hesaba bağlanmaz). Ödenip henüz kargolanmamışsa "kargoya verilince" denir.
+ * - Müşteri başına ürün başına tek değerlendirme; düzenlenirse yeni hâli hemen yayınlanır.
+ * - Mağaza yönetici hesabı değerlendirme yazamaz (API'de denetlenir).
+ * - Mağaza yalnız uygunsuz yorumu (hakaret, kişisel veri, ürünle ilgisiz içerik) yayından kaldırabilir (ürün
+ *   sayfasında yöneticiye görünen düğme); kayıt silinmez, durumu REJECTED olur.
  * - Yorumlarda soyadı açık yazılmaz ("Ahmet B."); e-posta yalnız admin panelinde görünür.
- * DATABASE_URL yoksa (yalnız development) .mock-data/product-reviews.json kullanılır.
+ * - Eski kurallarla yazılmış ve onay bekleyen (PENDING) yorumlar yayında değildir; müşteri düzenleyip kaydederse
+ *   (hakkı varsa) yayınlanır.
+ * DATABASE_URL yoksa (yalnız development) .mock-data/product-reviews.json okunur; yazma yapılmaz (sipariş yok).
  */
 
-import { randomUUID } from "node:crypto";
 import { writeOutbox } from "@/lib/outbox";
 import { prisma } from "@/lib/db/prisma";
 import { USE_DB, loadMock } from "@/lib/data/source";
-import { readMock, updateMock } from "@/lib/data/mock-store";
+import { readMock } from "@/lib/data/mock-store";
 import { publicDisplayName } from "@/lib/validation/account";
 
 export type ReviewStatus = "PENDING" | "APPROVED" | "REJECTED";
@@ -52,22 +56,6 @@ export interface MyReviewWithProduct extends MyProductReview {
   productSlug: string;
 }
 
-export interface AdminProductReview {
-  id: string;
-  productId: string;
-  productName: string;
-  productSlug: string;
-  customerName: string;
-  customerEmail: string;
-  rating: number;
-  title: string | null;
-  text: string;
-  status: ReviewStatus;
-  isVerifiedPurchase: boolean;
-  adminNote: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
 
 /** Yayında olmayan / bulunamayan ürüne değerlendirme */
 export class ReviewProductNotFoundError extends Error {
@@ -77,7 +65,24 @@ export class ReviewProductNotFoundError extends Error {
   }
 }
 
-const PAID_STATUSES = ["PAID", "PROCESSING", "SHIPPED", "DELIVERED"] as const;
+/**
+ * Değerlendirme hakkı:
+ * - eligible: hesabında bu ürünün kargoya verilmiş ya da teslim edilmiş siparişi var
+ * - awaiting_shipment: ödenmiş/hazırlanan siparişi var, henüz kargoya verilmedi
+ * - not_purchased: hesabında bu ürünle (iptal edilmemiş) sipariş yok
+ */
+export type ReviewEligibility = "eligible" | "awaiting_shipment" | "not_purchased";
+
+/** Hakkı olmayan müşterinin gönderimi */
+export class ReviewNotAllowedError extends Error {
+  constructor(public readonly eligibility: Exclude<ReviewEligibility, "eligible">) {
+    super("REVIEW_NOT_ALLOWED");
+    this.name = "ReviewNotAllowedError";
+  }
+}
+
+const REVIEWABLE_STATUSES = ["SHIPPED", "DELIVERED"] as const;
+const AWAITING_SHIPMENT_STATUSES = ["PAID", "PROCESSING"] as const;
 
 export function emptySummary(): ReviewSummary {
   return { count: 0, average: 0, distribution: [0, 0, 0, 0, 0] };
@@ -217,21 +222,24 @@ export async function getMyReviews(userId: string): Promise<MyReviewWithProduct[
   return rows.map((r) => ({ ...toMine(r), productName: r.product.name, productSlug: r.product.slug }));
 }
 
-/** Müşterinin ödemesi alınmış (üye girişli) bir siparişinde bu ürün var mı */
-async function hasPurchased(productId: string, userId: string): Promise<boolean> {
-  if (!USE_DB) return false; // veritabanısız modda sipariş yok
-  const count = await prisma.orderItem.count({
+/** Müşterinin bu ürünü değerlendirme hakkı (hesabına bağlı siparişlerden) */
+export async function reviewEligibility(productId: string, userId: string): Promise<ReviewEligibility> {
+  if (!USE_DB) return "not_purchased"; // veritabanısız modda sipariş yok
+  const rows = await prisma.orderItem.findMany({
     where: {
       variant: { productId },
-      order: { userId, status: { in: [...PAID_STATUSES] } },
+      order: { userId, status: { in: [...REVIEWABLE_STATUSES, ...AWAITING_SHIPMENT_STATUSES] } },
     },
+    select: { order: { select: { status: true } } },
+    take: 20,
   });
-  return count > 0;
+  if (rows.some((r) => (REVIEWABLE_STATUSES as readonly string[]).includes(r.order.status))) return "eligible";
+  return rows.length > 0 ? "awaiting_shipment" : "not_purchased";
 }
 
 /**
- * Değerlendirme gönder/güncelle → her zaman "Onay bekliyor" durumuna düşer.
- * Ürün yayında değilse ReviewProductNotFoundError.
+ * Değerlendirme gönder/güncelle → hemen yayında. Ürün yayında değilse ReviewProductNotFoundError, hakkı yoksa
+ * ReviewNotAllowedError. Dönen ürün adresi sayfa önbelleğini tazelemek içindir.
  */
 export async function submitReview(input: {
   productId: string;
@@ -239,58 +247,29 @@ export async function submitReview(input: {
   rating: number;
   title: string | null;
   text: string;
-}): Promise<MyProductReview> {
-  if (!USE_DB) {
-    const products = await mockProducts();
-    const product = products.get(input.productId);
-    if (!product || !product.isPublished) throw new ReviewProductNotFoundError();
-    const now = new Date().toISOString();
-    return updateMock<MockReview[], MyProductReview>(REVIEWS_FILE, [], (all) => {
-      const i = all.findIndex((r) => r.productId === input.productId && r.userId === input.userId);
-      const base = {
-        rating: input.rating,
-        title: input.title,
-        text: input.text,
-        status: "PENDING" as const,
-        isVerifiedPurchase: false,
-        adminNote: null,
-        approvedAt: null,
-        updatedAt: now,
-      };
-      const next = all.slice();
-      if (i >= 0) {
-        next[i] = { ...next[i], ...base };
-        return { next, result: toMine(next[i]) };
-      }
-      const created: MockReview = {
-        id: `mock-review-${randomUUID()}`,
-        productId: input.productId,
-        userId: input.userId,
-        createdAt: now,
-        ...base,
-      };
-      next.push(created);
-      return { next, result: toMine(created) };
-    });
-  }
+}): Promise<{ review: MyProductReview; productSlug: string }> {
+  if (!USE_DB) throw new ReviewNotAllowedError("not_purchased");
 
   const product = await prisma.product.findFirst({
     where: { id: input.productId, isPublished: true },
-    select: { id: true },
+    select: { id: true, slug: true },
   });
   if (!product) throw new ReviewProductNotFoundError();
 
-  const isVerifiedPurchase = await hasPurchased(input.productId, input.userId);
+  const eligibility = await reviewEligibility(input.productId, input.userId);
+  if (eligibility !== "eligible") throw new ReviewNotAllowedError(eligibility);
+
+  const now = new Date();
   const data = {
     rating: input.rating,
     title: input.title,
     text: input.text,
-    status: "PENDING" as const,
-    isVerifiedPurchase,
+    status: "APPROVED" as const,
+    isVerifiedPurchase: true,
     adminNote: null,
-    approvedAt: null,
+    approvedAt: now,
   };
-  // Değerlendirme ve işletmeye "onay bekliyor" bildirimi aynı işlemde
+  // Değerlendirme ve işletmeye "yeni değerlendirme yayınlandı" bildirimi aynı işlemde
   const r = await prisma.$transaction(async (tx) => {
     const saved = await tx.productReview.upsert({
       where: { productId_userId: { productId: input.productId, userId: input.userId } },
@@ -306,92 +285,21 @@ export async function submitReview(input: {
     });
     return saved;
   });
-  return toMine(r);
+  return { review: toMine(r), productSlug: product.slug };
 }
 
-// ── Admin ─────────────────────────────────────────────────────
+// ── Mağaza ───────────────────────────────────────────────────
 
-export async function getReviewsForAdmin(): Promise<AdminProductReview[]> {
-  if (!USE_DB) {
-    const [all, users, products] = await Promise.all([
-      readMock<MockReview[]>(REVIEWS_FILE, []),
-      mockUsers(),
-      mockProducts(),
-    ]);
-    return all
-      .slice()
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-      .map((r) => ({
-        id: r.id,
-        productId: r.productId,
-        productName: products.get(r.productId)?.name ?? "Ürün",
-        productSlug: products.get(r.productId)?.slug ?? "",
-        customerName: users.get(r.userId)?.name ?? "—",
-        customerEmail: users.get(r.userId)?.email ?? "—",
-        rating: r.rating,
-        title: r.title,
-        text: r.text,
-        status: r.status,
-        isVerifiedPurchase: r.isVerifiedPurchase,
-        adminNote: r.adminNote,
-        createdAt: r.createdAt,
-        updatedAt: r.updatedAt,
-      }));
-  }
-
-  const rows = await prisma.productReview.findMany({
-    include: {
-      product: { select: { name: true, slug: true } },
-      user: { select: { name: true, email: true } },
-    },
-    orderBy: { updatedAt: "desc" },
-    take: 500,
-  });
-  return rows.map((r) => ({
-    id: r.id,
-    productId: r.productId,
-    productName: r.product.name,
-    productSlug: r.product.slug,
-    customerName: r.user.name ?? "—",
-    customerEmail: r.user.email,
-    rating: r.rating,
-    title: r.title,
-    text: r.text,
-    status: r.status as ReviewStatus,
-    isVerifiedPurchase: r.isVerifiedPurchase,
-    adminNote: r.adminNote,
-    createdAt: r.createdAt.toISOString(),
-    updatedAt: r.updatedAt.toISOString(),
-  }));
-}
-
-/** Onayla / reddet. Dönen slug ürün sayfasının önbelleğini tazelemek içindir; bulunamazsa null. */
-export async function moderateReview(
-  id: string,
-  status: Exclude<ReviewStatus, "PENDING">,
-  adminNote: string | null
-): Promise<{ productSlug: string } | null> {
-  if (!USE_DB) {
-    const products = await mockProducts();
-    return updateMock<MockReview[], { productSlug: string } | null>(REVIEWS_FILE, [], (all) => {
-      const i = all.findIndex((r) => r.id === id);
-      if (i < 0) return { next: all, result: null };
-      const next = all.slice();
-      const now = new Date().toISOString();
-      next[i] = {
-        ...next[i],
-        status,
-        adminNote,
-        approvedAt: status === "APPROVED" ? now : null,
-      };
-      return { next, result: { productSlug: products.get(next[i].productId)?.slug ?? "" } };
-    });
-  }
-
+/**
+ * Uygunsuz yorumu yayından kaldırır (hakaret, kişisel veri, ürünle ilgisiz içerik). Kayıt silinmez.
+ * Dönen ürün adresi sayfa önbelleğini tazelemek içindir; bulunamazsa null.
+ */
+export async function hideReview(id: string): Promise<{ productSlug: string } | null> {
+  if (!USE_DB) return null;
   try {
     const r = await prisma.productReview.update({
       where: { id },
-      data: { status, adminNote, approvedAt: status === "APPROVED" ? new Date() : null },
+      data: { status: "REJECTED", adminNote: "Mağaza tarafından yayından kaldırıldı", approvedAt: null },
       include: { product: { select: { slug: true } } },
     });
     return { productSlug: r.product.slug };
@@ -399,36 +307,4 @@ export async function moderateReview(
     if ((err as { code?: string }).code === "P2025") return null;
     throw err;
   }
-}
-
-export async function deleteReview(id: string): Promise<{ productSlug: string } | null> {
-  if (!USE_DB) {
-    const products = await mockProducts();
-    return updateMock<MockReview[], { productSlug: string } | null>(REVIEWS_FILE, [], (all) => {
-      const r = all.find((x) => x.id === id);
-      if (!r) return { next: all, result: null };
-      return {
-        next: all.filter((x) => x.id !== id),
-        result: { productSlug: products.get(r.productId)?.slug ?? "" },
-      };
-    });
-  }
-  try {
-    const r = await prisma.productReview.delete({
-      where: { id },
-      include: { product: { select: { slug: true } } },
-    });
-    return { productSlug: r.product.slug };
-  } catch (err) {
-    if ((err as { code?: string }).code === "P2025") return null;
-    throw err;
-  }
-}
-
-export async function countPendingReviews(): Promise<number> {
-  if (!USE_DB) {
-    const all = await readMock<MockReview[]>(REVIEWS_FILE, []);
-    return all.filter((r) => r.status === "PENDING").length;
-  }
-  return prisma.productReview.count({ where: { status: "PENDING" } });
 }

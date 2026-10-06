@@ -1,11 +1,16 @@
 "use client";
 
 /**
- * Onaylı değerlendirmeler — ilk 6'sı gösterilir, gerisi "Tümünü göster" ile açılır.
+ * Yayındaki değerlendirmeler — ilk 6'sı gösterilir, gerisi "Tümünü göster" ile açılır.
  * Sıralama: en yeni / en yüksek puan / en düşük puan.
+ * Yönetici oturumunda her yorumun altında "Yayından kaldır" (hakaret, kişisel bilgi, ürünle ilgisiz içerik için);
+ * düğme oturum tarayıcıda okununca görünür, sayfanın önbellekli hâli herkes için aynıdır.
  */
 
+import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { useState } from "react";
+import { isStaffRole } from "@/lib/auth/roles";
 import type { PublicProductReview } from "@/lib/repositories/product-review.repository";
 import RatingStars from "./RatingStars";
 import styles from "./ProductReviews.module.css";
@@ -18,10 +23,14 @@ type Sort = "new" | "high" | "low";
 export default function ReviewList({ reviews }: { reviews: PublicProductReview[] }) {
   const [sort, setSort] = useState<Sort>("new");
   const [expanded, setExpanded] = useState(false);
+  const [hidden, setHidden] = useState<string[]>([]);
+  const { data: session } = useSession();
+  const staff = isStaffRole((session?.user as { role?: string } | undefined)?.role);
 
-  if (reviews.length === 0) return null;
+  const visible = reviews.filter((r) => !hidden.includes(r.id));
+  if (visible.length === 0) return null;
 
-  const sorted = [...reviews].sort((a, b) =>
+  const sorted = [...visible].sort((a, b) =>
     sort === "high"
       ? b.rating - a.rating || b.createdAt.localeCompare(a.createdAt)
       : sort === "low"
@@ -32,7 +41,7 @@ export default function ReviewList({ reviews }: { reviews: PublicProductReview[]
 
   return (
     <div className={styles.listWrap}>
-      {reviews.length > 1 && (
+      {visible.length > 1 && (
         <div className={styles.sortRow}>
           <label className={styles.sortLabel}>
             Sırala
@@ -65,6 +74,7 @@ export default function ReviewList({ reviews }: { reviews: PublicProductReview[]
             <RatingStars value={r.rating} size={15} />
             {r.title && <p className={styles.reviewTitle}>{r.title}</p>}
             <p className={styles.reviewText}>{r.text}</p>
+            {staff && <HideButton reviewId={r.id} onHidden={() => setHidden((h) => [...h, r.id])} />}
           </li>
         ))}
       </ul>
@@ -73,6 +83,51 @@ export default function ReviewList({ reviews }: { reviews: PublicProductReview[]
         <button type="button" className={styles.more} onClick={() => setExpanded(true)}>
           Tüm değerlendirmeleri göster ({sorted.length})
         </button>
+      )}
+    </div>
+  );
+}
+
+/** Yalnız yönetici oturumunda: uygunsuz yorumu yayından kaldırır (kayıt silinmez) */
+function HideButton({ reviewId, onHidden }: { reviewId: string; onHidden: () => void }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const hide = async () => {
+    if (!window.confirm("Bu yorum yayından kaldırılsın mı? Yalnız hakaret, kişisel bilgi ya da ürünle ilgisi olmayan içerik için kullanın.")) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/product-reviews", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: reviewId }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setError(data?.error ?? "Kaldırılamadı. Tekrar deneyin.");
+        return;
+      }
+      onHidden();
+      router.refresh();
+    } catch {
+      setError("Bağlantı hatası. Tekrar deneyin.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className={styles.moderation}>
+      <button type="button" className={styles.hideBtn} onClick={hide} disabled={busy}>
+        {busy ? "Kaldırılıyor…" : "Yayından kaldır"}
+      </button>
+      <span className={styles.moderationNote}>Yalnız size görünür</span>
+      {error && (
+        <span role="alert" className={styles.fieldError}>
+          {error}
+        </span>
       )}
     </div>
   );
