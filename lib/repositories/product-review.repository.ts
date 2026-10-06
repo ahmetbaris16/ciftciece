@@ -1,9 +1,15 @@
 /**
- * Ürün değerlendirmeleri — yalnız ürünü satın almış üye müşteri yazar; yazınca hemen yayınlanır (onay yok).
+ * Ürün değerlendirmeleri — yalnız ürünü satın almış müşteri yazar; yazınca hemen yayınlanır (onay yok).
  *
- * - Hak: üye girişliyken verilmiş, kargoya verilmiş ya da teslim edilmiş bir siparişte bu ürün olmalı (misafir
- *   siparişi e-postayla hesaba bağlanmaz). Sipariş verilmiş ama henüz kargolanmamışsa "kargoya verilince" denir.
- * - Müşteri başına ürün başına tek değerlendirme; düzenlenirse yeni hâli hemen yayınlanır.
+ * - Hak: bu ürünü içeren sipariş TESLİM EDİLMİŞ olmalı (kullanıcı kararı). Verilmiş ama henüz teslim edilmemiş
+ *   siparişte "teslim edilince" denir.
+ * - Üye: hesabına bağlı (üye girişiyle verilmiş) siparişten; ürün sayfasından ya da kendi sipariş sayfasından yazar.
+ *   Üye başına ürün başına tek değerlendirme.
+ * - Üye olmadan verilmiş (misafir) sipariş: o siparişin sayfasından yazılır — sipariş numarası (tahmin edilemez
+ *   referans) sipariş sayfasının da anahtarıdır; teslim e-postasındaki bağlantı oraya gider. Sipariş başına ürün başına
+ *   tek değerlendirme; adı siparişteki addan ("Ayşe K."). Misafir siparişi e-postayla üyeliğe bağlanmaz (e-posta
+ *   doğrulanmadığı için), üyelikle verilmiş siparişin sayfasından ise giriş yapmadan yazılamaz.
+ * - Düzenlenirse yeni hâli hemen yayınlanır.
  * - Mağaza yönetici hesabı değerlendirme yazamaz (API'de denetlenir).
  * - Mağaza yalnız uygunsuz yorumu (hakaret, kişisel veri, ürünle ilgisiz içerik) yayından kaldırabilir (ürün
  *   sayfasında yöneticiye görünen düğme); kayıt silinmez, durumu REJECTED olur.
@@ -13,6 +19,7 @@
  * DATABASE_URL yoksa (yalnız development) .mock-data/product-reviews.json okunur; yazma yapılmaz (sipariş yok).
  */
 
+import type { Prisma } from "@prisma/client";
 import { writeOutbox } from "@/lib/outbox";
 import { prisma } from "@/lib/db/prisma";
 import { USE_DB, loadMock } from "@/lib/data/source";
@@ -67,11 +74,12 @@ export class ReviewProductNotFoundError extends Error {
 
 /**
  * Değerlendirme hakkı:
- * - eligible: hesabında bu ürünün kargoya verilmiş ya da teslim edilmiş siparişi var
- * - awaiting_shipment: verilmiş (ödemesi bekleniyor / ödenmiş / hazırlanıyor) siparişi var, henüz kargoya verilmedi
- * - not_purchased: hesabında bu ürünle (iptal edilmemiş) sipariş yok
+ * - eligible: bu ürünü içeren teslim edilmiş siparişi var
+ * - awaiting_delivery: verilmiş (ödemesi bekleniyor / ödenmiş / hazırlanıyor / kargoda) siparişi var, henüz teslim
+ *   edilmedi
+ * - not_purchased: bu ürünle (iptal edilmemiş) siparişi yok
  */
-export type ReviewEligibility = "eligible" | "awaiting_shipment" | "not_purchased";
+export type ReviewEligibility = "eligible" | "awaiting_delivery" | "not_purchased";
 
 /** Hakkı olmayan müşterinin gönderimi */
 export class ReviewNotAllowedError extends Error {
@@ -81,9 +89,27 @@ export class ReviewNotAllowedError extends Error {
   }
 }
 
-const REVIEWABLE_STATUSES = ["SHIPPED", "DELIVERED"] as const;
-// Ödemesi beklenen / alınmış ama henüz kargolanmamış sipariş: "kargoya verilince" denir
-const AWAITING_SHIPMENT_STATUSES = ["PENDING", "PAID", "PROCESSING"] as const;
+/** Üyelikle verilmiş siparişin sayfasından girişsiz gönderim: değerlendirme üyenin hesabına yazılır, giriş gerekir */
+export class ReviewNeedsLoginError extends Error {
+  constructor() {
+    super("REVIEW_NEEDS_LOGIN");
+    this.name = "ReviewNeedsLoginError";
+  }
+}
+
+const REVIEWABLE_STATUSES = ["DELIVERED"] as const;
+// Verilmiş ama henüz teslim edilmemiş sipariş (ödemesi bekleniyor / ödenmiş / hazırlanıyor / kargoda): "teslim edilince"
+const AWAITING_DELIVERY_STATUSES = ["PENDING", "PAID", "PROCESSING", "SHIPPED"] as const;
+
+const isReviewable = (status: string) => (REVIEWABLE_STATUSES as readonly string[]).includes(status);
+const isAwaitingDelivery = (status: string) => (AWAITING_DELIVERY_STATUSES as readonly string[]).includes(status);
+
+/** Misafir değerlendirmesinde görünen ad: siparişteki ad (yoksa teslimat adresindeki ad soyad) */
+function orderCustomerName(order: { guestName: string | null; shippingAddress: unknown } | null): string | null {
+  if (!order) return null;
+  const a = (order.shippingAddress ?? {}) as { firstName?: string; lastName?: string };
+  return order.guestName?.trim() || `${a.firstName ?? ""} ${a.lastName ?? ""}`.trim() || null;
+}
 
 export function emptySummary(): ReviewSummary {
   return { count: 0, average: 0, distribution: [0, 0, 0, 0, 0] };
@@ -173,7 +199,7 @@ export async function getProductReviews(
 
   const rows = await prisma.productReview.findMany({
     where: { productId, status: "APPROVED" },
-    include: { user: { select: { name: true } } },
+    include: { user: { select: { name: true } }, order: { select: { guestName: true, shippingAddress: true } } },
     orderBy: { createdAt: "desc" },
     take: 200,
   });
@@ -181,7 +207,7 @@ export async function getProductReviews(
     summary: summarize(rows.map((r) => r.rating)),
     reviews: rows.map((r) => ({
       id: r.id,
-      authorName: publicDisplayName(r.user.name),
+      authorName: publicDisplayName(r.user?.name ?? orderCustomerName(r.order)),
       rating: r.rating,
       title: r.title,
       text: r.text,
@@ -223,19 +249,48 @@ export async function getMyReviews(userId: string): Promise<MyReviewWithProduct[
   return rows.map((r) => ({ ...toMine(r), productName: r.product.name, productSlug: r.product.slug }));
 }
 
-/** Müşterinin bu ürünü değerlendirme hakkı (hesabına bağlı siparişlerden) */
+/** Üyenin bu ürünü değerlendirme hakkı (hesabına bağlı siparişlerden) */
 export async function reviewEligibility(productId: string, userId: string): Promise<ReviewEligibility> {
   if (!USE_DB) return "not_purchased"; // veritabanısız modda sipariş yok
   const rows = await prisma.orderItem.findMany({
     where: {
       variant: { productId },
-      order: { userId, status: { in: [...REVIEWABLE_STATUSES, ...AWAITING_SHIPMENT_STATUSES] } },
+      order: { userId, status: { in: [...REVIEWABLE_STATUSES, ...AWAITING_DELIVERY_STATUSES] } },
     },
     select: { order: { select: { status: true } } },
     take: 20,
   });
-  if (rows.some((r) => (REVIEWABLE_STATUSES as readonly string[]).includes(r.order.status))) return "eligible";
-  return rows.length > 0 ? "awaiting_shipment" : "not_purchased";
+  if (rows.some((r) => isReviewable(r.order.status))) return "eligible";
+  return rows.length > 0 ? "awaiting_delivery" : "not_purchased";
+}
+
+const publishedData = (input: { rating: number; title: string | null; text: string }, now: Date) => ({
+  rating: input.rating,
+  title: input.title,
+  text: input.text,
+  status: "APPROVED" as const,
+  isVerifiedPurchase: true,
+  adminNote: null,
+  approvedAt: now,
+});
+
+/** Değerlendirmeyi yazar/günceller ve işletmeye "yeni değerlendirme yayınlandı" bildirimini aynı işlemde kuyruğa koyar */
+async function publishReview(
+  where: Prisma.ProductReviewWhereUniqueInput,
+  create: Prisma.ProductReviewUncheckedCreateInput,
+  update: ReturnType<typeof publishedData>
+) {
+  return prisma.$transaction(async (tx) => {
+    const saved = await tx.productReview.upsert({ where, create, update });
+    await writeOutbox(tx, {
+      topic: "review.submitted",
+      aggregateType: "review",
+      aggregateId: saved.id,
+      dedupeKey: `review:${saved.id}:${saved.updatedAt.getTime()}`,
+      payload: { reviewId: saved.id },
+    });
+    return saved;
+  });
 }
 
 /**
@@ -260,32 +315,114 @@ export async function submitReview(input: {
   const eligibility = await reviewEligibility(input.productId, input.userId);
   if (eligibility !== "eligible") throw new ReviewNotAllowedError(eligibility);
 
-  const now = new Date();
-  const data = {
-    rating: input.rating,
-    title: input.title,
-    text: input.text,
-    status: "APPROVED" as const,
-    isVerifiedPurchase: true,
-    adminNote: null,
-    approvedAt: now,
-  };
-  // Değerlendirme ve işletmeye "yeni değerlendirme yayınlandı" bildirimi aynı işlemde
-  const r = await prisma.$transaction(async (tx) => {
-    const saved = await tx.productReview.upsert({
-      where: { productId_userId: { productId: input.productId, userId: input.userId } },
-      create: { productId: input.productId, userId: input.userId, ...data },
-      update: data,
-    });
-    await writeOutbox(tx, {
-      topic: "review.submitted",
-      aggregateType: "review",
-      aggregateId: saved.id,
-      dedupeKey: `review:${saved.id}:${saved.updatedAt.getTime()}`,
-      payload: { reviewId: saved.id },
-    });
-    return saved;
+  const data = publishedData(input, new Date());
+  const r = await publishReview(
+    { productId_userId: { productId: input.productId, userId: input.userId } },
+    { productId: input.productId, userId: input.userId, ...data },
+    data
+  );
+  return { review: toMine(r), productSlug: product.slug };
+}
+
+// ── Sipariş sayfası ──────────────────────────────────────────
+
+export interface OrderReviewItem {
+  productId: string;
+  productName: string;
+  productSlug: string;
+  /** Misafir siparişinde bu siparişten, üye siparişinde üyenin hesabından yazılmış değerlendirme */
+  review: MyProductReview | null;
+}
+
+export interface OrderReviewContext {
+  /** Siparişi veren üye; misafir siparişinde null */
+  userId: string | null;
+  /** Teslim edildi: değerlendirme yazılabilir */
+  delivered: boolean;
+  /** Siparişteki yayında ürünler (aynı ürün bir kez) */
+  items: OrderReviewItem[];
+}
+
+/** Sipariş sayfasının "Ürünleri değerlendirin" bölümü için: siparişteki ürünler ve yazılmış değerlendirmeler */
+export async function getOrderReviewContext(reference: string): Promise<OrderReviewContext | null> {
+  if (!USE_DB) return null;
+  const order = await prisma.order.findUnique({
+    where: { reference },
+    select: {
+      id: true,
+      userId: true,
+      status: true,
+      items: { select: { variant: { select: { product: { select: { id: true, name: true, slug: true, isPublished: true } } } } } },
+    },
   });
+  if (!order) return null;
+  const products = new Map<string, { id: string; name: string; slug: string }>();
+  for (const item of order.items) {
+    const p = item.variant.product;
+    if (p.isPublished && !products.has(p.id)) products.set(p.id, { id: p.id, name: p.name, slug: p.slug });
+  }
+  const ids = [...products.keys()];
+  const reviews =
+    ids.length === 0
+      ? []
+      : await prisma.productReview.findMany({
+          where: order.userId ? { userId: order.userId, productId: { in: ids } } : { orderId: order.id, productId: { in: ids } },
+        });
+  const byProduct = new Map(reviews.map((r) => [r.productId, toMine(r)]));
+  return {
+    userId: order.userId,
+    delivered: isReviewable(order.status),
+    items: [...products.values()].map((p) => ({
+      productId: p.id,
+      productName: p.name,
+      productSlug: p.slug,
+      review: byProduct.get(p.id) ?? null,
+    })),
+  };
+}
+
+/**
+ * Üye olmadan verilmiş siparişten değerlendirme gönder/güncelle → hemen yayında. Anahtar sipariş numarasıdır (sipariş
+ * sayfası gibi). Sipariş üyelikle verildiyse ReviewNeedsLoginError; ürün siparişte yoksa ya da sipariş teslim
+ * edilmediyse ReviewNotAllowedError; ürün yayında değilse ReviewProductNotFoundError.
+ */
+export async function submitOrderReview(input: {
+  reference: string;
+  productId: string;
+  rating: number;
+  title: string | null;
+  text: string;
+}): Promise<{ review: MyProductReview; productSlug: string }> {
+  if (!USE_DB) throw new ReviewNotAllowedError("not_purchased");
+
+  const order = await prisma.order.findUnique({
+    where: { reference: input.reference },
+    select: {
+      id: true,
+      userId: true,
+      status: true,
+      items: { where: { variant: { productId: input.productId } }, select: { id: true }, take: 1 },
+    },
+  });
+  if (!order || order.items.length === 0) throw new ReviewNotAllowedError("not_purchased");
+  if (order.userId) throw new ReviewNeedsLoginError();
+
+  const product = await prisma.product.findFirst({
+    where: { id: input.productId, isPublished: true },
+    select: { id: true, slug: true },
+  });
+  if (!product) throw new ReviewProductNotFoundError();
+
+  if (!isReviewable(order.status)) {
+    throw new ReviewNotAllowedError(isAwaitingDelivery(order.status) ? "awaiting_delivery" : "not_purchased");
+  }
+
+  const data = publishedData(input, new Date());
+  const r = await publishReview(
+    { productId_orderId: { productId: input.productId, orderId: order.id } },
+    { productId: input.productId, orderId: order.id, ...data },
+    data
+  );
   return { review: toMine(r), productSlug: product.slug };
 }
 

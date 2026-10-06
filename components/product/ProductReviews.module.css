@@ -135,6 +135,14 @@
   background-color: var(--color-surface);
 }
 
+/* Sipariş sayfasında: kartın içinde, ayrı çerçeve yok */
+.formBoxFlat {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
 .formTitle {
   margin: 0;
   font-family: var(--font-display);

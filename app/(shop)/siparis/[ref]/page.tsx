@@ -3,7 +3,8 @@
  *
  * Müşterinin siparişle ilgili her şeyi gördüğü tek sayfa: durum ve adımlar, zaman çizelgesi (müşteriye görünen
  * geçmiş), havale bilgileri, ödemesi yarım kalan kartta "Ödemeyi tamamla", kargo takip numarası, ürünler ve
- * tutarlar, teslimat/fatura bilgisi, fatura numarası, iadeler, iptal/iade talebi ve siparişe özel sözleşmeler.
+ * tutarlar, teslimat/fatura bilgisi, fatura numarası, iadeler, iptal/iade talebi, siparişe özel sözleşmeler ve teslim
+ * edilince ürün değerlendirmesi (üye olmadan verilmiş siparişte de).
  * Sipariş numarası (tahmin edilemez referans) sayfanın anahtarıdır; arama motorlarına kapalıdır.
  */
 
@@ -17,11 +18,14 @@ import { PAYMENT_METHOD_LABELS } from "@/lib/payment/methods";
 import { RECIPIENT_PAYS_NOTE } from "@/lib/shipping/quote";
 import { distanceSalesSections, preInformationSections } from "@/lib/legal/content";
 import { formatPhoneTr } from "@/lib/business/info";
+import { getCurrentCustomer } from "@/lib/auth/session";
+import { getOrderReviewContext } from "@/lib/repositories/product-review.repository";
 import LegalSections from "@/components/legal/LegalSections";
 import ClearCartOnPaid from "./ClearCartOnPaid";
 import CopyButton from "./CopyButton";
 import PayNowButton from "./PayNowButton";
 import OrderRequests from "./OrderRequests";
+import OrderReviews from "./OrderReviews";
 import styles from "./order.module.css";
 
 export const metadata: Metadata = {
@@ -57,6 +61,15 @@ export default async function SiparisPage({ params, searchParams }: Props) {
   if (!view) notFound();
 
   const d = view.data;
+  // Teslim edildiyse ürün değerlendirmesi (bölüm yüklenemezse sayfanın geri kalanı yine açılır)
+  const reviewContext =
+    d.status === "DELIVERED"
+      ? await getOrderReviewContext(d.reference).catch((err) => {
+          console.error("[siparis] Değerlendirme bölümü yüklenemedi:", err);
+          return null;
+        })
+      : null;
+  const viewer = reviewContext ? await getCurrentCustomer().catch(() => null) : null;
   const isPaid = PAID.includes(d.status);
   const isCod = d.paymentMethod === "CASH_ON_DELIVERY";
   const itemDiscount = itemDiscountKurus(d);
@@ -100,7 +113,7 @@ export default async function SiparisPage({ params, searchParams }: Props) {
     message = "Bu siparişin ödemesi iade edildi (aşağıda).";
   } else if (d.status === "DELIVERED") {
     title = "Siparişiniz teslim edildi";
-    message = "Afiyet olsun! Bir sorun varsa aşağıdaki “İade / iptal” bölümünden bize bildirebilirsiniz.";
+    message = "Afiyet olsun! Ürünleri aşağıdan değerlendirebilirsiniz. Bir sorun varsa “İade / iptal” bölümünden bize bildirin.";
   } else if (d.status === "SHIPPED") {
     title = "Siparişiniz kargoda";
     message = "Siparişiniz yola çıktı. Takip numaranızı aşağıda bulabilirsiniz.";
@@ -152,6 +165,14 @@ export default async function SiparisPage({ params, searchParams }: Props) {
 
         <div className={styles.layout}>
           <div className={styles.main}>
+            {reviewContext && (
+              <OrderReviews
+                reference={d.reference}
+                context={reviewContext}
+                viewer={viewer ? { id: viewer.id, role: viewer.role } : null}
+              />
+            )}
+
             {awaitingTransfer && (
               <section className={`${styles.card} ${styles.highlight}`} aria-labelledby="bank-title">
                 <h2 id="bank-title" className={styles.cardTitle}>

@@ -53,8 +53,16 @@ export default async function KvkkPage() {
             <td>Hukuki yükümlülük; bir hakkın tesisi ve korunması</td>
           </tr>
           <tr>
-            <td>Üyelik bilgileri (ad, e-posta, telefon, şifrenin geri döndürülemez özeti), ürün değerlendirmeleri</td>
-            <td>Üyelik hesabı, sipariş geçmişi, değerlendirmelerin yayımlanması</td>
+            <td>Üyelik bilgileri (ad, e-posta, telefon, şifrenin geri döndürülemez özeti)</td>
+            <td>Üyelik hesabı, sipariş geçmişi</td>
+            <td>Sözleşmenin kurulması ve ifası</td>
+          </tr>
+          <tr>
+            <td>Ürün değerlendirmeleri (puan, yorum); yayında adınız ve soyadınızın baş harfi görünür</td>
+            <td>
+              Ürünü satın alan müşterinin (üye hesabından ya da sipariş sayfasından) yazdığı değerlendirmenin ürün sayfasında
+              yayımlanması
+            </td>
             <td>Sözleşmenin kurulması ve ifası</td>
           </tr>
           <tr>

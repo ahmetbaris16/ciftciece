@@ -303,6 +303,8 @@ model Order {
   shipments       Shipment[]
   refunds         Refund[]
   requests        CustomerRequest[]
+  // Üye olmadan verilmiş siparişten (sipariş sayfasından) yazılan ürün değerlendirmeleri
+  reviews         ProductReview[]
   // Fatura bilgisi (bireysel/kurumsal) — sipariş anındaki hâli: {type, name, companyName, taxOffice,
   // taxNumber, address, sameAsShipping}. Boş = eski sipariş (teslimat bilgileriyle bireysel kabul edilir).
   billingInfo     Json?
@@ -570,13 +572,17 @@ model ProductReview {
   id                 String       @id @default(cuid())
   productId          String
   product            Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
-  userId             String
-  user               User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Yazan: üye (userId; ürün sayfasından ya da kendi sipariş sayfasından) ya da üye olmadan verilmiş siparişin sahibi
+  // (orderId; o siparişin sayfasından — sipariş numarası sayfanın anahtarıdır). Biri dolu olur, diğeri boş.
+  userId             String?
+  user               User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderId            String?
+  order              Order?       @relation(fields: [orderId], references: [id], onDelete: Cascade)
   rating             Int          // 1-5
   title              String?
   text               String       @db.Text
   status             ReviewStatus @default(PENDING)
-  // Gönderim anında: müşterinin ödenmiş siparişlerinde bu ürün var mı ("Satın aldı" rozeti)
+  // Gönderim anında: bu ürünü içeren sipariş teslim edildi mi ("Satın aldı" rozeti)
   isVerifiedPurchase Boolean      @default(false)
   // Reddedilme sebebi vb. — yalnız admin görür
   adminNote          String?      @db.Text
@@ -584,7 +590,10 @@ model ProductReview {
   updatedAt          DateTime     @updatedAt
   approvedAt         DateTime?
 
+  // Üye başına ürün başına tek değerlendirme; misafir siparişinde sipariş başına ürün başına tek değerlendirme
   @@unique([productId, userId])
+  @@unique([productId, orderId])
+  @@index([orderId])
   @@index([productId, status])
   @@index([status, createdAt])
   @@map("product_reviews")

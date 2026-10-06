@@ -460,9 +460,10 @@ export async function loadAdminCustomer(key: string): Promise<CustomerLookup> {
       take: 20,
       select: { id: true, subject: true, status: true, orderReference: true, createdAt: true },
     }),
-    member
+    member || orderIds.length
       ? prisma.productReview.findMany({
-          where: { userId: member.id },
+          // Üyenin hesabından yazdıkları + bu müşterinin üye olmadan verdiği siparişlerin sayfasından yazılanlar
+          where: { OR: [...(member ? [{ userId: member.id }] : []), ...(orderIds.length ? [{ orderId: { in: orderIds } }] : [])] },
           orderBy: { createdAt: "desc" },
           select: {
             id: true,

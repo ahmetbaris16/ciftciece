@@ -158,8 +158,8 @@ export default async function SssPage() {
           text: "Hayır. Üye olmadan sipariş verebilirsiniz; üyelik siparişlerinizi tek yerden takip etmenizi sağlar.",
           a: (
             <>
-              Hayır, üye olmadan sipariş verebilirsiniz. <Link href="/uye-ol">Üyelik</Link> ücretsizdir; siparişlerinizi tek
-              yerden takip etmenizi ve aldığınız ürünleri değerlendirmenizi sağlar.
+              Hayır, üye olmadan sipariş verebilirsiniz; teslim edilen ürünleri sipariş sayfanızdan değerlendirebilirsiniz.{" "}
+              <Link href="/uye-ol">Üyelik</Link> ücretsizdir ve siparişlerinizi tek yerden takip etmenizi sağlar.
             </>
           ),
         },

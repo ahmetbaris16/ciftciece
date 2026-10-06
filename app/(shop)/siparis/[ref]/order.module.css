@@ -347,6 +347,37 @@
   list-style: none;
 }
 
+/* ── Ürün değerlendirmesi (teslim edilince) ──────────── */
+
+.reviewItems {
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reviewItem {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) 0;
+  border-top: 1px solid var(--color-border-light);
+}
+
+.reviewProduct {
+  font-weight: 600;
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.reviewProduct:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.reviewLogin {
+  margin: var(--space-4) 0 0;
+}
+
 .items li {
   display: flex;
   justify-content: space-between;

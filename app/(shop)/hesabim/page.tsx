@@ -210,8 +210,8 @@ async function ReviewsSection({ userId }: { userId: string }) {
       <div className={styles.empty}>
         <p className={styles.emptyTitle}>Henüz değerlendirme yazmadınız</p>
         <p className={styles.emptyText}>
-          Satın aldığınız ürünleri, siparişiniz kargoya verildikten sonra ürün sayfasındaki &quot;Değerlendirmeler&quot;
-          bölümünden puanlayıp yorumlayabilirsiniz. Değerlendirmeniz hemen yayınlanır.
+          Satın aldığınız ürünleri, siparişiniz teslim edildikten sonra ürün sayfasındaki &quot;Değerlendirmeler&quot;
+          bölümünden ya da sipariş sayfanızdan puanlayıp yorumlayabilirsiniz. Değerlendirmeniz hemen yayınlanır.
         </p>
         <Link href="/urunler" className={styles.cta}>
           Ürünlere Göz At

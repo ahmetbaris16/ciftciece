@@ -29,7 +29,8 @@ export default async function UyelikSozlesmesiPage() {
       <h2>2. Konu</h2>
       <p>
         Üyelik; siparişlerinizi tek yerden takip etmenizi, bilgilerinizin sonraki siparişlerde hazır gelmesini ve satın
-        aldığınız ürünleri değerlendirmenizi sağlar. Üye olmadan da sipariş verilebilir. Üyelik ücretsizdir.
+        aldığınız ürünleri hesabınızdan değerlendirmenizi sağlar. Üye olmadan da sipariş verilebilir; teslim edilen ürünler
+        sipariş sayfasından değerlendirilebilir. Üyelik ücretsizdir.
       </p>
 
       <h2>3. Üyenin yükümlülükleri</h2>
@@ -45,7 +46,10 @@ export default async function UyelikSozlesmesiPage() {
       <h2>4. Satıcının hakları ve yükümlülükleri</h2>
       <ul>
         <li>Üye bilgilerini <Link href="/kvkk">KVKK Aydınlatma Metni</Link> ve <Link href="/gizlilik">Gizlilik Politikası</Link>&apos;na göre işlemek ve korumak</li>
-        <li>Ürün değerlendirmelerini yayımlamadan önce incelemek; bu sözleşmeye aykırı olanları yayımlamamak</li>
+        <li>
+          Ürün değerlendirmelerini (ürünü satın alan müşteri yazar, hemen yayınlanır) izlemek; bu sözleşmeye aykırı olanları
+          yayından kaldırmak
+        </li>
         <li>Sözleşmeye aykırı kullanımda üyeliği askıya almak ya da sonlandırmak (verilmiş siparişler etkilenmez)</li>
       </ul>
 

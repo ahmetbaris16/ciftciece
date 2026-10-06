@@ -289,7 +289,7 @@ export function orderDeliveredEmail(d: OrderEmailData): RenderedEmail {
         "Siparişiniz teslim edildi; afiyet olsun! Ürünlerimizi beğendiyseniz değerlendirmeniz diğer müşterilerimize yol gösterir."
       ),
       progressSteps(STEPS, 5),
-      button("Siparişi görüntüle ve değerlendir", orderUrl(d)),
+      button("Siparişi görüntüle ve değerlendir", `${orderUrl(d)}#degerlendir`),
       notice(
         "Bir sorun varsa (eksik, hasarlı ya da yanlış ürün) sipariş sayfanızdaki “İade / iptal” bölümünden ya da bu e-postayı yanıtlayarak bize bildirin. Teslimattan itibaren 14 gün içinde cayma hakkınızı kullanabilirsiniz (ambalajı açılmış gıda ürünleri hariç).",
         "info"

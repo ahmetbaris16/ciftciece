@@ -1,12 +1,16 @@
 "use client";
 
 /**
- * Ürün değerlendirme formu — yalnız ürünü satın almış üye müşteri yazar; gönderince hemen yayınlanır.
+ * Ürün değerlendirme formu — yalnız ürünü satın almış müşteri, sipariş teslim edildikten sonra yazar; gönderince
+ * hemen yayınlanır.
  *
- * - Girişsiz: "Giriş yapın / Üye olun" (girişten sonra bu bölüme döner)
+ * Ürün sayfası (üye):
+ * - Girişsiz: "Giriş yapın" ya da üye olmadan verdiği siparişi bulsun (sipariş sayfasından değerlendirir)
  * - Yönetici hesabı: değerlendirme yazılmaz (uygunsuz yorumu listedeki "Yayından kaldır" ile kaldırır)
- * - Satın almamış: neden yazamadığı; ödenmiş ama kargolanmamışsa "kargoya verilince"
+ * - Satın almamış: neden yazamadığı; sipariş verilmiş ama teslim edilmemişse "teslim edilince"
  * - Daha önce yazmış: durumu (Yayında / Yayından kaldırıldı) + "Düzenle" (düzenleme de hemen yayınlanır)
+ * Sipariş sayfası (`preset`): hak sunucuda denetlendi (sipariş teslim edildi); misafir siparişinde gönderim sipariş
+ * numarasıyla (orderRef), üye siparişinde oturumla yapılır. Görünüm sade (kart içinde kart yok).
  */
 
 import Link from "next/link";
@@ -28,15 +32,24 @@ type Load =
   | { state: "error" };
 
 const NOT_ELIGIBLE: Record<Exclude<ReviewEligibility, "eligible">, string> = {
-  awaiting_shipment: "Siparişiniz kargoya verildiğinde bu ürünü değerlendirebilirsiniz.",
+  awaiting_delivery: "Siparişiniz teslim edildiğinde bu ürünü değerlendirebilirsiniz.",
   not_purchased:
-    "Değerlendirmeleri yalnız bu ürünü satın alan müşterilerimiz yazar. Ürünü sitemizden üye girişiyle satın aldığınızda, sipariş kargoya verilince burada değerlendirme yazabilirsiniz.",
+    "Değerlendirmeleri yalnız bu ürünü satın alan müşterilerimiz yazar. Ürünü sitemizden aldığınızda, sipariş teslim edilince burada değerlendirme yazabilirsiniz. Üye olmadan verdiğiniz siparişi sipariş sayfasından değerlendirebilirsiniz.",
 };
 
-export default function ReviewForm({ productId, productSlug }: { productId: string; productSlug: string }) {
+interface Props {
+  productId: string;
+  productSlug: string;
+  /** Sipariş sayfası: yazılmış değerlendirme ve (misafir siparişinde) sipariş numarası; durum sorgulanmaz */
+  preset?: { review: MyProductReview | null; orderRef?: string };
+}
+
+export default function ReviewForm({ productId, productSlug, preset }: Props) {
   const id = useId();
   const router = useRouter();
-  const [load, setLoad] = useState<Load>({ state: "loading" });
+  const [load, setLoad] = useState<Load>(
+    preset ? { state: "ready", review: preset.review, eligibility: "eligible" } : { state: "loading" }
+  );
   const [editing, setEditing] = useState(false);
   const [rating, setRating] = useState(0);
   const [hover, setHover] = useState(0);
@@ -47,7 +60,12 @@ export default function ReviewForm({ productId, productSlug }: { productId: stri
   const [busy, setBusy] = useState(false);
   const [justSent, setJustSent] = useState(false);
 
+  const presetMode = preset !== undefined;
+  const orderRef = preset?.orderRef;
+  const box = presetMode ? `${styles.formBox} ${styles.formBoxFlat}` : styles.formBox;
+
   useEffect(() => {
+    if (presetMode) return; // sipariş sayfası: hak sunucuda denetlendi
     let alive = true;
     fetch(`/api/reviews?productId=${encodeURIComponent(productId)}`, { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
@@ -64,7 +82,7 @@ export default function ReviewForm({ productId, productSlug }: { productId: stri
     return () => {
       alive = false;
     };
-  }, [productId]);
+  }, [productId, presetMode]);
 
   const startEdit = (r: MyProductReview | null) => {
     setRating(r?.rating ?? 0);
@@ -79,7 +97,7 @@ export default function ReviewForm({ productId, productSlug }: { productId: stri
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setFormError(null);
-    const payload = { productId, rating, title, text };
+    const payload = { productId, rating, title, text, ...(orderRef ? { orderRef } : {}) };
     const parsed = ReviewSchema.safeParse(payload);
     if (!parsed.success) {
       setErrors(accountFieldErrors(parsed.error).fieldErrors);
@@ -94,6 +112,11 @@ export default function ReviewForm({ productId, productSlug }: { productId: stri
       });
       const data = await res.json().catch(() => null);
       if (res.status === 401) {
+        // Sipariş sayfasında: üyelikle verilmiş siparişte oturum yok/düşmüş → giriş gerektiğini söyle
+        if (presetMode) {
+          setFormError(data?.error ?? "Değerlendirmek için giriş yapın.");
+          return;
+        }
         setLoad({ state: "guest" });
         setEditing(false);
         return;
@@ -136,14 +159,16 @@ export default function ReviewForm({ productId, productSlug }: { productId: stri
       <div className={styles.formBox}>
         <p className={styles.formTitle}>Bu ürünü satın aldınız mı?</p>
         <p className={styles.formText}>
-          Değerlendirmeleri ürünü satın alan müşterilerimiz yazar. Siparişinizi verdiğiniz üyelikle giriş yapın.
+          Değerlendirmeleri ürünü satın alan müşterilerimiz, ürün teslim edildikten sonra yazar. Üyeyseniz giriş yapın. Üye
+          olmadan sipariş verdiyseniz sipariş sayfanızdan değerlendirebilirsiniz: teslimat e-postasındaki bağlantıyla ya da
+          sipariş numaranızla.
         </p>
         <div className={styles.formActions}>
           <Link href={`/giris?next=${encodeURIComponent(back)}`} className={styles.btnPrimary}>
             Giriş Yap
           </Link>
-          <Link href={`/uye-ol?next=${encodeURIComponent(back)}`} className={styles.btnSecondary}>
-            Üye Ol
+          <Link href="/siparis-takip" className={styles.btnSecondary}>
+            Siparişimi Bul
           </Link>
         </div>
       </div>
@@ -175,6 +200,17 @@ export default function ReviewForm({ productId, productSlug }: { productId: stri
           </div>
         );
       }
+      if (presetMode) {
+        return (
+          <div className={box}>
+            <div className={styles.formActions}>
+              <button type="button" className={styles.btnSecondary} onClick={() => startEdit(null)}>
+                Değerlendirme Yaz
+              </button>
+            </div>
+          </div>
+        );
+      }
       return (
         <div className={styles.formBox}>
           <p className={styles.formTitle}>Bu ürünü satın aldınız</p>
@@ -194,9 +230,9 @@ export default function ReviewForm({ productId, productSlug }: { productId: stri
           ? "Değerlendirmeniz mağaza tarafından yayından kaldırıldı (hakaret, kişisel bilgi ya da ürünle ilgisiz içerik). Düzenleyip yeniden yayınlayabilirsiniz."
           : "Değerlendirmeniz yayında değil. Düzenleyip kaydederseniz yayınlanır.";
     return (
-      <div className={styles.formBox}>
+      <div className={box}>
         {justSent && <p className={styles.formSuccess}>Teşekkürler! Değerlendirmeniz yayınlandı.</p>}
-        <p className={styles.formTitle}>Sizin değerlendirmeniz</p>
+        {!presetMode && <p className={styles.formTitle}>Sizin değerlendirmeniz</p>}
         <p
           className={`${styles.statusPill} ${
             mine.status === "APPROVED" ? styles.pillOk : mine.status === "REJECTED" ? styles.pillBad : styles.pillWait
@@ -227,7 +263,7 @@ export default function ReviewForm({ productId, productSlug }: { productId: stri
   const shown = hover || rating;
 
   return (
-    <form className={styles.formBox} onSubmit={submit} noValidate>
+    <form className={box} onSubmit={submit} noValidate>
       <p className={styles.formTitle}>{mine ? "Değerlendirmenizi düzenleyin" : "Değerlendirme yazın"}</p>
 
       <fieldset className={styles.starField}>
