@@ -90,9 +90,23 @@ export default function DiscountManager({
     if (selected.length === 0) return setStatus({ kind: "error", text: "İndirim yapılacak ürünü seçin." });
     if (!endsOn) return setStatus({ kind: "error", text: "Bitiş tarihini seçin." });
     const replacing = products.filter((p) => selected.includes(p.id) && p.activePercent !== null).length;
+    // Son 10 günde daha düşük fiyattan satılmış (süren ya da yakında biten indirim) seçenek: indirim o fiyattan
+    // hesaplanır (yasal kural). Oran sınırı olmadığı için yönetici sonucu onaydan önce görsün.
+    const lowered = products
+      .filter((p) => selected.includes(p.id))
+      .flatMap((p) =>
+        p.variants
+          .filter((v) => v.referenceKurus < v.priceKurus)
+          .map((v) => `• ${p.name} (${v.name}): ${formatPrice(v.referenceKurus)} → ${formatPrice(salePrice(v.referenceKurus, percent))}`)
+      );
     const question =
       `${selected.length} üründe %${percent} indirim şimdi başlasın mı? Bitiş: ${formatEnd(endsOn)}.` +
-      (replacing > 0 ? `\n${replacing} üründe süren indirim bu indirimle değişecek.` : "");
+      (replacing > 0 ? `\n${replacing} üründe süren indirim bu indirimle değişecek.` : "") +
+      (lowered.length > 0
+        ? `\n\nDikkat: bu seçenekler son 10 günde daha düşük fiyattan satıldığı için indirim o fiyattan hesaplanır (yasal kural):\n` +
+          lowered.slice(0, 6).join("\n") +
+          (lowered.length > 6 ? `\n… ve ${lowered.length - 6} seçenek daha` : "")
+        : "");
     if (!window.confirm(question)) return;
     setBusy(true);
     try {
