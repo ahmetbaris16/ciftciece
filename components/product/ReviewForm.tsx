@@ -106,8 +106,10 @@ export default function ReviewForm({ productId, productSlug }: { productId: stri
       setLoad({ state: "ready", review: data.review as MyProductReview, eligibility: "eligible" });
       setEditing(false);
       setJustSent(true);
-      // Yayınlanan değerlendirme listede görünsün (sayfa önbelleği sunucuda tazelendi)
+      // Yayınlanan değerlendirme listede görünsün: sunucu sayfa önbelleğini "sonraki ziyarette tazele" diye işaretler;
+      // ilk yenileme tazelemeyi başlatır (eski kopya gelebilir), kısa süre sonraki ikinci yenileme yeni hâli getirir
       router.refresh();
+      window.setTimeout(() => router.refresh(), 2000);
     } catch {
       setFormError(ACCOUNT_MESSAGES.unavailable);
     } finally {

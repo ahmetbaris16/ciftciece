@@ -2,7 +2,7 @@
  * Ürün değerlendirmeleri — yalnız ürünü satın almış üye müşteri yazar; yazınca hemen yayınlanır (onay yok).
  *
  * - Hak: üye girişliyken verilmiş, kargoya verilmiş ya da teslim edilmiş bir siparişte bu ürün olmalı (misafir
- *   siparişi e-postayla hesaba bağlanmaz). Ödenip henüz kargolanmamışsa "kargoya verilince" denir.
+ *   siparişi e-postayla hesaba bağlanmaz). Sipariş verilmiş ama henüz kargolanmamışsa "kargoya verilince" denir.
  * - Müşteri başına ürün başına tek değerlendirme; düzenlenirse yeni hâli hemen yayınlanır.
  * - Mağaza yönetici hesabı değerlendirme yazamaz (API'de denetlenir).
  * - Mağaza yalnız uygunsuz yorumu (hakaret, kişisel veri, ürünle ilgisiz içerik) yayından kaldırabilir (ürün
@@ -68,7 +68,7 @@ export class ReviewProductNotFoundError extends Error {
 /**
  * Değerlendirme hakkı:
  * - eligible: hesabında bu ürünün kargoya verilmiş ya da teslim edilmiş siparişi var
- * - awaiting_shipment: ödenmiş/hazırlanan siparişi var, henüz kargoya verilmedi
+ * - awaiting_shipment: verilmiş (ödemesi bekleniyor / ödenmiş / hazırlanıyor) siparişi var, henüz kargoya verilmedi
  * - not_purchased: hesabında bu ürünle (iptal edilmemiş) sipariş yok
  */
 export type ReviewEligibility = "eligible" | "awaiting_shipment" | "not_purchased";
@@ -82,7 +82,8 @@ export class ReviewNotAllowedError extends Error {
 }
 
 const REVIEWABLE_STATUSES = ["SHIPPED", "DELIVERED"] as const;
-const AWAITING_SHIPMENT_STATUSES = ["PAID", "PROCESSING"] as const;
+// Ödemesi beklenen / alınmış ama henüz kargolanmamış sipariş: "kargoya verilince" denir
+const AWAITING_SHIPMENT_STATUSES = ["PENDING", "PAID", "PROCESSING"] as const;
 
 export function emptySummary(): ReviewSummary {
   return { count: 0, average: 0, distribution: [0, 0, 0, 0, 0] };
