@@ -18,6 +18,8 @@ export const ACCOUNT_MESSAGES = {
   wrongPassword: "Mevcut şifreniz hatalı.",
   emailTaken: "Bu e-posta adresiyle zaten bir üyelik var. Giriş yapmayı deneyin.",
   loginFailed: "E-posta adresi veya şifre hatalı.",
+  staffPassword: "Bu yönetici hesabıdır; şifresi yönetim panelinden (Ayarlar → Yönetici hesabı) değiştirilir.",
+  staffReview: "Mağaza yönetici hesabıyla ürün değerlendirmesi yazılamaz; değerlendirmeleri ürünü satın alan müşteriler yazar.",
   tooMany: "Çok fazla deneme yapıldı. Lütfen birkaç dakika sonra tekrar deneyin.",
   unavailable: "Şu anda işlem yapılamıyor. Lütfen biraz sonra tekrar deneyin.",
   generic: "Bilgilerinizi kontrol edin.",

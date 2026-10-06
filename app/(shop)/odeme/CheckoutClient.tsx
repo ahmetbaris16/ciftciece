@@ -45,6 +45,7 @@ import { formatPhoneTr, type BusinessInfo } from "@/lib/business/info";
 import LegalSections from "@/components/legal/LegalSections";
 import PaymentMarks from "@/components/payment/PaymentMarks";
 import CartChanges from "@/components/cart/CartChanges";
+import { isStoreRole } from "@/lib/auth/roles";
 import styles from "./checkout.module.css";
 
 type Step = "iletisim" | "teslimat" | "odeme";
@@ -130,7 +131,7 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
 
   // Üye girişliyse iletişim bilgileri hesaptan gelir (yalnız boş alanlar; müşteri değiştirebilir)
   const { data: session, status: sessionStatus } = useSession();
-  const isCustomer = sessionStatus === "authenticated" && (session?.user as { role?: string } | undefined)?.role === "CUSTOMER";
+  const isCustomer = sessionStatus === "authenticated" && isStoreRole((session?.user as { role?: string } | undefined)?.role);
   const prefilled = useRef(false);
   useEffect(() => {
     if (!isCustomer || prefilled.current) return;

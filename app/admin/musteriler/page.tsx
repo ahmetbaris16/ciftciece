@@ -85,7 +85,7 @@ export default async function AdminMusterilerPage({ searchParams }: Props) {
                       {c.name ?? "—"}
                       {c.member && <span style={st.member}>Üye</span>}
                       {c.staff && (
-                        <span style={st.staff} title="Bu e-posta yönetici hesabına ait: aynı e-postayla mağazaya üye girişi yapılamaz.">
+                        <span style={st.staff} title="Bu e-posta yönetici hesabına ait; mağazaya da bu hesapla giriş yapılır.">
                           Yönetici hesabı
                         </span>
                       )}

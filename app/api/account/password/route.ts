@@ -1,9 +1,11 @@
 /**
  * POST /api/account/password — mevcut şifreyi doğrulayıp yenisini kaydeder.
+ * Yönetici/personel hesabının şifresi buradan değişmez (panelin daha sıkı şifre kuralı atlanmasın): panel → Ayarlar.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentCustomer } from "@/lib/auth/session";
+import { isStaffRole } from "@/lib/auth/roles";
 import { getUserById, updateUserPasswordHash } from "@/lib/account/customer.repository";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { rateLimit } from "@/lib/security/rate-limit";
@@ -16,6 +18,7 @@ export async function POST(request: NextRequest) {
   }
   const session = await getCurrentCustomer();
   if (!session) return NextResponse.json({ error: "Oturumunuz kapanmış. Lütfen tekrar giriş yapın." }, { status: 401 });
+  if (isStaffRole(session.role)) return NextResponse.json({ error: ACCOUNT_MESSAGES.staffPassword }, { status: 403 });
 
   const parsed = PasswordChangeSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
@@ -29,6 +32,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const user = await getUserById(session.id);
+    if (user && isStaffRole(user.role)) return NextResponse.json({ error: ACCOUNT_MESSAGES.staffPassword }, { status: 403 });
     if (!user || !(await verifyPassword(parsed.data.currentPassword, user.passwordHash))) {
       return NextResponse.json(
         { error: ACCOUNT_MESSAGES.wrongPassword, fieldErrors: { currentPassword: ACCOUNT_MESSAGES.wrongPassword } },

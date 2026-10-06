@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { scheduleNotifications } from "@/lib/notifications/run";
 import { getCurrentCustomer } from "@/lib/auth/session";
+import { isStaffRole } from "@/lib/auth/roles";
 import {
   ReviewProductNotFoundError,
   getMyReviewForProduct,
@@ -44,6 +45,9 @@ export async function POST(request: NextRequest) {
   const session = await getCurrentCustomer();
   if (!session) {
     return NextResponse.json({ error: "Değerlendirme yazmak için giriş yapın." }, { status: 401 });
+  }
+  if (isStaffRole(session.role)) {
+    return NextResponse.json({ error: ACCOUNT_MESSAGES.staffReview }, { status: 403 });
   }
 
   const parsed = ReviewSchema.safeParse(await request.json().catch(() => null));

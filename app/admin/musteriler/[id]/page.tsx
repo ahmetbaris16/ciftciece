@@ -369,12 +369,12 @@ export default async function AdminMusteriDetay({ params }: Props) {
                 </>
               ) : (
                 <>
-                  <p className={s.text}>Üye değil.</p>
-                  <p className={s.muted}>Siparişlerini e-postasındaki bağlantıdan ya da Sipariş Takip sayfasından izler.</p>
+                  <p className={s.text}>{c.staff ? "Yönetici hesabı." : "Üye değil."}</p>
+                  {!c.staff && <p className={s.muted}>Siparişlerini e-postasındaki bağlantıdan ya da Sipariş Takip sayfasından izler.</p>}
                   {c.staff && (
-                    <p className={s.warn}>
-                      Bu e-posta yönetici hesabınıza ait: bu e-postayla mağazaya üye olunamaz ve üye girişi yapılamaz. Mağazayı müşteri olarak
-                      denemek için başka bir e-posta kullanın ya da <Link href="/admin/ayarlar#hesap">yönetici e-postanızı değiştirin</Link>.
+                    <p className={s.hint}>
+                      Bu e-posta yönetici hesabınıza ait. Mağazaya da bu e-posta ve yönetici şifrenizle girebilirsiniz; giriş yapmışken
+                      verdiğiniz siparişler hesabınıza kaydedilir.
                     </p>
                   )}
                 </>

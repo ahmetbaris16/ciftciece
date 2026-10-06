@@ -7,6 +7,7 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "./auth-options";
+import { isStoreRole } from "./roles";
 
 export interface SessionUser {
   id: string;
@@ -48,11 +49,12 @@ export async function requireStaff(): Promise<SessionUser> {
 }
 
 /**
- * Giriş yapmış üye müşteri (role CUSTOMER) ya da null.
+ * Mağazada giriş yapmış hesap ya da null: üye müşteri ya da kendi hesabıyla alışveriş yapan yönetici/personel.
+ * Yöneticiye kapalı mağaza işlemleri (ürün değerlendirmesi, şifre değiştirme) ayrıca isStaffRole ile denetlenir.
  */
 export async function getCurrentCustomer(): Promise<SessionUser | null> {
   const user = await getCurrentUser();
-  return user && user.role === "CUSTOMER" ? user : null;
+  return user && isStoreRole(user.role) ? user : null;
 }
 
 /**

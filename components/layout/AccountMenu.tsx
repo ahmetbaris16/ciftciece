@@ -3,7 +3,8 @@
 /**
  * Başlıktaki hesap menüsü (masaüstü).
  * Girişsiz: "Giriş Yap" → açılır kutuda Giriş Yap / Üye Ol / Sipariş Takibi.
- * Girişli: "Hesabım" → Siparişlerim, Değerlendirmelerim, Hesap Bilgileri, Çıkış Yap.
+ * Girişli: "Hesabım" → Siparişlerim, Değerlendirmelerim, Hesap Bilgileri, Çıkış Yap (yönetici hesabında ayrıca
+ * Yönetim Paneli; değerlendirme yönetici hesabıyla yazılmaz).
  * Tıkla aç/kapat; dışarı tıklama ve Esc kapatır.
  */
 
@@ -11,6 +12,7 @@ import Link from "next/link";
 import { signOut, useSession } from "next-auth/react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
+import { isStaffRole, isStoreRole } from "@/lib/auth/roles";
 import styles from "./AccountMenu.module.css";
 
 export default function AccountMenu() {
@@ -22,7 +24,8 @@ export default function AccountMenu() {
   const menuId = useId();
 
   const user = data?.user as { name?: string | null; role?: string } | undefined;
-  const isCustomer = status === "authenticated" && user?.role === "CUSTOMER";
+  const isCustomer = status === "authenticated" && isStoreRole(user?.role);
+  const isStaff = isCustomer && isStaffRole(user?.role);
   const firstName = (user?.name ?? "").trim().split(/\s+/)[0] ?? "";
 
   // Sayfa değişince kapan
@@ -84,12 +87,19 @@ export default function AccountMenu() {
             <Link href="/hesabim" className={styles.item} onClick={() => setOpen(false)}>
               Siparişlerim
             </Link>
-            <Link href="/hesabim?bolum=degerlendirmeler" className={styles.item} onClick={() => setOpen(false)}>
-              Değerlendirmelerim
-            </Link>
+            {!isStaff && (
+              <Link href="/hesabim?bolum=degerlendirmeler" className={styles.item} onClick={() => setOpen(false)}>
+                Değerlendirmelerim
+              </Link>
+            )}
             <Link href="/hesabim?bolum=bilgiler" className={styles.item} onClick={() => setOpen(false)}>
               Hesap Bilgileri
             </Link>
+            {isStaff && (
+              <Link href="/admin" className={styles.item} onClick={() => setOpen(false)}>
+                Yönetim Paneli
+              </Link>
+            )}
             <button
               type="button"
               className={`${styles.item} ${styles.signOut}`}

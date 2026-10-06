@@ -4,8 +4,10 @@
  * İki ayrı credentials sağlayıcısı, tek JWT oturumu:
  * - "credentials" → yönetim paneli (/admin/giris): kullanıcı adı (ya da e-posta) + şifre. Yalnız ADMIN ve STAFF.
  *                   Oturum 8 saat.
- * - "customer"    → mağaza üyeleri (/giris, /uye-ol). Yalnız CUSTOMER. Oturum 30 gün.
- * Müşteri hesabıyla panele, yönetici hesabıyla mağaza girişine izin verilmez (roller karışmaz).
+ * - "customer"    → mağaza girişi (/giris, /uye-ol). Üye müşteri oturumu 30 gün. Yönetici/personel de mağazaya kendi
+ *                   e-posta ve şifresiyle girebilir (tek hesap: aynı oturum panelde de geçerlidir, 8 saatte düşer);
+ *                   bu hesaplara yönetici girişinin deneme sınırı uygulanır.
+ * Müşteri hesabıyla panele girilemez.
  * Şifre değişince (müşteri: "şifremi unuttum", yönetici: panel → Ayarlar → Yönetici hesabı) önceki oturumlar en geç
  * 5 dakikada düşer. Session'da user id, rol ve ad taşınır.
  */
@@ -123,11 +125,16 @@ export const authOptions: NextAuthOptions = {
         }
 
         const user = await findUserByEmail(email);
+        // Yönetici/personel hesabı: panel girişindeki hesap başına sınır (aynı sayaç) burada da geçerli; mağaza
+        // formu yönetici şifresini denemek için daha gevşek bir kapı olmasın
+        if (user && user.role !== "CUSTOMER" && !rateLimit(`admin-login-id:${email}`, 5, 15 * 60_000)) {
+          throw new Error(LOGIN_RATE_LIMITED);
+        }
         // Hesap yoksa da şifre karşılaştırması yapılır (yanıt süresi hesabın varlığını ele vermesin)
         const valid = await verifyPassword(password, user?.passwordHash);
-        if (!user || !valid || user.role !== "CUSTOMER") return null;
+        if (!user || !valid) return null;
 
-        return { id: user.id, email: user.email, name: user.name, role: "CUSTOMER" };
+        return { id: user.id, email: user.email, name: user.name, role: user.role };
       },
     }),
   ],
@@ -140,8 +147,8 @@ export const authOptions: NextAuthOptions = {
         token.checkedAt = token.authAt;
       }
 
-      // Profilde ad değişince istemci useSession().update({ name }) çağırır
-      if (trigger === "update" && token.role === "CUSTOMER") {
+      // Profilde ad değişince istemci useSession().update({ name }) çağırır (mağaza hesabı: üye ya da yönetici)
+      if (trigger === "update" && typeof token.role === "string") {
         const name = (session as { name?: unknown } | undefined)?.name;
         if (typeof name === "string" && name.trim()) token.name = name.trim().slice(0, 120);
       }

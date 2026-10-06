@@ -9,6 +9,7 @@ import SearchBar from "@/components/ui/SearchBar";
 import { STORE } from "@/lib/config/store";
 import { useCart } from "@/lib/cart/CartContext";
 import { useSession } from "next-auth/react";
+import { isStoreRole } from "@/lib/auth/roles";
 import AccountMenu from "./AccountMenu";
 
 const NAV_LINKS = [
@@ -36,8 +37,7 @@ export default function Header() {
   const { cart, isHydrated } = useCart();
   const cartCount = isHydrated ? cart.itemCount : 0;
   const { data: session, status: sessionStatus } = useSession();
-  const isCustomer =
-    sessionStatus === "authenticated" && (session?.user as { role?: string } | undefined)?.role === "CUSTOMER";
+  const isCustomer = sessionStatus === "authenticated" && isStoreRole((session?.user as { role?: string } | undefined)?.role);
 
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);

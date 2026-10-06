@@ -131,7 +131,7 @@ export interface AdminCustomerRow {
   memberSince: Date | null;
   /** Mağaza üyeliği (müşteri hesabı) var */
   member: boolean;
-  /** Bu e-posta yönetici/personel hesabına ait: aynı e-postayla mağazaya üye girişi yapılamaz */
+  /** Bu e-posta yönetici/personel hesabına ait (mağazaya da bu hesapla girilir; ayrıca üye olunmaz) */
   staff: boolean;
 }
 

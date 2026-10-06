@@ -1,5 +1,6 @@
 /**
- * Hesabım — yalnız üye müşteriler (girişsiz gelen /giris?next=/hesabim'e yönlenir)
+ * Hesabım — mağazada giriş yapmış hesap (girişsiz gelen /giris?next=/hesabim'e yönlenir). Yönetici hesabıyla da açılır:
+ * o zaman değerlendirme bölümü yoktur, şifre panelden değişir, üstte Yönetim Paneli bağlantısı görünür.
  *
  * Bölümler (?bolum=): siparisler (varsayılan) | degerlendirmeler | bilgiler
  * - Siparişlerim: üye girişliyken verilen siparişler (misafir siparişleri e-postayla eşleştirilmez)
@@ -9,6 +10,7 @@
 
 import Link from "next/link";
 import { requireCustomer } from "@/lib/auth/session";
+import { isStaffRole } from "@/lib/auth/roles";
 import { getCustomerOrders, getUserById } from "@/lib/account/customer.repository";
 import { getMyReviews } from "@/lib/repositories/product-review.repository";
 import { splitFullName } from "@/lib/validation/account";
@@ -50,9 +52,12 @@ interface Props {
 export default async function HesabimPage({ searchParams }: Props) {
   const { bolum } = await searchParams;
   const raw = Array.isArray(bolum) ? bolum[0] : bolum;
-  const section: SectionKey = SECTIONS.some((s) => s.key === raw) ? (raw as SectionKey) : "siparisler";
+  const requested: SectionKey = SECTIONS.some((s) => s.key === raw) ? (raw as SectionKey) : "siparisler";
 
-  const session = await requireCustomer(section === "siparisler" ? "/hesabim" : `/hesabim?bolum=${section}`);
+  const session = await requireCustomer(requested === "siparisler" ? "/hesabim" : `/hesabim?bolum=${requested}`);
+  const staff = isStaffRole(session.role);
+  const sections = staff ? SECTIONS.filter((s) => s.key !== "degerlendirmeler") : SECTIONS;
+  const section: SectionKey = sections.some((s) => s.key === requested) ? requested : "siparisler";
   const user = await getUserById(session.id);
   const { firstName, lastName } = splitFullName(user?.name ?? session.name);
 
@@ -68,8 +73,17 @@ export default async function HesabimPage({ searchParams }: Props) {
           <SignOutButton className={styles.signOut} />
         </header>
 
+        {staff && (
+          <p className={styles.staffNote}>
+            Yönetici hesabınızla mağazadasınız: siparişleriniz bu hesaba kaydedilir.{" "}
+            <Link href="/admin" className={styles.link}>
+              Yönetim paneline git
+            </Link>
+          </p>
+        )}
+
         <nav className={styles.tabs} aria-label="Hesap bölümleri">
-          {SECTIONS.map((s) => (
+          {sections.map((s) => (
             <Link
               key={s.key}
               href={s.key === "siparisler" ? "/hesabim" : `/hesabim?bolum=${s.key}`}
@@ -97,7 +111,16 @@ export default async function HesabimPage({ searchParams }: Props) {
               <h2 id="password-title" className={styles.panelTitle}>
                 Şifre değiştir
               </h2>
-              <PasswordForm />
+              {staff ? (
+                <p className={styles.muted}>
+                  Yönetici hesabının şifresi yönetim panelinden değiştirilir:{" "}
+                  <Link href="/admin/ayarlar" className={styles.link}>
+                    Ayarlar → Yönetici hesabı
+                  </Link>
+                </p>
+              ) : (
+                <PasswordForm />
+              )}
             </section>
           </div>
         )}
