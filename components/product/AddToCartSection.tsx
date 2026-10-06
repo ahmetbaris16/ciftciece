@@ -7,6 +7,7 @@
  * - Varyant seçimi (interaktif)
  * - Miktar seçimi
  * - Sepete ekle (cart context)
+ * - İndirim sürüyorsa: "%X İndirim" etiketi, indirimli fiyat, üstü çizili eski fiyat ve kampanya tarihleri
  */
 
 import { useState, useCallback } from "react";
@@ -14,7 +15,8 @@ import { useCart } from "@/lib/cart/CartContext";
 import { STORE } from "@/lib/config/store";
 import { formatPrice } from "@/types";
 import { unitPriceLabel } from "@/lib/catalog/unit-price";
-import type { ProductVariant } from "@/types";
+import { discountPercentLabel, formatDiscountPeriod } from "@/lib/pricing/discount";
+import type { ProductDiscountInfo, ProductVariant } from "@/types";
 import styles from "./AddToCartSection.module.css";
 
 interface ProductData {
@@ -24,6 +26,8 @@ interface ProductData {
   primaryImageUrl: string | null;
   primaryImageAlt: string;
   variants: ProductVariant[];
+  /** Süren indirim (varsa) */
+  discount?: ProductDiscountInfo | null;
 }
 
 export default function AddToCartSection({ product }: { product: ProductData }) {
@@ -48,6 +52,7 @@ export default function AddToCartSection({ product }: { product: ProductData }) 
       productName: product.name,
       variantName: selectedVariant.name,
       priceKurus: selectedVariant.priceKurus,
+      compareAtPriceKurus: selectedVariant.compareAtPriceKurus ?? null,
       quantity,
       imageUrl: product.primaryImageUrl ?? "/images/atmosphere/magaza-zeytin-tepsi.jpg",
       imageAlt: product.primaryImageAlt,
@@ -61,6 +66,11 @@ export default function AddToCartSection({ product }: { product: ProductData }) 
 
   const priceAvailable = selectedVariant && selectedVariant.priceKurus > 0;
   const isAvailable = selectedVariant?.isAvailable ?? false;
+  const compareAt =
+    priceAvailable && selectedVariant!.compareAtPriceKurus && selectedVariant!.compareAtPriceKurus > selectedVariant!.priceKurus
+      ? selectedVariant!.compareAtPriceKurus
+      : null;
+  const percent = compareAt ? discountPercentLabel(compareAt, selectedVariant!.priceKurus) : 0;
 
   return (
     <div className={styles.wrap}>
@@ -81,7 +91,7 @@ export default function AddToCartSection({ product }: { product: ProductData }) 
               >
                 <span className={styles.variantName}>{variant.name}</span>
                 {variant.priceKurus > 0 && (
-                  <span className={styles.variantPrice}>
+                  <span className={`${styles.variantPrice} ${variant.compareAtPriceKurus ? styles.variantPriceSale : ""}`}>
                     {formatPrice(variant.priceKurus)}
                   </span>
                 )}
@@ -91,13 +101,20 @@ export default function AddToCartSection({ product }: { product: ProductData }) 
         </div>
       )}
 
-      {/* Price Display */}
+      {/* Fiyat (indirimde: etiket + indirimli fiyat + üstü çizili eski fiyat) */}
+      {compareAt && percent > 0 && <span className={styles.saleBadge}>%{percent} İndirim</span>}
       <div className={styles.priceDisplay}>
         {priceAvailable ? (
           <>
-            <span className={styles.price}>
+            <span className={`${styles.price} ${compareAt ? styles.priceSale : ""}`}>
               {formatPrice(selectedVariant!.priceKurus)}
             </span>
+            {compareAt && (
+              <span className={styles.priceOriginal}>
+                <span className="sr-only">İndirimden önceki fiyat: </span>
+                {formatPrice(compareAt)}
+              </span>
+            )}
             {unitPriceLabel(selectedVariant!.priceKurus, selectedVariant!.name) && (
               <span className={styles.unitPrice}>
                 ({unitPriceLabel(selectedVariant!.priceKurus, selectedVariant!.name)})
@@ -111,6 +128,12 @@ export default function AddToCartSection({ product }: { product: ProductData }) 
           </span>
         )}
       </div>
+      {compareAt && product.discount && (
+        <p className={styles.saleNote}>
+          İndirim {formatDiscountPeriod(product.discount.startsAt, product.discount.endsAt)} tarihleri arasında geçerlidir.
+          Üstü çizili fiyat, ürünün indirimden önceki son 10 gündeki en düşük fiyatıdır.
+        </p>
+      )}
 
       {/* Quantity + Add to Cart */}
       {isAvailable && priceAvailable && (

@@ -34,10 +34,20 @@ export interface ProductVariant {
   id: string;
   name: string; // "500g", "1kg", "5L"
   sku?: string | null;
-  priceKurus: number; // 0 = fiyat girilmemiş
+  /** Satış fiyatı (vitrinde indirim sürüyorsa indirimli fiyat); 0 = fiyat girilmemiş */
+  priceKurus: number;
+  /** İndirim sürüyorsa indirimden önceki fiyat (üstü çizili gösterilir: son 10 günün en düşük fiyatı) */
+  compareAtPriceKurus?: number | null;
   isAvailable: boolean;
   sortOrder: number;
   stockQuantity?: number; // Inventory'den join edildiğinde
+}
+
+/** Süren indirim (kampanya) — tarihler ISO; müşteriye yazılır */
+export interface ProductDiscountInfo {
+  percent: number;
+  startsAt: string;
+  endsAt: string;
 }
 
 export interface Product {
@@ -54,6 +64,8 @@ export interface Product {
   sortOrder: number;
   /** KDV oranı (baz puan: 100 = %1); boş = girilmemiş */
   vatRateBps?: number | null;
+  /** Vitrinde: süren indirim (varsa) */
+  discount?: ProductDiscountInfo | null;
 }
 
 // Liste sayfaları için hafif versiyon (images[0] + variants[0] içerir)
@@ -79,6 +91,8 @@ export interface CartItem {
   productName: string;
   variantName: string;
   priceKurus: number;
+  /** İndirim sürüyorsa indirimden önceki fiyat (sepette üstü çizili) */
+  compareAtPriceKurus?: number | null;
   quantity: number;
   imageUrl: string;
   imageAlt: string;

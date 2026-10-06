@@ -12,7 +12,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { formatPrice } from "@/types";
 import { loadCustomerOrderView, progressIndex } from "@/lib/orders/customer-view";
-import { addressText, billingText, formatIban } from "@/lib/notifications/order-data";
+import { addressText, billingText, formatIban, itemDiscountKurus } from "@/lib/notifications/order-data";
 import { PAYMENT_METHOD_LABELS } from "@/lib/payment/methods";
 import { RECIPIENT_PAYS_NOTE } from "@/lib/shipping/quote";
 import { distanceSalesSections, preInformationSections } from "@/lib/legal/content";
@@ -59,6 +59,7 @@ export default async function SiparisPage({ params, searchParams }: Props) {
   const d = view.data;
   const isPaid = PAID.includes(d.status);
   const isCod = d.paymentMethod === "CASH_ON_DELIVERY";
+  const itemDiscount = itemDiscountKurus(d);
   const awaitingTransfer = d.paymentMethod === "BANK_TRANSFER" && d.status === "PENDING";
   const cardPending = d.paymentMethod === "CARD" && d.status === "PENDING";
   const reviewing = cardPending && view.needsAttention;
@@ -273,15 +274,29 @@ export default async function SiparisPage({ params, searchParams }: Props) {
                         {i.variant} × {i.quantity}
                       </span>
                     </span>
-                    <span className={styles.itemPrice}>{formatPrice(i.lineTotalKurus)}</span>
+                    <span className={styles.itemPrice}>
+                      {i.lineTotalKurus < i.unitPriceKurus * i.quantity && (
+                        <span className={styles.itemPriceOld}>
+                          <span className="sr-only">İndirimden önce: </span>
+                          {formatPrice(i.unitPriceKurus * i.quantity)}
+                        </span>
+                      )}
+                      {formatPrice(i.lineTotalKurus)}
+                    </span>
                   </li>
                 ))}
               </ul>
               <dl className={styles.totals}>
                 <div>
                   <dt>Ürünler</dt>
-                  <dd>{formatPrice(d.subtotalKurus)}</dd>
+                  <dd>{formatPrice(d.subtotalKurus + itemDiscount)}</dd>
                 </div>
+                {itemDiscount > 0 && (
+                  <div className={styles.saving}>
+                    <dt>İndirim</dt>
+                    <dd>−{formatPrice(itemDiscount)}</dd>
+                  </div>
+                )}
                 <div>
                   <dt>Kargo ({d.carrierName})</dt>
                   <dd>{d.recipientPaysShipping ? "Teslimatta ödenir" : d.shippingKurus > 0 ? formatPrice(d.shippingKurus) : "Ücretsiz"}</dd>

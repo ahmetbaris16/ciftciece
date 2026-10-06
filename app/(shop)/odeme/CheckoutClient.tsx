@@ -46,6 +46,7 @@ import LegalSections from "@/components/legal/LegalSections";
 import PaymentMarks from "@/components/payment/PaymentMarks";
 import CartChanges from "@/components/cart/CartChanges";
 import { isStoreRole } from "@/lib/auth/roles";
+import { cartSavingsKurus } from "@/lib/pricing/discount";
 import styles from "./checkout.module.css";
 
 type Step = "iletisim" | "teslimat" | "odeme";
@@ -182,6 +183,7 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
   const feeKurus = selected?.feeKurus ?? 0;
   const noPaymentMethod = paymentOptionsState.status !== "loading" && selectable.length === 0;
   const totalKurus = cart.subtotalKurus + shippingKurus + feeKurus;
+  const savingsKurus = cartSavingsKurus(cart.items);
   const remainingFree = shippingSettings ? remainingForFreeShipping(cart.subtotalKurus, shippingSettings) : 0;
   const shippingLabel =
     quoteState.status === "loading"
@@ -212,7 +214,8 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
         name: i.productName,
         variant: i.variantName,
         quantity: i.quantity,
-        unitPriceKurus: i.priceKurus,
+        // İndirimde birim fiyat indirimden önceki fiyat, satır tutarı indirimli (siparişteki kayıtla aynı)
+        unitPriceKurus: i.compareAtPriceKurus ?? i.priceKurus,
         lineTotalKurus: i.priceKurus * i.quantity,
       })),
       subtotalKurus: cart.subtotalKurus,
@@ -851,11 +854,31 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
                       <span className={styles.lineName}>{item.productName}</span>
                       <span className={styles.lineVariant}>{item.variantName}</span>
                     </span>
-                    <span className={styles.linePrice}>{formatPrice(item.priceKurus * item.quantity)}</span>
+                    <span className={styles.linePrice}>
+                      {item.compareAtPriceKurus && item.compareAtPriceKurus > item.priceKurus && (
+                        <span className={styles.linePriceOld}>
+                          <span className="sr-only">İndirimden önce: </span>
+                          {formatPrice(item.compareAtPriceKurus * item.quantity)}
+                        </span>
+                      )}
+                      {formatPrice(item.priceKurus * item.quantity)}
+                    </span>
                   </li>
                 ))}
               </ul>
               <dl className={styles.sums}>
+                {savingsKurus > 0 && (
+                  <>
+                    <div>
+                      <dt>Ürünler</dt>
+                      <dd>{formatPrice(cart.subtotalKurus + savingsKurus)}</dd>
+                    </div>
+                    <div className={styles.saving}>
+                      <dt>İndirim</dt>
+                      <dd>−{formatPrice(savingsKurus)}</dd>
+                    </div>
+                  </>
+                )}
                 <div>
                   <dt>Ara toplam</dt>
                   <dd>{formatPrice(cart.subtotalKurus)}</dd>

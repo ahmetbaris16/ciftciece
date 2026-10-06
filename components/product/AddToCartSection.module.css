@@ -80,6 +80,37 @@
   color: var(--color-text-muted);
 }
 
+.priceSale {
+  color: var(--color-sale);
+}
+
+.priceOriginal {
+  font-size: var(--text-lg);
+  color: var(--color-text-muted);
+  text-decoration: line-through;
+}
+
+.saleBadge {
+  align-self: flex-start;
+  padding: 0.3rem 0.75rem;
+  border-radius: var(--radius-full);
+  background-color: var(--color-sale);
+  color: #fff;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+}
+
+.saleNote {
+  margin: calc(var(--space-2) * -1) 0 0;
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  color: var(--color-text-muted);
+}
+
+.variantPriceSale {
+  color: var(--color-sale);
+}
+
 .priceContact {
   font-size: var(--text-base);
   color: var(--color-text-secondary);

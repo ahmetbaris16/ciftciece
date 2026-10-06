@@ -45,6 +45,7 @@ export default function ProductRail({ id, eyebrow, title, text, products, more }
                 name={p.name}
                 variantName={p.variant?.name}
                 priceKurus={p.variant?.priceKurus ?? 0}
+                originalPriceKurus={p.variant?.compareAtPriceKurus}
                 imageUrl={p.imageUrl}
                 imageAlt={p.imageAlt}
                 isAvailable={!!p.variant}

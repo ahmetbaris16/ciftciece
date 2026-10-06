@@ -117,6 +117,11 @@ export function billingText(billing: BillingInfo | null, fallbackName: string): 
 }
 
 /** Yasal metinlerin siparişe özel hâli için bağlam */
+/** Kalem indirimlerinin toplamı (indirim kampanyası): (birim fiyat × adet − satır tutarı) toplamı */
+export function itemDiscountKurus(d: Pick<OrderEmailData, "items">): number {
+  return d.items.reduce((sum, i) => sum + Math.max(0, i.unitPriceKurus * i.quantity - i.lineTotalKurus), 0);
+}
+
 export function orderLegalContext(d: OrderEmailData): OrderContext {
   return {
     reference: d.reference,

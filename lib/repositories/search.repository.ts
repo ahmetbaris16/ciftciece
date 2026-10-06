@@ -11,6 +11,7 @@
 
 import { prisma } from "@/lib/db/prisma";
 import { USE_DB, loadMock as getMock } from "@/lib/data/source";
+import { withActiveDiscounts } from "./discount.repository";
 import type { Product } from "@/types";
 
 // Reuse product include from product repository
@@ -48,7 +49,7 @@ export async function searchProducts(query: string): Promise<Product[]> {
     take: 50,
   });
 
-  return products.map((p) => ({
+  const mapped: Product[] = products.map((p) => ({
     id: p.id,
     name: p.name,
     slug: p.slug,
@@ -82,4 +83,5 @@ export async function searchProducts(query: string): Promise<Product[]> {
     isFeatured: p.isFeatured,
     sortOrder: p.sortOrder,
   }));
+  return withActiveDiscounts(mapped);
 }

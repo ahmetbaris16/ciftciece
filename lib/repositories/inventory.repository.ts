@@ -10,6 +10,7 @@
 
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
+import { recordPriceChange } from "./discount.repository";
 
 export interface StockWrite {
   variantId: string;
@@ -68,7 +69,8 @@ export interface VariantUpdate {
 
 /**
  * Varyant bilgisi ve (verildiyse) stok tek işlemde güncellenir: stok çakışırsa varyant değişikliği de
- * geri alınır. Varyant bu ürüne ait değilse null.
+ * geri alınır. Fiyat değiştiyse fiyat geçmişine aynı işlemde yazılır (indirimde eski fiyat hesabı).
+ * Varyant bu ürüne ait değilse null.
  */
 export async function updateVariantAndStock(
   productId: string,
@@ -77,9 +79,20 @@ export async function updateVariantAndStock(
   stock?: { expected: number; quantity: number }
 ) {
   return prisma.$transaction(async (tx) => {
-    const variant = await tx.productVariant.findFirst({ where: { id: variantId, productId }, select: { id: true } });
+    const variant = await tx.productVariant.findFirst({
+      where: { id: variantId, productId },
+      select: { id: true, priceKurus: true, product: { select: { createdAt: true } } },
+    });
     if (!variant) return null;
     await tx.productVariant.update({ where: { id: variantId }, data });
+    if (data.priceKurus !== undefined) {
+      await recordPriceChange(tx, {
+        variantId,
+        oldPriceKurus: variant.priceKurus,
+        newPriceKurus: data.priceKurus,
+        since: variant.product.createdAt,
+      });
+    }
     if (stock) await writeStockIfUnchanged(tx, [{ variantId, ...stock }]);
     return tx.productVariant.findUniqueOrThrow({ where: { id: variantId }, include: { inventory: true } });
   });

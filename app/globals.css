@@ -61,6 +61,9 @@
   --color-success-bg: #e8f2e8;
   --color-error: #8b2e2e;
   --color-error-bg: #fce8e8;
+  /* İndirim: etiket, indirimli fiyat */
+  --color-sale: #a3261f;
+  --color-sale-bg: #fbeae8;
   --color-warning: #8b6914;
   --color-warning-bg: #fdf4d9;
 

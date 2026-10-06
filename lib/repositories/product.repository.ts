@@ -6,10 +6,13 @@
  * DB hataları yutulmaz; çağıran katman ele alır.
  *
  * Tüm fonksiyonlar async — sayfa/API katmanında `await` ile çağrılır.
+ * Vitrin fonksiyonları (getAllProducts, getProductBySlug, getFeaturedProducts) süren indirimi uygular: indirimli
+ * varyantta priceKurus indirimli fiyat, compareAtPriceKurus eski fiyattır. Admin fonksiyonları liste fiyatını döner.
  */
 
 import { prisma } from "@/lib/db/prisma";
 import { USE_DB, loadMock as getMock } from "@/lib/data/source";
+import { withActiveDiscounts } from "./discount.repository";
 import type { Product } from "@/types";
 
 // ── Prisma → App Type Mapper ──────────────────────────────────
@@ -94,7 +97,7 @@ export async function getAllProducts(categorySlug?: string): Promise<Product[]> 
     include: PRODUCT_INCLUDE,
     orderBy: { sortOrder: "asc" },
   });
-  return products.map((p) => mapProduct(p as unknown as NonNullable<PrismaProductFull>));
+  return withActiveDiscounts(products.map((p) => mapProduct(p as unknown as NonNullable<PrismaProductFull>)));
 }
 
 export async function getProductBySlug(slug: string): Promise<Product | null> {
@@ -107,7 +110,9 @@ export async function getProductBySlug(slug: string): Promise<Product | null> {
     where: { slug, isPublished: true },
     include: PRODUCT_INCLUDE,
   });
-  return product ? mapProduct(product as unknown as NonNullable<PrismaProductFull>) : null;
+  if (!product) return null;
+  const [withDiscount] = await withActiveDiscounts([mapProduct(product as unknown as NonNullable<PrismaProductFull>)]);
+  return withDiscount;
 }
 
 export async function getFeaturedProducts(limit = 4): Promise<Product[]> {
@@ -122,7 +127,7 @@ export async function getFeaturedProducts(limit = 4): Promise<Product[]> {
     orderBy: { sortOrder: "asc" },
     take: limit,
   });
-  return products.map((p) => mapProduct(p as unknown as NonNullable<PrismaProductFull>));
+  return withActiveDiscounts(products.map((p) => mapProduct(p as unknown as NonNullable<PrismaProductFull>)));
 }
 
 /**

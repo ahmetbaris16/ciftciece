@@ -1,7 +1,8 @@
 /**
  * Sepet eşitleme: tarayıcıda saklanan sepet, sunucudaki güncel ürün bilgisiyle karşılaştırılır.
  * Bulunamayan ya da satıştan kalkan ürün çıkarılır, ad/fiyat/görsel güncellenir, adet stoğa indirilir;
- * her değişiklik müşteriye bir cümleyle söylenir. Sipariş tutarı ve stok yine /api/checkout'ta doğrulanır.
+ * her değişiklik müşteriye bir cümleyle söylenir (indirim başladı / bitti dahil). Sipariş tutarı ve stok yine
+ * /api/checkout'ta doğrulanır.
  */
 
 import { formatPrice, type CartItem } from "@/types";
@@ -14,7 +15,10 @@ export interface CartVariantSnapshot {
   productSlug: string;
   productName: string;
   variantName: string;
+  /** Satış fiyatı (indirim sürüyorsa indirimli) */
   priceKurus: number;
+  /** İndirim sürüyorsa indirimden önceki fiyat */
+  compareAtPriceKurus: number | null;
   stockQuantity: number;
   isAvailable: boolean;
   productPublished: boolean;
@@ -30,6 +34,7 @@ export type CartLine =
       productName: string;
       variantName: string;
       priceKurus: number;
+      compareAtPriceKurus?: number | null;
       maxQuantity: number;
       imageUrl: string | null;
       imageAlt: string | null;
@@ -48,6 +53,7 @@ export function cartLineFor(variantId: string, v: CartVariantSnapshot | undefine
     productName: v.productName,
     variantName: v.variantName,
     priceKurus: v.priceKurus,
+    compareAtPriceKurus: v.compareAtPriceKurus,
     maxQuantity: Math.min(v.stockQuantity, MAX_QUANTITY),
     imageUrl: v.imageUrl,
     imageAlt: v.imageAlt,
@@ -85,7 +91,14 @@ export function applyCartSync(items: CartItem[], lines: CartLine[]): { items: Ca
     const name = itemLabel(line.productName, line.variantName);
     const quantity = Math.min(item.quantity, line.maxQuantity);
     if (line.priceKurus !== item.priceKurus) {
-      changes.push(`“${name}” fiyatı güncellendi: ${formatPrice(line.priceKurus)} (önceden ${formatPrice(item.priceKurus)}).`);
+      const sale = line.compareAtPriceKurus ?? null;
+      changes.push(
+        sale !== null && line.priceKurus < item.priceKurus
+          ? `“${name}” indirime girdi: ${formatPrice(line.priceKurus)} (önceden ${formatPrice(item.priceKurus)}).`
+          : item.compareAtPriceKurus && sale === null
+            ? `“${name}” indiriminin süresi doldu: fiyatı ${formatPrice(line.priceKurus)} (sepette ${formatPrice(item.priceKurus)} görünüyordu).`
+            : `“${name}” fiyatı güncellendi: ${formatPrice(line.priceKurus)} (önceden ${formatPrice(item.priceKurus)}).`
+      );
     }
     if (quantity < item.quantity) {
       changes.push(`“${name}” için stokta ${quantity} adet var; sepetteki adet ${quantity} yapıldı.`);
@@ -96,6 +109,7 @@ export function applyCartSync(items: CartItem[], lines: CartLine[]): { items: Ca
       productName: line.productName,
       variantName: line.variantName,
       priceKurus: line.priceKurus,
+      compareAtPriceKurus: line.compareAtPriceKurus ?? null,
       imageUrl: line.imageUrl ?? item.imageUrl,
       imageAlt: line.imageAlt ?? item.imageAlt,
       isAvailable: true,

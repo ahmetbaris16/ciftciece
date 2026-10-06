@@ -1,0 +1,350 @@
+/* Admin — İndirimler (koyu panel teması) */
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  color: #e8e4d9;
+}
+
+.card {
+  padding: 1.15rem 1.25rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.85rem;
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.count {
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(240, 120, 100, 0.18);
+  color: #f3a08f;
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.muted {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: rgba(232, 228, 217, 0.55);
+  overflow-wrap: anywhere;
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: rgba(232, 228, 217, 0.5);
+  max-width: 70ch;
+}
+
+.ok,
+.error {
+  margin: 0;
+  padding: 0.7rem 0.9rem;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.ok {
+  background: rgba(159, 211, 159, 0.1);
+  color: #9fd39f;
+}
+
+.error {
+  background: rgba(243, 160, 160, 0.1);
+  color: #f3a0a0;
+}
+
+.rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.row:last-child {
+  border-bottom: 0;
+}
+
+.rowMain {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.rowTitle {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-weight: 600;
+  font-size: 0.9375rem;
+}
+
+.pill,
+.pillPast {
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.pill {
+  background: #a3261f;
+  color: #fff;
+}
+
+.pillPast {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(232, 228, 217, 0.7);
+}
+
+.link {
+  color: #e8e4d9;
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.label {
+  font-size: 0.8125rem;
+  color: rgba(232, 228, 217, 0.7);
+}
+
+.input {
+  width: 100%;
+  min-width: 0;
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: #e8e4d9;
+  font-size: 0.9375rem;
+  font-family: inherit;
+  color-scheme: dark;
+}
+
+.percentRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.percentRow .input {
+  width: 5rem;
+}
+
+.chip {
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: transparent;
+  color: rgba(232, 228, 217, 0.8);
+  font-size: 0.8125rem;
+  font-family: inherit;
+}
+
+.chipOn {
+  background: rgba(196, 214, 142, 0.15);
+  border-color: rgba(196, 214, 142, 0.45);
+  color: #e8e4d9;
+}
+
+.pickerHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.6rem;
+}
+
+.pickerHead .input {
+  flex: 1 1 240px;
+  width: auto;
+}
+
+.linkBtn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #c4d68e;
+  font-size: 0.8125rem;
+  font-family: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.picker {
+  max-height: 460px;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.group {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.groupTitle {
+  padding: 0;
+  margin-bottom: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: rgba(232, 228, 217, 0.5);
+}
+
+.option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.option:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.optionOn {
+  background: rgba(196, 214, 142, 0.08);
+}
+
+.option input {
+  margin-top: 0.2rem;
+  accent-color: #c4d68e;
+}
+
+.optionMain {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.optionName {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.tag,
+.tagSale {
+  padding: 0.02rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+.tag {
+  background: rgba(234, 179, 8, 0.15);
+  color: #facc15;
+}
+
+.tagSale {
+  background: rgba(240, 120, 100, 0.18);
+  color: #f3a08f;
+}
+
+.prices {
+  font-size: 0.8125rem;
+  color: rgba(232, 228, 217, 0.6);
+  overflow-wrap: anywhere;
+}
+
+.footer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.primaryBtn {
+  align-self: flex-start;
+  padding: 0.65rem 1.25rem;
+  border: 0;
+  border-radius: 8px;
+  background: #c4d68e;
+  color: #15180f;
+  font-weight: 600;
+  font-size: 0.875rem;
+  font-family: inherit;
+}
+
+.primaryBtn:disabled {
+  opacity: 0.6;
+}
+
+.secondaryBtn {
+  flex-shrink: 0;
+  padding: 0.45rem 0.9rem;
+  border-radius: 8px;
+  border: 1px solid rgba(243, 160, 160, 0.4);
+  background: transparent;
+  color: #f3a0a0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-family: inherit;
+}
+
+.summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.summary + .rows {
+  margin-top: 0.6rem;
+}
+
+@media (max-width: 560px) {
+  .row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

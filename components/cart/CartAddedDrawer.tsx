@@ -124,7 +124,15 @@ export default function CartAddedDrawer() {
                 {item.variantName} · {addedQuantity} adet eklendi
                 {inCart && inCart.quantity > addedQuantity ? ` (sepette ${inCart.quantity})` : ""}
               </p>
-              <p className={styles.productPrice}>{formatPrice(item.priceKurus * addedQuantity)}</p>
+              <p className={styles.productPrice}>
+                {item.compareAtPriceKurus && item.compareAtPriceKurus > item.priceKurus && (
+                  <span className={styles.productPriceOld}>
+                    <span className="sr-only">İndirimden önce: </span>
+                    {formatPrice(item.compareAtPriceKurus * addedQuantity)}
+                  </span>
+                )}
+                {formatPrice(item.priceKurus * addedQuantity)}
+              </p>
             </div>
           </div>
 

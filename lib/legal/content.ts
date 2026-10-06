@@ -78,9 +78,13 @@ function orderRows(order: OrderContext): Array<{ label: string; value: string }>
   if (order.reference) rows.push({ label: "Sipariş no", value: order.reference });
   if (order.date) rows.push({ label: "Sipariş tarihi", value: dateTr(order.date) });
   for (const i of order.items) {
+    // İndirimli kalem: birim fiyat indirimden önceki fiyattır, satır tutarı indirimli
+    const discounted = i.quantity > 0 && i.lineTotalKurus < i.unitPriceKurus * i.quantity;
     rows.push({
       label: `${i.name} (${i.variant}) × ${i.quantity}`,
-      value: `${tl(i.lineTotalKurus)} (birim ${tl(i.unitPriceKurus)})`,
+      value: discounted
+        ? `${tl(i.lineTotalKurus)} (birim ${tl(i.unitPriceKurus)} yerine indirimli ${tl(Math.round(i.lineTotalKurus / i.quantity))})`
+        : `${tl(i.lineTotalKurus)} (birim ${tl(i.unitPriceKurus)})`,
     });
   }
   rows.push({ label: "Ürünler toplamı (KDV dahil)", value: tl(order.subtotalKurus) });

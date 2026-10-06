@@ -28,6 +28,7 @@ import {
   addressText,
   billingText,
   formatIban,
+  itemDiscountKurus,
   orderLegalContext,
   type OrderEmailData,
 } from "@/lib/notifications/order-data";
@@ -40,7 +41,10 @@ const dateTimeTr = (d: Date) =>
 export const orderUrl = (d: OrderEmailData) => `${siteUrl()}/siparis/${d.reference}`;
 
 function totals(d: OrderEmailData): SummaryTotal[] {
-  const t: SummaryTotal[] = [{ label: "Ürünler", amount: formatPrice(d.subtotalKurus) }];
+  // İndirimli kalem varsa ürünler indirimsiz tutarla, indirim ayrı satırda (sepet ve ödemedeki gibi)
+  const itemDiscount = itemDiscountKurus(d);
+  const t: SummaryTotal[] = [{ label: "Ürünler", amount: formatPrice(d.subtotalKurus + itemDiscount) }];
+  if (itemDiscount > 0) t.push({ label: "İndirim", amount: `−${formatPrice(itemDiscount)}` });
   if (d.discountKurus > 0) t.push({ label: "İndirim", amount: `−${formatPrice(d.discountKurus)}` });
   t.push({
     label: `Kargo (${d.carrierName})`,
@@ -60,7 +64,10 @@ function summary(d: OrderEmailData): Block {
   return orderSummary(
     d.items.map((i) => ({
       name: i.name,
-      detail: `${i.variant} × ${i.quantity}`,
+      detail:
+        i.lineTotalKurus < i.unitPriceKurus * i.quantity
+          ? `${i.variant} × ${i.quantity} · indirimli (${formatPrice(i.unitPriceKurus * i.quantity)} yerine)`
+          : `${i.variant} × ${i.quantity}`,
       amount: formatPrice(i.lineTotalKurus),
     })),
     totals(d)

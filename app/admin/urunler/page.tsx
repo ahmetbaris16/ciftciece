@@ -1,5 +1,5 @@
 /**
- * Admin — Ürün Listesi
+ * Admin — Ürün Listesi (süren indirim fiyat sütununda "%X indirimde" olarak görünür)
  */
 
 import { requireAdmin } from "@/lib/auth/session";
@@ -8,6 +8,7 @@ import { getCategoriesForAdmin } from "@/lib/repositories";
 import AdminShell from "@/components/admin/AdminShell";
 import Link from "next/link";
 import { formatPrice } from "@/types";
+import { getActiveDiscountsByProduct } from "@/lib/repositories/discount.repository";
 
 export default async function AdminUrunlerPage() {
   const user = await requireAdmin();
@@ -17,6 +18,10 @@ export default async function AdminUrunlerPage() {
   ]);
 
   const categoryMap = new Map(categories.map((c) => [c.id, c.name]));
+  const discounts = await getActiveDiscountsByProduct(products.map((p) => p.id)).catch((err) => {
+    console.error("[admin/urunler] İndirimler okunamadı:", err);
+    return new Map();
+  });
 
   return (
     <AdminShell user={user} activeSection="urunler">
@@ -83,6 +88,14 @@ export default async function AdminUrunlerPage() {
                         <span style={{ fontSize: "0.75rem", color: "rgba(232,228,217,0.4)", marginLeft: "0.25rem" }}>
                           +{product.variants.length - 1}
                         </span>
+                      )}
+                      {discounts.has(product.id) && (
+                        <Link
+                          href="/admin/indirimler"
+                          style={{ display: "inline-block", marginLeft: "0.4rem", padding: "0.05rem 0.4rem", borderRadius: 4, fontSize: "0.6875rem", fontWeight: 700, background: "rgba(240,120,100,0.18)", color: "#f3a08f", textDecoration: "none" }}
+                        >
+                          %{discounts.get(product.id)!.percent} indirimde
+                        </Link>
                       )}
                     </td>
                     <td style={{ padding: "0.75rem" }}>

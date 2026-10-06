@@ -2,13 +2,14 @@ import Image from "next/image";
 import Link from "next/link";
 import styles from "./ProductCard.module.css";
 import { unitPriceLabel } from "@/lib/catalog/unit-price";
+import { discountPercentLabel } from "@/lib/pricing/discount";
 
 export interface ProductCardProps {
   slug: string;
   name: string;
   variantName?: string;
-  priceKurus: number; // 0 = fiyat girilmemiş
-  originalPriceKurus?: number; // indirimli fiyat varsa
+  priceKurus: number; // 0 = fiyat girilmemiş (indirim sürüyorsa indirimli fiyat)
+  originalPriceKurus?: number | null; // indirim sürüyorsa indirimden önceki fiyat (üstü çizili)
   imageUrl: string;
   imageAlt: string;
   isAvailable?: boolean;
@@ -38,7 +39,8 @@ export default function ProductCard({
   isAvailable = true,
 }: ProductCardProps) {
   const hasDiscount =
-    originalPriceKurus != null && originalPriceKurus > priceKurus;
+    originalPriceKurus != null && originalPriceKurus > priceKurus && priceKurus > 0;
+  const percent = hasDiscount ? discountPercentLabel(originalPriceKurus, priceKurus) : 0;
   const priceAvailable = priceKurus > 0;
   const unitLabel = priceAvailable && variantName ? unitPriceLabel(priceKurus, variantName) : null;
 
@@ -66,6 +68,7 @@ export default function ProductCard({
               Stok Dışı
             </div>
           )}
+          {isAvailable && percent > 0 && <div className={styles.saleBadge}>%{percent} İndirim</div>}
         </div>
       </Link>
 
@@ -91,6 +94,7 @@ export default function ProductCard({
                 </span>
                 {hasDiscount && originalPriceKurus != null && (
                   <span className={styles.priceOriginal}>
+                    <span className="sr-only">İndirimden önceki fiyat: </span>
                     {formatPrice(originalPriceKurus)}
                   </span>
                 )}

@@ -40,6 +40,7 @@ export default async function FeaturedProducts() {
                 name={product.name}
                 variantName={primaryVariant?.name}
                 priceKurus={primaryVariant?.priceKurus ?? 0}
+                originalPriceKurus={primaryVariant?.compareAtPriceKurus}
                 imageUrl={primaryImage?.url ?? "/images/atmosphere/magaza-zeytin-tepsi.jpg"}
                 imageAlt={primaryImage?.altText ?? product.name}
                 isAvailable={primaryVariant?.isAvailable ?? true}

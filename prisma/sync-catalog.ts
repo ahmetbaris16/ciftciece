@@ -12,7 +12,8 @@
  *  - Katalogda bir SKU başka bir ürünün altındaysa (ör. çok boylu ürün ayrı kartlara bölündü) varyant SİLİNİP YENİDEN
  *    OLUŞTURULMAZ, ürün bağlantısı taşınır: stok ve sipariş geçmişi korunur
  *  - Varyant yalnızca REMOVED_VARIANT_SKUS'taki SKU'lar için silinir (siparişte kullanılmışsa satışa kapatılır)
- *  - Fiyat yalnızca --prices ile ve yalnızca aynı SKU'lu varyantlarda güncellenir
+ *  - Fiyat yalnızca --prices ile ve yalnızca aynı SKU'lu varyantlarda güncellenir; değişiklik varyant fiyat geçmişine
+ *    yazılır (indirimde "son 10 günün en düşük fiyatı" hesabı; panelden fiyat değişikliğiyle aynı kural)
  *  - REMOVED_PRODUCT_SLUGS: siparişte kullanılmadıysa silinir (sepet satırlarıyla birlikte), kullanıldıysa yayından kaldırılır
  *  - Katalogda olmayan DB ürünlerine ve varyantlarına dokunulmaz (raporlanır)
  */
@@ -29,6 +30,20 @@ const report: string[] = [];
 const log = (line: string) => report.push(line);
 
 const ALL_CATALOG_SKUS = new Set(PRODUCTS.flatMap((p) => p.variants.map((v) => v.sku)));
+
+/**
+ * Liste fiyatını günceller ve fiyat geçmişine yazar (tek işlemde). Varyantın hiç kaydı yoksa önce eski fiyat, ürünün
+ * eklendiği tarihle yazılır (lib/repositories/discount.repository.ts → recordPriceChange ile aynı kural).
+ */
+async function updatePrice(variant: { id: string; priceKurus: number }, since: Date, newPrice: number) {
+  await prisma.$transaction(async (tx) => {
+    await tx.productVariant.update({ where: { id: variant.id }, data: { priceKurus: newPrice } });
+    if ((await tx.variantPriceLog.count({ where: { variantId: variant.id } })) === 0) {
+      await tx.variantPriceLog.create({ data: { variantId: variant.id, priceKurus: variant.priceKurus, createdAt: since } });
+    }
+    await tx.variantPriceLog.create({ data: { variantId: variant.id, priceKurus: newPrice } });
+  });
+}
 
 async function main() {
   log(`Mod: ${APPLY ? "UYGULA" : "KURU ÇALIŞMA (değişiklik yok)"}${PRICES ? " + FİYATLAR" : ""}\n`);
@@ -127,7 +142,7 @@ async function main() {
       if (!dv) {
         const other = await prisma.productVariant.findUnique({
           where: { sku: v.sku },
-          include: { product: { select: { slug: true } } },
+          include: { product: { select: { slug: true, createdAt: true } } },
         });
         if (other) {
           log(`> ${prod.slug}: varyant taşı ${v.sku} (${other.product.slug} → ${prod.slug}; stok ve sipariş geçmişi korunur)`);
@@ -139,7 +154,7 @@ async function main() {
           }
           if (other.priceKurus !== v.priceKurus) {
             log(`$ ${prod.slug} ${v.sku}: DB ${tl(other.priceKurus)} ↔ katalog ${tl(v.priceKurus)}${PRICES ? "" : " (uygulanmadı)"}`);
-            if (APPLY && PRICES) await prisma.productVariant.update({ where: { id: other.id }, data: { priceKurus: v.priceKurus } });
+            if (APPLY && PRICES) await updatePrice(other, other.product.createdAt, v.priceKurus);
           }
           continue;
         }
@@ -166,7 +181,7 @@ async function main() {
       }
       if (dv.priceKurus !== v.priceKurus) {
         log(`$ ${prod.slug} ${v.sku}: DB ${tl(dv.priceKurus)} ↔ katalog ${tl(v.priceKurus)}${PRICES ? "" : " (uygulanmadı)"}`);
-        if (APPLY && PRICES) await prisma.productVariant.update({ where: { id: dv.id }, data: { priceKurus: v.priceKurus } });
+        if (APPLY && PRICES && db) await updatePrice(dv, db.createdAt, v.priceKurus);
       }
     }
     if (db) {

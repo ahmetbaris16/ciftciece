@@ -32,7 +32,10 @@ export interface LiteProduct {
   variant: {
     id: string;
     name: string;
+    /** Satış fiyatı (indirim sürüyorsa indirimli) */
     priceKurus: number;
+    /** İndirim sürüyorsa indirimden önceki fiyat */
+    compareAtPriceKurus?: number | null;
     stock: number;
   } | null;
 }
@@ -56,7 +59,9 @@ export function toLiteProduct(p: Product): LiteProduct {
     imageAlt: img?.altText ?? p.name,
     isFeatured: p.isFeatured,
     sortOrder: p.sortOrder,
-    variant: v ? { id: v.id, name: v.name, priceKurus: v.priceKurus, stock: v.stockQuantity ?? 0 } : null,
+    variant: v
+      ? { id: v.id, name: v.name, priceKurus: v.priceKurus, compareAtPriceKurus: v.compareAtPriceKurus ?? null, stock: v.stockQuantity ?? 0 }
+      : null,
   };
 }
 

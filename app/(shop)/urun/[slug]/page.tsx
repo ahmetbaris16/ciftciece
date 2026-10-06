@@ -118,6 +118,8 @@ export default async function UrunDetayPage({ params }: Props) {
       sku: v.sku ?? undefined,
       price: (v.priceKurus / 100).toFixed(2),
       priceCurrency: "TRY",
+      // İndirimli fiyat kampanya bitişine kadar geçerli
+      ...(v.compareAtPriceKurus && product.discount ? { priceValidUntil: product.discount.endsAt.slice(0, 10) } : {}),
       availability:
         (v.stockQuantity ?? 0) > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
       url: `${SITE_URL}/urun/${product.slug}`,
@@ -209,6 +211,7 @@ export default async function UrunDetayPage({ params }: Props) {
                 primaryImageUrl: primaryImage?.url ?? null,
                 primaryImageAlt: primaryImage?.altText ?? product.name,
                 variants: product.variants,
+                discount: product.discount ?? null,
               }}
             />
 

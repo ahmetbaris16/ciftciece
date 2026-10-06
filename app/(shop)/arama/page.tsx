@@ -73,6 +73,7 @@ export default async function AramaPage({ searchParams }: Props) {
                       name={product.name}
                       variantName={primaryVariant?.name}
                       priceKurus={primaryVariant?.priceKurus ?? 0}
+                      originalPriceKurus={primaryVariant?.compareAtPriceKurus}
                       imageUrl={
                         primaryImage?.url ??
                         "/images/atmosphere/magaza-zeytin-tepsi.jpg"

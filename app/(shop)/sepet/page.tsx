@@ -12,6 +12,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useCart } from "@/lib/cart/CartContext";
 import { formatPrice } from "@/types";
+import { cartSavingsKurus } from "@/lib/pricing/discount";
 import { unitPriceLabel } from "@/lib/catalog/unit-price";
 import { useShippingSettings } from "@/lib/shipping/useShippingSettings";
 import { useShippingQuote } from "@/lib/shipping/useShippingQuote";
@@ -27,6 +28,7 @@ import styles from "./page.module.css";
 
 export default function SepetPage() {
   const { cart, removeItem, updateQuantity, isHydrated } = useCart();
+  const savingsKurus = cartSavingsKurus(cart.items);
   const shippingState = useShippingSettings();
   const shippingSettings = shippingState.status === "ready" ? shippingState.settings : null;
   const quoteState = useShippingQuote(cart.items);
@@ -145,9 +147,17 @@ export default function SepetPage() {
                           </button>
                         </div>
 
-                        {/* Fiyat */}
+                        {/* Fiyat (indirimde eski tutar üstü çizili) */}
                         <span className={styles.itemPrice}>
-                          {formatPrice(item.priceKurus * item.quantity)}
+                          {item.compareAtPriceKurus && item.compareAtPriceKurus > item.priceKurus && (
+                            <span className={styles.itemPriceOld}>
+                              <span className="sr-only">İndirimden önce: </span>
+                              {formatPrice(item.compareAtPriceKurus * item.quantity)}
+                            </span>
+                          )}
+                          <span className={item.compareAtPriceKurus && item.compareAtPriceKurus > item.priceKurus ? styles.itemPriceSale : undefined}>
+                            {formatPrice(item.priceKurus * item.quantity)}
+                          </span>
                         </span>
 
                         {/* Sil */}
@@ -174,6 +184,18 @@ export default function SepetPage() {
                 <h2 className={styles.summaryTitle}>Sipariş Özeti</h2>
 
                 <div className={styles.summaryRows}>
+                  {savingsKurus > 0 && (
+                    <>
+                      <div className={styles.summaryRow}>
+                        <span>Ürünler</span>
+                        <span>{formatPrice(cart.subtotalKurus + savingsKurus)}</span>
+                      </div>
+                      <div className={`${styles.summaryRow} ${styles.summarySaving}`}>
+                        <span>İndirim</span>
+                        <span>−{formatPrice(savingsKurus)}</span>
+                      </div>
+                    </>
+                  )}
                   <div className={styles.summaryRow}>
                     <span>Ara Toplam</span>
                     <span>{formatPrice(cart.subtotalKurus)}</span>

@@ -4,12 +4,17 @@
  * Fiyat ve stok doğrulaması için kritik.
  * Cart API ve Checkout API buradan beslenir.
  *
+ * Süren indirim uygulanır: indirimli varyantta priceKurus indirimli fiyat, compareAtPriceKurus indirimden önceki
+ * fiyattır (sepet ve ödeme bu fiyatı kullanır). İndirimler okunamazsa hata çağırana gider (ödeme farklı fiyatla
+ * alınmasın); yalnız veritabanı güncellenmemişse indirimsiz devam edilir.
  * DATABASE_URL yoksa (sadece development) mock veri — bkz. lib/data/source.ts.
  */
 
 import { prisma } from "@/lib/db/prisma";
 import { USE_DB, loadMock as getMock } from "@/lib/data/source";
 import type { CartVariantSnapshot } from "@/lib/cart/sync";
+import { effectivePrice } from "@/lib/pricing/discount";
+import { applyProductDiscount, getActiveDiscountItems, getActiveDiscountsByProduct } from "./discount.repository";
 import type { Product, ProductVariant } from "@/types";
 
 export interface VariantLookupResult {
@@ -48,7 +53,7 @@ export async function getVariantById(variantId: string): Promise<VariantLookupRe
 
   const p = variant.product;
 
-  const product: Product = {
+  const listed: Product = {
     id: p.id,
     name: p.name,
     slug: p.slug,
@@ -84,7 +89,8 @@ export async function getVariantById(variantId: string): Promise<VariantLookupRe
     vatRateBps: p.vatRateBps,
   };
 
-  const mappedVariant: ProductVariant = {
+  const product = applyProductDiscount(listed, (await getActiveDiscountsByProduct([p.id])).get(p.id));
+  const mappedVariant: ProductVariant = product.variants.find((v) => v.id === variant.id) ?? {
     id: variant.id,
     name: variant.name,
     sku: variant.sku,
@@ -113,6 +119,7 @@ export async function getCartVariants(variantIds: string[]): Promise<Map<string,
         productName: found.product.name,
         variantName: found.variant.name,
         priceKurus: found.variant.priceKurus,
+        compareAtPriceKurus: null,
         stockQuantity: found.variant.stockQuantity ?? 0,
         isAvailable: found.variant.isAvailable,
         productPublished: found.product.isPublished,
@@ -141,13 +148,16 @@ export async function getCartVariants(variantIds: string[]): Promise<Map<string,
       },
     },
   });
+  const discounts = await getActiveDiscountItems(rows.map((r) => r.id));
   for (const r of rows) {
     const image = r.product.images[0];
+    const price = effectivePrice(r.priceKurus, discounts.get(r.id));
     result.set(r.id, {
       productSlug: r.product.slug,
       productName: r.product.name,
       variantName: r.name,
-      priceKurus: r.priceKurus,
+      priceKurus: price.priceKurus,
+      compareAtPriceKurus: price.compareAtKurus,
       stockQuantity: r.inventory?.quantity ?? 0,
       isAvailable: r.isAvailable,
       productPublished: r.product.isPublished,

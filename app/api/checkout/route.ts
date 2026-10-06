@@ -221,16 +221,18 @@ export async function POST(request: NextRequest) {
       continue;
     }
 
-    // Kalem indirimi: şu an kampanya/kupon yok → 0 (alan snapshot'ta tutulur)
-    const discountKurus = 0;
-    const lineTotalKurus = variant.priceKurus * item.quantity - discountKurus;
+    // İndirim sürüyorsa (sunucudaki kampanya kaydından): kaleme indirimden önceki fiyat + kalem indirimi yazılır,
+    // satır tutarı indirimli fiyat × adet olur. Müşterinin gördüğü fiyat değil, DB'deki fiyat esas alınır.
+    const listUnitKurus = variant.compareAtPriceKurus ?? variant.priceKurus;
+    const discountKurus = (listUnitKurus - variant.priceKurus) * item.quantity;
+    const lineTotalKurus = listUnitKurus * item.quantity - discountKurus;
     subtotalKurus += lineTotalKurus;
 
     orderItems.push({
       variantId: variant.id,
       snapshotName: product.name,      // Sipariş anı snapshot
       snapshotVariant: variant.name,   // Sipariş anı snapshot
-      snapshotPrice: variant.priceKurus, // SERVER'DAN — frontend fiyatı değil
+      snapshotPrice: listUnitKurus,    // SERVER'DAN — frontend fiyatı değil (indirimde indirimden önceki fiyat)
       quantity: item.quantity,
       vatRateBps: product.vatRateBps ?? null, // Katalogda yoksa boş — oran uydurulmaz
       discountKurus,
