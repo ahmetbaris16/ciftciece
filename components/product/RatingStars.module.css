@@ -1,6 +1,9 @@
 .stars {
   position: relative;
   display: inline-flex;
+  /* Genişlik yıldızlar kadar: dikey flex kutusunda (yorum listesi, "Sizin değerlendirmeniz") satıra yayılırsa dolgu
+     yüzdesi satır genişliğinden hesaplanır ve 4 yıldızlı yorum 5 yıldız görünür */
+  width: max-content;
   vertical-align: middle;
   line-height: 0;
   flex-shrink: 0;
@@ -10,6 +13,13 @@
 .fill {
   display: inline-flex;
   gap: var(--star-gap, 2px);
+}
+
+/* Yıldızlar daralmaz: dolgu kutusu (ör. %80) dar olsa da altın yıldızlar gri yıldızların tam üstünde kalır, taşan kısım
+   kırpılır (yoksa sıkışıp kayıyor, 4,5 puan bulanık görünüyordu) */
+.base > svg,
+.fill > svg {
+  flex-shrink: 0;
 }
 
 .base {
