@@ -11,7 +11,8 @@
 
 .row {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
+  /* Sağ sütun sabit: içindeki ipucu ("Müşteri talebine karar verin") uzunsa satırlar arasında tutar sütunu kaymasın */
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(7rem, 13rem);
   grid-template-areas: "main amount side";
   gap: 0.75rem;
   align-items: center;
