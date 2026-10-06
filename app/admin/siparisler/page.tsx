@@ -1,6 +1,6 @@
 /**
- * Admin — Siparişler: iş odaklı filtreler (kargolanacak, havale bekleyen, dikkat, müşteri talebi…), arama ve
- * sayfalama. Tarihler İstanbul saatiyle.
+ * Admin — Siparişler: süreç aşamaları (Ödeme bekleniyor → Kargolanacak → Kargoda → Teslim edildi; yanda Müşteri talebi,
+ * İptal / iade, Dikkat) sayılarıyla, arama ve sayfalama. Her satırda sıradaki iş yazar. Tarihler İstanbul saatiyle.
  */
 
 import Link from "next/link";
@@ -9,8 +9,7 @@ import { releaseExpiredOrders } from "@/lib/repositories";
 import AdminShell from "@/components/admin/AdminShell";
 import { formatPrice } from "@/types";
 import { PAYMENT_METHOD_LABELS } from "@/lib/payment/methods";
-import { ORDER_FILTERS, parseFilter, searchOrdersForAdmin, type OrderFilter } from "@/lib/admin/orders";
-import { getAdminBadges } from "@/lib/admin/dashboard";
+import { ORDER_FILTERS, countOrdersByFilter, nextStepHint, parseFilter, searchOrdersForAdmin, type OrderFilter } from "@/lib/admin/orders";
 import rows_ from "@/components/admin/AdminRows.module.css";
 
 export const dynamic = "force-dynamic";
@@ -40,9 +39,9 @@ export default async function AdminSiparislerPage({ searchParams }: Props) {
   const page = Number(params.sayfa) || 1;
   // Süresi dolan ödenmemiş siparişler listede güncel görünsün (stok iade edilir)
   await releaseExpiredOrders().catch((err) => console.error("[admin/siparisler]", err));
-  const [{ rows, total, pages }, badges] = await Promise.all([searchOrdersForAdmin({ q, filter, page }), getAdminBadges()]);
+  const [{ rows, total, pages }, counts] = await Promise.all([searchOrdersForAdmin({ q, filter, page }), countOrdersByFilter()]);
   // "Dikkat" filtresi yalnız ödeme uyarılı sipariş varken (ya da seçiliyken) görünür
-  const filters = (Object.keys(ORDER_FILTERS) as OrderFilter[]).filter((f) => f !== "dikkat" || badges.attention > 0 || filter === "dikkat");
+  const filters = (Object.keys(ORDER_FILTERS) as OrderFilter[]).filter((f) => f !== "dikkat" || counts.dikkat > 0 || filter === "dikkat");
 
   const href = (next: { durum?: OrderFilter; sayfa?: number; q?: string }) => {
     const sp = new URLSearchParams();
@@ -74,10 +73,18 @@ export default async function AdminSiparislerPage({ searchParams }: Props) {
           )}
         </form>
 
-        <nav style={st.filters} aria-label="Sipariş filtreleri">
+        <nav style={st.filters} aria-label="Sipariş aşamaları">
           {filters.map((f) => (
-            <Link key={f} href={href({ durum: f, sayfa: 1 })} style={{ ...st.filter, ...(filter === f ? st.filterOn : {}) }}>
+            <Link
+              key={f}
+              href={href({ durum: f, sayfa: 1 })}
+              style={{ ...st.filter, ...(filter === f ? st.filterOn : {}) }}
+              aria-current={filter === f ? "page" : undefined}
+            >
               {ORDER_FILTERS[f]}
+              <span style={{ ...st.count, ...(counts[f] > 0 && f !== "tum" && f !== "teslim" && f !== "iptal" ? st.countOn : {}) }}>
+                {counts[f]}
+              </span>
             </Link>
           ))}
         </nav>
@@ -91,6 +98,7 @@ export default async function AdminSiparislerPage({ searchParams }: Props) {
                 o.status === "PENDING" && o.paymentMethod === "BANK_TRANSFER"
                   ? { label: "Havale bekleniyor", color: "#facc15" }
                   : STATUS[o.status] ?? { label: o.status, color: "#999" };
+              const hint = nextStepHint(o);
               return (
                 <li key={o.id}>
                   <Link href={`/admin/siparisler/${o.id}`} className={rows_.row}>
@@ -121,6 +129,7 @@ export default async function AdminSiparislerPage({ searchParams }: Props) {
                           Talep
                         </span>
                       )}
+                      {hint && <span className={rows_.meta}>{hint}</span>}
                     </span>
                   </Link>
                 </li>
@@ -177,6 +186,8 @@ const st: Record<string, React.CSSProperties> = {
     fontSize: "0.8125rem",
   },
   filterOn: { background: "rgba(196,214,142,0.15)", borderColor: "rgba(196,214,142,0.4)", color: "#e8e4d9" },
+  count: { marginLeft: "0.4rem", fontWeight: 700, fontVariantNumeric: "tabular-nums", color: "rgba(232,228,217,0.45)" },
+  countOn: { color: "#c4d68e" },
   empty: { padding: "3rem 0", textAlign: "center", color: "rgba(232,228,217,0.45)" },
   meta: { fontSize: "0.75rem", color: "rgba(232,228,217,0.45)", wordBreak: "break-all" },
   pager: { display: "flex", justifyContent: "center", alignItems: "center", gap: "1rem", marginTop: "1.25rem" },

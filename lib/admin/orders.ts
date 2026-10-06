@@ -6,13 +6,19 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { USE_DB } from "@/lib/data/source";
 
+/**
+ * Sipariş aşamaları (Tümü dışında): her sipariş en az birinde görünür.
+ * Ödeme bekleniyor (havale + yarım kalmış kart) → Kargolanacak (ödendi / hazırlanıyor; kapıda ödeme doğrudan buraya düşer)
+ * → Kargoda → Teslim edildi. Yanda: Müşteri talebi (açık iptal/iade isteği), İptal / iade, Dikkat (ödeme uyarısı).
+ * İptali istenmiş ya da ödeme uyarılı sipariş "Kargolanacak"ta değil, kendi aşamasında görünür (önce karar verilir).
+ */
 export const ORDER_FILTERS = {
   tum: "Tümü",
+  odeme: "Ödeme bekleniyor",
   kargolanacak: "Kargolanacak",
-  havale: "Havale bekleyen",
-  talep: "Müşteri talebi",
   kargoda: "Kargoda",
   teslim: "Teslim edildi",
+  talep: "Müşteri talebi",
   iptal: "İptal / iade",
   // Listede yalnız böyle sipariş varken görünür (panelden de bağlantı verilir)
   dikkat: "Dikkat",
@@ -20,7 +26,11 @@ export const ORDER_FILTERS = {
 
 export type OrderFilter = keyof typeof ORDER_FILTERS;
 
+/** Eski bağlantılar: "havale" artık "Ödeme bekleniyor" (havale + kart) */
+const LEGACY_FILTERS: Record<string, OrderFilter> = { havale: "odeme" };
+
 export function parseFilter(v: string | undefined): OrderFilter {
+  if (v && v in LEGACY_FILTERS) return LEGACY_FILTERS[v];
   return v && v in ORDER_FILTERS ? (v as OrderFilter) : "tum";
 }
 
@@ -29,8 +39,9 @@ function whereFor(filter: OrderFilter): Prisma.OrderWhereInput {
     case "kargolanacak":
       // Müşterinin iptal isteği karar bekleyen sipariş kargolanmaz: "Müşteri talebi"nde görünür
       return { status: { in: ["PAID", "PROCESSING"] }, needsAttention: false, requests: { none: { type: "CANCEL", status: "OPEN" } } };
-    case "havale":
-      return { status: "PENDING", paymentMethod: "BANK_TRANSFER" };
+    case "odeme":
+      // Kapıda ödeme siparişi "Hazırlanıyor" başlar; burada yalnız havale ve ödemesi yarım kalmış kart siparişleri
+      return { status: "PENDING" };
     case "dikkat":
       return { needsAttention: true };
     case "talep":
@@ -43,6 +54,32 @@ function whereFor(filter: OrderFilter): Prisma.OrderWhereInput {
       return { status: { in: ["CANCELLED", "REFUNDED"] } };
     default:
       return {};
+  }
+}
+
+/** Her aşamadaki sipariş sayısı (filtre düğmelerinde ve paneldeki süreç şeridinde) */
+export async function countOrdersByFilter(): Promise<Record<OrderFilter, number>> {
+  const keys = Object.keys(ORDER_FILTERS) as OrderFilter[];
+  if (!USE_DB) return Object.fromEntries(keys.map((k) => [k, 0])) as Record<OrderFilter, number>;
+  const counts = await Promise.all(keys.map((k) => prisma.order.count({ where: whereFor(k) })));
+  return Object.fromEntries(keys.map((k, i) => [k, counts[i]])) as Record<OrderFilter, number>;
+}
+
+/** Listede satırın altında: siparişte sıradaki iş (kapanmış siparişte yok) */
+export function nextStepHint(o: { status: string; paymentMethod: string; needsAttention: boolean; openRequests: number }): string | null {
+  if (o.needsAttention) return "Ödeme uyarısına karar verin";
+  if (o.openRequests > 0) return "Müşteri talebine karar verin";
+  switch (o.status) {
+    case "PENDING":
+      return o.paymentMethod === "BANK_TRANSFER" ? "Havale gelince onaylayın" : "Kart ödemesi bekleniyor";
+    case "PAID":
+      return "Hazırlayıp kargoya verin";
+    case "PROCESSING":
+      return o.paymentMethod === "CASH_ON_DELIVERY" ? "Kargoya verin (kapıda ödeme)" : "Kargoya verin";
+    case "SHIPPED":
+      return "Teslim edilince işaretleyin";
+    default:
+      return null;
   }
 }
 

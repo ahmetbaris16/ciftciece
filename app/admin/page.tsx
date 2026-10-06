@@ -1,25 +1,32 @@
 /**
- * Admin — Panel: bekleyen işler, kısa özet, azalan stok ve (varsa) yönetici panelinden tamamlanacak kurulum
- * eksikleri. Sunucu/banka tarafındaki teknik kontroller Ayarlar'ın sonundaki yayın öncesi listededir.
+ * Admin — Panel: bekleyen işler, sipariş süreci şeridi (her aşamada kaç sipariş; tıklayınca o aşamanın listesi),
+ * kısa özet, azalan stok ve (varsa) yönetici panelinden tamamlanacak kurulum eksikleri. Sunucu/banka tarafındaki
+ * teknik kontroller Ayarlar'ın sonundaki yayın öncesi listededir.
  */
 
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth/session";
 import AdminShell from "@/components/admin/AdminShell";
 import { getAdminBadges, getDashboardStats, getLaunchChecklist } from "@/lib/admin/dashboard";
+import { ORDER_FILTERS, countOrdersByFilter, type OrderFilter } from "@/lib/admin/orders";
 import { formatPrice } from "@/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminDashboardPage() {
   const user = await requireAdmin();
-  const [badges, stats, checklist] = await Promise.all([getAdminBadges(), getDashboardStats(), getLaunchChecklist()]);
+  const [badges, stats, checklist, stages] = await Promise.all([
+    getAdminBadges(),
+    getDashboardStats(),
+    getLaunchChecklist(),
+    countOrdersByFilter(),
+  ]);
   const setup = checklist.filter((c) => c.state === "todo" && !c.technical);
 
   const tasks = [
     { n: badges.attention, text: "ödeme uyarısı: karar bekliyor", href: "/admin/siparisler?durum=dikkat", urgent: true },
     { n: badges.toShip, text: "sipariş hazırlanıp kargolanacak", href: "/admin/siparisler?durum=kargolanacak" },
-    { n: badges.pendingTransfers, text: "sipariş havale bekliyor: hesabınızı kontrol edin", href: "/admin/siparisler?durum=havale" },
+    { n: badges.pendingTransfers, text: "sipariş havale bekliyor: hesabınızı kontrol edin", href: "/admin/siparisler?durum=odeme" },
     { n: badges.openRequests, text: "müşteri iptal/iade talebi", href: "/admin/siparisler?durum=talep" },
     { n: badges.newMessages, text: "yeni mesaj", href: "/admin/mesajlar" },
     { n: badges.pendingReviews, text: "onay bekleyen ürün yorumu", href: "/admin/yorumlar" },
@@ -53,6 +60,34 @@ export default async function AdminDashboardPage() {
           )}
         </section>
 
+        <section style={s.card} aria-labelledby="surec">
+          <h2 id="surec" style={s.h2}>
+            Sipariş süreci
+          </h2>
+          <ol style={s.flow}>
+            {PIPELINE.map((f, i) => (
+              <li key={f} style={s.flowItem}>
+                <Link href={`/admin/siparisler?durum=${f}`} style={{ ...s.stage, ...(stages[f] > 0 && f !== "teslim" ? s.stageOn : {}) }}>
+                  <strong style={s.stageN}>{stages[f]}</strong>
+                  <span>{ORDER_FILTERS[f]}</span>
+                </Link>
+                {i < PIPELINE.length - 1 && (
+                  <span aria-hidden="true" style={s.flowArrow}>
+                    ›
+                  </span>
+                )}
+              </li>
+            ))}
+          </ol>
+          <p style={{ ...s.muted, margin: "0.75rem 0 0" }}>
+            Kapıda ödemeli sipariş doğrudan &quot;Kargolanacak&quot;a düşer.
+            {stages.talep > 0 ? ` ${stages.talep} siparişte müşteri talebi karar bekliyor.` : ""}{" "}
+            <Link href="/admin/siparisler?durum=iptal" style={s.link}>
+              İptal / iade ({stages.iptal})
+            </Link>
+          </p>
+        </section>
+
         <div style={s.tiles}>
           <Tile label="Bugünkü siparişler" value={String(stats.todayOrders)} />
           <Tile
@@ -60,7 +95,6 @@ export default async function AdminDashboardPage() {
             value={formatPrice(stats.monthRevenueKurus)}
             hint={stats.monthRefundKurus > 0 ? `iade ${formatPrice(stats.monthRefundKurus)}` : undefined}
           />
-          <Tile label="Kargoda" value={String(stats.shipped)} />
         </div>
 
         {stats.lowStock.length > 0 && (
@@ -101,6 +135,9 @@ export default async function AdminDashboardPage() {
     </AdminShell>
   );
 }
+
+/** Panelde gösterilen ana akış (talep, iptal ve dikkat ayrı) */
+const PIPELINE: OrderFilter[] = ["odeme", "kargolanacak", "kargoda", "teslim"];
 
 function Tile({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
@@ -172,4 +209,23 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: "0.875rem",
   },
   link: { color: "#c4d68e", fontSize: "0.875rem" },
+  flow: { listStyle: "none", margin: 0, padding: 0, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 6 },
+  flowItem: { display: "flex", alignItems: "center", gap: 6, minWidth: 0 },
+  stage: {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+    padding: "0.75rem 0.875rem",
+    borderRadius: 10,
+    background: "rgba(255,255,255,0.03)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    color: "rgba(232,228,217,0.75)",
+    textDecoration: "none",
+    fontSize: "0.875rem",
+    minWidth: 0,
+  },
+  stageOn: { background: "rgba(196,214,142,0.08)", borderColor: "rgba(196,214,142,0.35)", color: "#e8e4d9" },
+  stageN: { fontSize: "1.375rem", color: "#e8e4d9", fontVariantNumeric: "tabular-nums" },
+  flowArrow: { color: "rgba(232,228,217,0.35)", fontSize: "1.25rem" },
 };
