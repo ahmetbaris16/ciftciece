@@ -2,7 +2,8 @@
  * Ürün Detay Sayfası
  * /urun/[slug]
  *
- * Üst: görsel + ad, puan özeti, kısa açıklama, varyant/adet, sepete ekle (eklenince "Sepete eklendi" paneli açılır)
+ * Üst: fotoğraflar (kırpılmadan; fareyle/dokunarak yakınlaştırma) + ad, puan özeti, kısa açıklama, varyant/adet,
+ *      sepete ekle (eklenince "Sepete eklendi" paneli açılır)
  * Bölüm menüsü (yapışkan): Ürün Açıklaması · Değerlendirmeler · Teslimat ve İade
  * Alt: "Sofranızı tamamlayın" (tamamlayıcı kategoriler) ve "Benzer ürünler" şeritleri
  * Yapısal veri: Product (+ onaylı değerlendirme varsa aggregateRating)
@@ -10,7 +11,6 @@
 
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import Image from "next/image";
 import Link from "next/link";
 import { getProductBySlug, getAllProducts } from "@/lib/repositories";
 import { emptySummary, getProductReviews } from "@/lib/repositories/product-review.repository";
@@ -21,6 +21,7 @@ import { formatPrice } from "@/types";
 import { getProductGuide } from "@/lib/catalog/product-guides";
 import { pickComplementary, pickSimilar, toLiteProduct } from "@/lib/catalog/recommendations";
 import AddToCartSection from "@/components/product/AddToCartSection";
+import ProductGallery from "@/components/product/ProductGallery";
 import ProductReviews from "@/components/product/ProductReviews";
 import ProductRail from "@/components/product/ProductRail";
 import ProductSectionNav from "@/components/product/ProductSectionNav";
@@ -163,45 +164,9 @@ export default async function UrunDetayPage({ params }: Props) {
         </nav>
 
         <div className={styles.grid}>
-          {/* LEFT: Image */}
+          {/* SOL: fotoğraflar (kırpılmadan; fareyle / dokunarak yakınlaştırma) */}
           <div className={styles.imageSection}>
-            <div className={styles.imageWrap}>
-              {primaryImage ? (
-                <Image
-                  src={primaryImage.url}
-                  alt={primaryImage.altText ?? product.name}
-                  fill
-                  sizes="(max-width: 768px) 100vw, 50vw"
-                  quality={85}
-                  loading="eager"
-                  fetchPriority="high"
-                  style={{ objectFit: "cover" }}
-                  className={styles.image}
-                />
-              ) : (
-                <div className={styles.imagePlaceholder}>
-                  <span>Fotoğraf Yakında</span>
-                </div>
-              )}
-            </div>
-
-            {/* Additional images (if any) */}
-            {product.images.length > 1 && (
-              <div className={styles.thumbnails}>
-                {product.images.map((img, i) => (
-                  <div key={img.id} className={styles.thumb}>
-                    <Image
-                      src={img.url}
-                      alt={img.altText ?? `${product.name} — görsel ${i + 1}`}
-                      fill
-                      sizes="80px"
-                      quality={70}
-                      style={{ objectFit: "cover" }}
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
+            <ProductGallery images={product.images} productName={product.name} />
           </div>
 
           {/* RIGHT: Info + Actions */}

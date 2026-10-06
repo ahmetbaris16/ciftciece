@@ -116,7 +116,7 @@ export default function CartAddedDrawer() {
           {/* Eklenen ürün */}
           <div className={styles.product} key={key}>
             <div className={styles.productImage}>
-              <Image src={item.imageUrl} alt="" fill sizes="80px" quality={75} style={{ objectFit: "cover" }} />
+              <Image src={item.imageUrl} alt="" fill sizes="80px" quality={75} style={{ objectFit: "contain" }} />
             </div>
             <div className={styles.productInfo}>
               <p className={styles.productName}>{item.productName}</p>

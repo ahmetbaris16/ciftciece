@@ -93,7 +93,7 @@ export default function SepetPage() {
                           fill
                           sizes="96px"
                           quality={70}
-                          style={{ objectFit: "cover" }}
+                          style={{ objectFit: "contain" }}
                         />
                       </div>
                     </Link>

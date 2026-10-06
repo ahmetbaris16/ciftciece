@@ -20,10 +20,11 @@
   display: block;
 }
 
+/* Ürün fotoğrafı kırpılmaz (beyaz zeminli fotoğraflar beyaz kutuda; kapak ve alt kısım kesilmez) */
 .imageWrap {
   position: relative;
   aspect-ratio: 1 / 1;
-  background-color: var(--color-bg-soft);
+  background-color: var(--color-surface);
   overflow: hidden;
 }
 

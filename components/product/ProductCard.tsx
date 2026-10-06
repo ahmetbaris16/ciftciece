@@ -58,7 +58,7 @@ export default function ProductCard({
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
             quality={80}
             className={styles.image}
-            style={{ objectFit: "cover" }}
+            style={{ objectFit: "contain" }}
             loading="lazy"
           />
           {!isAvailable && (

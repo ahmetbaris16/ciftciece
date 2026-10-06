@@ -1,0 +1,139 @@
+/* Ürün fotoğrafları: kırpılmadan (contain), beyaz zeminde; fare / dokunmayla yakınlaştırma */
+
+.gallery {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.stage {
+  --zx: 50%;
+  --zy: 50%;
+  position: relative;
+  width: 100%;
+  /* Fotoğrafların çoğu 3:4; ekrandan taşmasın diye yükseklik sınırlı (fazla genişlik beyaz kalır) */
+  aspect-ratio: 3 / 4;
+  max-height: min(78vh, 760px);
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-light);
+  background-color: var(--color-surface);
+  cursor: zoom-in;
+  /* Yakınlaşmamışken sayfa dikey kaydırılabilir; dokunarak yakınlaşınca sürükleme fotoğrafı gezdirir */
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.stage[data-zoom="hover"] {
+  cursor: crosshair;
+}
+
+.stage[data-zoom="touch"] {
+  touch-action: none;
+}
+
+.layer {
+  object-fit: contain;
+  transform-origin: var(--zx) var(--zy);
+  transition: transform 0.2s ease-out;
+  pointer-events: none;
+}
+
+/* Ölçek ProductGallery.tsx'teki SCALE ile aynı olmalı (sürükleme hesabı ona göre) */
+.stage[data-zoom="hover"] .layer,
+.stage[data-zoom="touch"] .layer {
+  transform: scale(2.5);
+}
+
+/* Yüksek çözünürlüklü kopya: yüklenip yakınlaşınca görünür (yüklenene kadar alttaki büyür) */
+.hiRes {
+  opacity: 0;
+}
+
+.stage[data-zoom="hover"] .hiRes[data-loaded="true"],
+.stage[data-zoom="touch"] .hiRes[data-loaded="true"] {
+  opacity: 1;
+}
+
+.stage[data-empty="true"] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+  background-color: var(--color-bg-soft);
+}
+
+.placeholder {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.hint {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.hintTouch {
+  display: none;
+}
+
+/* Dokunmatik ekran: dokunma ipucu */
+@media (hover: none) {
+  .hintMouse {
+    display: none;
+  }
+
+  .hintTouch {
+    display: inline;
+  }
+
+  .stage {
+    cursor: default;
+  }
+}
+
+.thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.thumb {
+  position: relative;
+  width: 60px;
+  height: 80px;
+  padding: 0;
+  overflow: hidden;
+  border: 2px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.thumb:hover {
+  border-color: var(--color-border);
+}
+
+.thumb[aria-pressed="true"] {
+  border-color: var(--color-primary);
+}
+
+.thumb:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.thumbImg {
+  object-fit: contain;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .layer {
+    transition: none;
+  }
+}

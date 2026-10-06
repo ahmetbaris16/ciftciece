@@ -94,7 +94,7 @@ export default function CartSuggestions({ freezeKey, limit = 3, onNavigate, clas
           return (
             <li key={p.slug} className={styles.item}>
               <Link href={`/urun/${p.slug}`} className={styles.thumb} onClick={onNavigate} tabIndex={-1} aria-hidden="true">
-                <Image src={p.imageUrl} alt="" fill sizes="64px" quality={70} style={{ objectFit: "cover" }} />
+                <Image src={p.imageUrl} alt="" fill sizes="64px" quality={70} style={{ objectFit: "contain" }} />
               </Link>
               <div className={styles.info}>
                 <Link href={`/urun/${p.slug}`} className={styles.name} onClick={onNavigate}>

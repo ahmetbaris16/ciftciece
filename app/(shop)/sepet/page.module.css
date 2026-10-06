@@ -111,7 +111,8 @@
   height: 88px;
   border-radius: var(--radius-md);
   overflow: hidden;
-  background: var(--color-bg-soft);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-light);
 }
 
 @media (min-width: 480px) {
