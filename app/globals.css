@@ -768,61 +768,22 @@ ul, ol {
 
 /* ============================================================
    CUSTOM CURSOR — zeytin dalı (yalnız hassas işaretçili cihazlar)
-   Kaynak: dükkan fotoğrafları/FARE İMLECİ/İMLEÇ.png. Tıklama noktası = zeytin meyvesinin ucu
-   (hotspot 26,25 — 32×32 tuvalin sağ altı); yapraklar imlecin sol üstünde durur.
-   Bağlantı/düğme üzerinde zeytinin etrafında altın halka çıkar (tıklanabilir olduğu anlaşılsın).
-   Görseller: scripts/generate-cursor.cjs → /cursor/olive{,-link}-{32,64}.png (64 = 2x)
+   Kaynak: dükkan fotoğrafları/FARE İMLECİ/İMLEÇ.png, 180° döndürülmüş: zeytin sol üstte, sıradan fare okunun
+   ucu gibi. Tıklama noktası = zeytinin ucu (hotspot 3,3 — 32×32 tuvalin sol üstü); yapraklar sağ alta uzanır.
+   Kullanıcı kuralı: imleç HİÇBİR YERDE değişmez — bağlantı, düğme, metin kutusu, pasif düğme, ürün fotoğrafı
+   (yakınlaştırma), harita dahil hep aynı görsel. Bu yüzden tek kural ve !important: bileşenlerdeki
+   cursor: pointer / zoom-in / text / not-allowed gibi bildirimler (satır içi stiller dahil) bunu ezemez.
+   Görsel: scripts/generate-cursor.cjs → /cursor/olive-{32,64}.png (64 = 2x)
    - Tuval 32 px'i aşmaz: Chrome daha büyük imleçleri pencere kenarında gizler
    - Sadece @media (pointer: fine): dokunmatik/mobilde tamamen kapalı
    - JS yok: sayfa açılışında yanıp sönme olmaz
-   - Metin alanlarında normal metin imleci korunur
    ============================================================ */
 @media (pointer: fine) {
   html,
   *,
   *::before,
   *::after {
-    cursor: url("/cursor/olive-32.png") 26 25, auto;
-    cursor: image-set(url("/cursor/olive-32.png") 1x, url("/cursor/olive-64.png") 2x) 26 25, auto;
-  }
-
-  /* Alt öğeler dahil (bağlantı içindeki span/svg üstünde de halka görünsün) */
-  a,
-  a *,
-  button,
-  button *,
-  [role="button"],
-  [role="button"] *,
-  [role="tab"],
-  [role="tab"] *,
-  label[for],
-  select,
-  summary,
-  summary *,
-  .btn,
-  .btn * {
-    cursor: url("/cursor/olive-link-32.png") 26 25, pointer;
-    cursor: image-set(url("/cursor/olive-link-32.png") 1x, url("/cursor/olive-link-64.png") 2x) 26 25, pointer;
-  }
-
-  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="file"]),
-  textarea,
-  [contenteditable]:not([contenteditable="false"]) {
-    cursor: text;
-  }
-
-  :disabled,
-  :disabled *,
-  [aria-disabled="true"],
-  [aria-disabled="true"] * {
-    cursor: not-allowed;
-  }
-
-  input[type="range"] {
-    cursor: grab;
-  }
-
-  input[type="range"]:active {
-    cursor: grabbing;
+    cursor: url("/cursor/olive-32.png") 3 3, auto !important;
+    cursor: image-set(url("/cursor/olive-32.png") 1x, url("/cursor/olive-64.png") 2x) 3 3, auto !important;
   }
 }

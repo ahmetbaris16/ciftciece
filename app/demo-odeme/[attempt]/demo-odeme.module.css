@@ -31,19 +31,7 @@
   font-family: var(--font-body);
 }
 
-/* Mağazanın zeytin imleci bu sayfada yok: bankanın sayfası gibi sistem imleci */
-.page,
-.page * {
-  cursor: auto;
-}
-.page a,
-.page button:not(:disabled),
-.page button:not(:disabled) * {
-  cursor: pointer;
-}
-.page input {
-  cursor: text;
-}
+/* İmleç: sitenin her yerinde olduğu gibi zeytin imleci (app/globals.css; kullanıcı kuralı: imleç hiç değişmez) */
 
 .sheet {
   width: 100%;

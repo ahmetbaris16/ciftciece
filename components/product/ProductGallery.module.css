@@ -1,4 +1,5 @@
-/* Ürün fotoğrafları: kırpılmadan (contain), beyaz zeminde; fare / dokunmayla yakınlaştırma */
+/* Ürün fotoğrafları: kırpılmadan (contain), beyaz zeminde; fare / dokunmayla yakınlaştırma.
+   İmleç burada da sitenin zeytin imleci kalır (app/globals.css; kullanıcı kuralı: imleç hiç değişmez). */
 
 .gallery {
   display: flex;
@@ -18,7 +19,6 @@
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-border-light);
   background-color: var(--color-surface);
-  cursor: zoom-in;
   /* Yakınlaşmamışken sayfa dikey kaydırılabilir; dokunarak yakınlaşınca sürükleme fotoğrafı gezdirir */
   touch-action: pan-y;
   user-select: none;
@@ -26,9 +26,6 @@
   -webkit-touch-callout: none;
 }
 
-.stage[data-zoom="hover"] {
-  cursor: crosshair;
-}
 
 .stage[data-zoom="touch"] {
   touch-action: none;
@@ -61,7 +58,6 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: default;
   background-color: var(--color-bg-soft);
 }
 
@@ -90,10 +86,6 @@
   .hintTouch {
     display: inline;
   }
-
-  .stage {
-    cursor: default;
-  }
 }
 
 .thumbs {
@@ -111,7 +103,6 @@
   border: 2px solid var(--color-border-light);
   border-radius: var(--radius-md);
   background-color: var(--color-surface);
-  cursor: pointer;
   flex-shrink: 0;
 }
 

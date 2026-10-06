@@ -1,14 +1,14 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-// Fare imleci görsellerini üretir: node scripts/generate-cursor.cjs
+// Fare imleci görselini üretir: node scripts/generate-cursor.cjs
 //
 // Kaynak: dükkan fotoğrafları/FARE İMLECİ/İMLEÇ.png (kullanıcının zeytin dalı çizimi).
-// Çıktı : public/cursor/olive{,-link}-{32,64}.png  (64 = 2x)
+// Çıktı : public/cursor/olive-{32,64}.png  (64 = 2x)
 //
-// - Zeytin meyvesi dalın sağ alt ucunda; yapraklar sol üste uzanır. Tıklama noktası (hotspot)
-//   zeytinin sivri ucudur, yapraklar imlecin arkasında (sol-üstte) kalır.
+// - Kaynakta zeytin meyvesi dalın sağ alt ucunda. Görsel 180° döndürülür (çizim değişmez, yalnız yönü): zeytin sol
+//   üstte, sıradan fare okunun ucu gibi; yapraklar sağ alta uzanır. Tıklama noktası (hotspot) zeytinin ucudur.
+// - Kullanıcı kuralı: imleç her yerde aynı (bağlantı, düğme, metin kutusu, fotoğraf üstünde değişmez) — tek görsel.
 // - Tuval 32×32 CSS px: Chrome 32 px'ten büyük imleçleri tarayıcı arayüzüne değdiğinde gizler.
 // - Okunabilirlik: ince açık kenar + yumuşak gölge (koyu zeytin koyu zeminde de görünsün).
-// - "-link" sürümü zeytinin ucuna altın halka ekler (tıklanabilir öğeler için).
 // - Hotspot app/globals.css'teki değerle aynı olmalı; betik sonda yazdırır.
 const sharp = require("sharp");
 const path = require("node:path");
@@ -17,30 +17,28 @@ const SRC = path.resolve(__dirname, "..", "..", "dükkan fotoğrafları", "FARE 
 const OUT = path.resolve(__dirname, "..", "public", "cursor");
 
 const S = 32; // tuval (CSS px)
-const BOX = 26; // dalın tuvaldeki genişliği (sağ/alt tarafta halka + gölge payı kalsın)
+const BOX = 26; // dalın tuvaldeki genişliği (önceki imleçle aynı boy)
 const PAD = 1.5; // dalın sol-üst boşluğu (kenar çizgisi için)
 const SS = 4; // süper-örnekleme (kenarlar pürüzsüz olsun)
 
 // Kaynak görselde (1254×1254) dalın kapladığı alan ve zeytinin köşegen ucu (analizle bulundu)
 const BBOX = { left: 52, top: 53, width: 1161, height: 1132 };
-const TIP = { x: 1188, y: 1154 }; // zeytinin sağ-alt ucu (max x+y)
+const TIP = { x: 1188, y: 1154 }; // zeytinin sağ-alt ucu (max x+y); döndürülünce sol-üst uç olur
 const OLIVE_CENTER = { x: 1086, y: 1029 };
 
 const scale = BOX / BBOX.width; // kaynak px → CSS px
-const toCanvas = (sx, sy) => [PAD + (sx - BBOX.left) * scale, PAD + (sy - BBOX.top) * scale];
+// Kaynak noktası → 180° döndürülmüş dalda yeri → tuval (CSS px)
+const toCanvas = (sx, sy) => [
+  PAD + (BBOX.width - (sx - BBOX.left)) * scale,
+  PAD + (BBOX.height - (sy - BBOX.top)) * scale,
+];
 
 // Hotspot: zeytin ucundan ~1 CSS px içeride (tam kenar değil, zeytinin üstüne tıklansın)
-const dx = OLIVE_CENTER.x - TIP.x;
-const dy = OLIVE_CENTER.y - TIP.y;
-const dl = Math.hypot(dx, dy);
-const inset = 1 / scale;
-const [hxF, hyF] = toCanvas(TIP.x + (dx / dl) * inset, TIP.y + (dy / dl) * inset);
-const HX = Math.round(hxF);
-const HY = Math.round(hyF);
-// Halka merkezi: zeytin merkeziyle hotspot arasında — halka zeytini sarar, tıklama noktası içinde kalır
+const [tipX, tipY] = toCanvas(TIP.x, TIP.y);
 const [ocx, ocy] = toCanvas(OLIVE_CENTER.x, OLIVE_CENTER.y);
-const RING_C = { x: ocx + (hxF - ocx) * 0.45, y: ocy + (hyF - ocy) * 0.45 };
-const RING_R = 4.6;
+const dl = Math.hypot(ocx - tipX, ocy - tipY);
+const HX = Math.round(tipX + (ocx - tipX) / dl);
+const HY = Math.round(tipY + (ocy - tipY) / dl);
 
 function gaussianBlur(src, n, sigma) {
   const r = Math.ceil(sigma * 3);
@@ -109,7 +107,7 @@ function over(dst, i, r, g, b, a) {
   dst[i + 3] = a + dst[i + 3] * inv;
 }
 
-async function render(k, withRing, branch) {
+async function render(k, branch) {
   const P = S * k; // çıktı boyutu (px)
   const N = P * SS; // süper-örneklenmiş tuval
   const sHi = scale * k * SS;
@@ -151,8 +149,6 @@ async function render(k, withRing, branch) {
     }
   const shadow = gaussianBlur(shadowMask, N, 0.9 * px);
 
-  const cx = RING_C.x * px;
-  const cy = RING_C.y * px;
   const acc = new Float32Array(N * N * 4); // premultiplied
   for (let y = 0; y < N; y++)
     for (let x = 0; x < N; x++) {
@@ -160,20 +156,9 @@ async function render(k, withRing, branch) {
       const i = p * 4;
       // 1) gölge
       over(acc, i, 0.09, 0.06, 0.02, Math.min(1, shadow[p] * 0.42));
-      // 2) altın halka (yalnız bağlantı imleci): dolgu + altın çizgi + dış beyaz çizgi
-      if (withRing) {
-        const dist = Math.hypot(x + 0.5 - cx, y + 0.5 - cy) / px; // CSS px
-        const R = RING_R;
-        const fill = dist <= R ? 1 : 0;
-        over(acc, i, 0.79, 0.66, 0.3, fill * 0.3);
-        const ringGold = Math.max(0, 1 - Math.abs(dist - R) / 0.7);
-        over(acc, i, 0.79, 0.66, 0.3, Math.min(1, ringGold * 1.15));
-        const ringWhite = Math.max(0, 1 - Math.abs(dist - (R + 0.95)) / 0.5);
-        over(acc, i, 1, 1, 1, Math.min(1, ringWhite * 0.85));
-      }
-      // 3) açık kenar
+      // 2) açık kenar
       over(acc, i, 1, 1, 1, Math.min(1, outline[p] * 0.85));
-      // 4) dal
+      // 3) dal
       over(acc, i, rgb[p * 3], rgb[p * 3 + 1], rgb[p * 3 + 2], A[p]);
     }
 
@@ -201,14 +186,12 @@ async function render(k, withRing, branch) {
 }
 
 (async () => {
-  // Kaynağı önce dalın sınır kutusuna kırp (kenar boşlukları atılır)
-  const branch = await sharp(SRC).extract(BBOX).png().toBuffer();
-  for (const [name, ring] of [["olive", false], ["olive-link", true]]) {
-    for (const k of [1, 2]) {
-      const img = await render(k, ring, branch);
-      await img.toFile(path.join(OUT, `${name}-${S * k}.png`));
-    }
+  // Kaynağı dalın sınır kutusuna kırp (kenar boşlukları atılır), sonra 180° döndür: zeytin sol üste gelir
+  const branch = await sharp(SRC).extract(BBOX).rotate(180).png().toBuffer();
+  for (const k of [1, 2]) {
+    const img = await render(k, branch);
+    await img.toFile(path.join(OUT, `olive-${S * k}.png`));
   }
   console.log("imleç görselleri üretildi:", OUT);
-  console.log(`hotspot (CSS px): ${HX} ${HY}  (zeytin ucu; tuval ${S}×${S})`);
+  console.log(`hotspot (CSS px): ${HX} ${HY}  (zeytin ucu, sol üst; tuval ${S}×${S})`);
 })();
