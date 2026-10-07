@@ -1,4 +1,5 @@
-/* Ürün fotoğrafları: kırpılmadan (contain), beyaz zeminde; fare / dokunmayla yakınlaştırma.
+/* Ürün fotoğrafları: kırpılmadan (contain), beyaz zeminde; farede üzerine gelince yakınlaştırma, dokununca /
+   tıklayınca tam ekran görüntüleyici (ProductLightbox).
    İmleç burada da sitenin zeytin imleci kalır (app/globals.css; kullanıcı kuralı: imleç hiç değişmez). */
 
 .gallery {
@@ -19,17 +20,13 @@
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-border-light);
   background-color: var(--color-surface);
-  /* Yakınlaşmamışken sayfa dikey kaydırılabilir; dokunarak yakınlaşınca sürükleme fotoğrafı gezdirir */
+  /* Sayfa fotoğrafın üzerinden de dikey kaydırılabilir; dokunma tam ekran görüntüleyiciyi açar */
   touch-action: pan-y;
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
 }
 
-
-.stage[data-zoom="touch"] {
-  touch-action: none;
-}
 
 .layer {
   object-fit: contain;
@@ -38,9 +35,7 @@
   pointer-events: none;
 }
 
-/* Ölçek ProductGallery.tsx'teki SCALE ile aynı olmalı (sürükleme hesabı ona göre) */
-.stage[data-zoom="hover"] .layer,
-.stage[data-zoom="touch"] .layer {
+.stage[data-zoom="hover"] .layer {
   transform: scale(2.5);
 }
 
@@ -49,9 +44,37 @@
   opacity: 0;
 }
 
-.stage[data-zoom="hover"] .hiRes[data-loaded="true"],
-.stage[data-zoom="touch"] .hiRes[data-loaded="true"] {
+.stage[data-zoom="hover"] .hiRes[data-loaded="true"] {
   opacity: 1;
+}
+
+/* Tam ekran düğmesi (sağ alt köşe; klavyeyle de açılır) */
+.expand {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--color-border-light);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--color-text);
+  box-shadow: 0 1px 4px rgba(38, 35, 31, 0.12);
+}
+
+.expand:hover {
+  background: #fff;
+  border-color: var(--color-border);
+}
+
+.expand:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .stage[data-empty="true"] {

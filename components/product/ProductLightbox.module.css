@@ -1,0 +1,146 @@
+/* Tam ekran fotoğraf görüntüleyici. Koyu zemin: beyaz zeminli ürün fotoğrafı öne çıkar.
+   İmleç burada da sitenin zeytin imleci kalır (app/globals.css; kullanıcı kuralı: imleç hiç değişmez). */
+
+.dialog {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  background: #141311;
+  color: #f5f1e8;
+  overscroll-behavior: contain;
+}
+
+.dialog::backdrop {
+  background: rgba(20, 19, 17, 0.6);
+}
+
+.bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+  padding: env(safe-area-inset-top, 0) max(12px, env(safe-area-inset-right, 0)) 0 max(16px, env(safe-area-inset-left, 0));
+}
+
+.count {
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  color: rgba(245, 241, 232, 0.8);
+}
+
+.close,
+.nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid rgba(245, 241, 232, 0.28);
+  border-radius: 50%;
+  /* Koyu yarı saydam: beyaz zeminli fotoğrafın üstünde de görünür */
+  background: rgba(20, 19, 17, 0.6);
+  color: #f5f1e8;
+  transition: background 0.15s ease;
+}
+
+.close:hover,
+.nav:hover:not(:disabled) {
+  background: rgba(20, 19, 17, 0.85);
+}
+
+.close:focus-visible,
+.nav:focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 2px;
+}
+
+/* Fotoğraf alanı: üst çubuk ve alttaki ipucunun arasında; dokunma hareketlerini sayfa değil görüntüleyici alır */
+.viewport {
+  position: absolute;
+  top: 56px;
+  bottom: 40px;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.frame {
+  position: relative;
+  flex: none;
+  transform-origin: center center;
+  will-change: transform;
+}
+
+.frame[data-animate="true"] {
+  transition: transform 0.25s ease-out;
+}
+
+.img {
+  object-fit: contain;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+
+.nav {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  transform: translateY(-50%);
+}
+
+.nav:disabled {
+  opacity: 0.25;
+}
+
+.prev {
+  left: max(8px, env(safe-area-inset-left, 0));
+}
+
+.next {
+  right: max(8px, env(safe-area-inset-right, 0));
+}
+
+.hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 40px;
+  margin: 0;
+  padding: 0 16px env(safe-area-inset-bottom, 0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-xs);
+  color: rgba(245, 241, 232, 0.65);
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .frame[data-animate="true"],
+  .close,
+  .nav {
+    transition: none;
+  }
+}
