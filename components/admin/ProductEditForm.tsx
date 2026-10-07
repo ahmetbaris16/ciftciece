@@ -9,8 +9,9 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { Product, Category } from "@/types";
-import { decimalToKurus, kurusToDecimalString } from "@/lib/payment/money";
+import { kurusToDecimalString, parseTlInput } from "@/lib/payment/money";
 import { VAT_INPUT_RULE, parseVatPercent, vatBpsToPercent } from "@/lib/catalog/vat";
+import { STOCK_INPUT_RULE, parseStockInput } from "@/lib/catalog/stock-input";
 import VatRateField from "./VatRateField";
 
 interface Props {
@@ -42,10 +43,10 @@ export default function ProductEditForm({ product, categories }: Props) {
       name: v.name,
       sku: v.sku ?? "",
       priceKurus: v.priceKurus as number | null,
-      // Fiyat alanında yazılan metin ("289.90"). Sayı alanı Türkçe biçimi ("289,90") okuyamadığı için
-      // alan boş görünüyordu; metin ayrı tutulur, kuruşa yalnız geçerliyse çevrilir (null = geçersiz)
-      priceText: kurusToDecimalString(v.priceKurus),
-      stockQuantity: v.stockQuantity ?? 0,
+      // Fiyat alanında yazılan metin ("289,90" ya da "289.90"); kuruşa yalnız geçerliyse çevrilir (null = geçersiz)
+      priceText: kurusToDecimalString(v.priceKurus).replace(".", ","),
+      // Stok alanında yazılan metin: alan silinip istenen sayı yazılabilir (eskiden "0"a geri dönüyordu); boş = 0
+      stockText: String(v.stockQuantity ?? 0),
       initialStock: v.stockQuantity ?? 0,
       isAvailable: v.isAvailable,
     }))
@@ -61,7 +62,12 @@ export default function ProductEditForm({ product, categories }: Props) {
     }
     const badPrice = variants.find((v) => v.priceKurus === null);
     if (badPrice) {
-      setMessage(`Hata: "${badPrice.name}" fiyatı geçersiz — en fazla 2 ondalık basamak (ör. 289.90). Hiçbir şey kaydedilmedi.`);
+      setMessage(`Hata: "${badPrice.name}" fiyatı geçersiz — en fazla 2 ondalık basamak (ör. 289,90). Hiçbir şey kaydedilmedi.`);
+      return;
+    }
+    const badStock = variants.find((v) => parseStockInput(v.stockText) === null);
+    if (badStock) {
+      setMessage(`Hata: "${badStock.name}" stoğu geçersiz — ${STOCK_INPUT_RULE} Hiçbir şey kaydedilmedi.`);
       return;
     }
     setSaving(true);
@@ -89,7 +95,8 @@ export default function ProductEditForm({ product, categories }: Props) {
       const failures: string[] = [];
       const savedStock = new Map<string, number>();
       for (const v of variants) {
-        const stockChanged = v.stockQuantity !== v.initialStock;
+        const stock = parseStockInput(v.stockText)!;
+        const stockChanged = stock !== v.initialStock;
         const r = await fetch(`/api/admin/products/${product.id}/variants`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -99,11 +106,11 @@ export default function ProductEditForm({ product, categories }: Props) {
             sku: v.sku || null,
             priceKurus: v.priceKurus,
             isAvailable: v.isAvailable,
-            ...(stockChanged ? { stockQuantity: v.stockQuantity, expectedStock: v.initialStock } : {}),
+            ...(stockChanged ? { stockQuantity: stock, expectedStock: v.initialStock } : {}),
           }),
         });
         if (r.ok) {
-          savedStock.set(v.id, v.stockQuantity);
+          savedStock.set(v.id, stock);
         } else {
           const data = await r.json().catch(() => ({}));
           failures.push(`${v.name}: ${data.error ?? `kaydedilemedi (HTTP ${r.status})`}`);
@@ -131,7 +138,7 @@ export default function ProductEditForm({ product, categories }: Props) {
 
   /** Fiyat metni ve kuruş birlikte: TL → kuruş tam sayı aritmetiğiyle (F-01); geçersizse kuruş null */
   function updateVariantPrice(index: number, text: string) {
-    setVariants((prev) => prev.map((v, i) => (i === index ? { ...v, priceText: text, priceKurus: decimalToKurus(text) } : v)));
+    setVariants((prev) => prev.map((v, i) => (i === index ? { ...v, priceText: text, priceKurus: parseTlInput(text) } : v)));
   }
 
   return (
@@ -204,16 +211,20 @@ export default function ProductEditForm({ product, categories }: Props) {
                 <input style={styles.input} value={v.name} onChange={(e) => updateVariant(i, "name", e.target.value)} />
               </div>
               <div style={styles.field}>
-                <label style={styles.labelSmall}>Fiyat (₺)</label>
-                {/* Kuruş tam sayı: en fazla 2 ondalık; geçersiz giriş kaydedilmez (F-01) */}
-                <input style={{ ...styles.input, ...(v.priceKurus === null ? styles.invalid : {}) }} type="number" step="0.01" min="0"
+                <label style={styles.labelSmall} htmlFor={`price-${v.id}`}>Fiyat (₺)</label>
+                {/* Kuruş tam sayı: en fazla 2 ondalık; geçersiz giriş kaydedilmez (F-01). Metin alanı: "289,90" de yazılır */}
+                <input id={`price-${v.id}`} style={{ ...styles.input, ...(v.priceKurus === null ? styles.invalid : {}) }}
+                  inputMode="decimal" autoComplete="off" placeholder="289,90"
                   value={v.priceText} aria-invalid={v.priceKurus === null}
                   onChange={(e) => updateVariantPrice(i, e.target.value)} />
               </div>
               <div style={styles.field}>
-                <label style={styles.labelSmall}>Stok</label>
-                <input style={styles.input} type="number" value={v.stockQuantity}
-                  onChange={(e) => updateVariant(i, "stockQuantity", parseInt(e.target.value || "0"))} />
+                <label style={styles.labelSmall} htmlFor={`stock-${v.id}`}>Stok (adet)</label>
+                {/* Boş bırakılırsa 0 */}
+                <input id={`stock-${v.id}`} style={{ ...styles.input, ...(parseStockInput(v.stockText) === null ? styles.invalid : {}) }}
+                  inputMode="numeric" autoComplete="off" placeholder="0"
+                  value={v.stockText} aria-invalid={parseStockInput(v.stockText) === null}
+                  onChange={(e) => updateVariant(i, "stockText", e.target.value)} />
               </div>
             </div>
           </div>

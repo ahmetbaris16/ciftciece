@@ -7,8 +7,9 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { Category } from "@/types";
-import { decimalToKurus } from "@/lib/payment/money";
+import { parseTlInput } from "@/lib/payment/money";
 import { VAT_INPUT_RULE, parseVatPercent } from "@/lib/catalog/vat";
+import { STOCK_INPUT_RULE, parseStockInput } from "@/lib/catalog/stock-input";
 import VatRateField from "./VatRateField";
 
 interface Props {
@@ -17,8 +18,10 @@ interface Props {
 
 interface VariantInput {
   name: string;
+  /** Yazıldığı gibi ("289,90", "1.250"); kuruşa kaydederken çevrilir */
   priceTL: string;
-  stockQuantity: number;
+  /** Yazıldığı gibi; boş = 0 (alan silinip istenen sayı yazılabilsin diye metin tutulur) */
+  stockText: string;
 }
 
 export default function ProductCreateForm({ categories }: Props) {
@@ -36,11 +39,11 @@ export default function ProductCreateForm({ categories }: Props) {
   const [message, setMessage] = useState("");
 
   const [variants, setVariants] = useState<VariantInput[]>([
-    { name: "", priceTL: "", stockQuantity: 0 },
+    { name: "", priceTL: "", stockText: "" },
   ]);
 
   function addVariant() {
-    setVariants((prev) => [...prev, { name: "", priceTL: "", stockQuantity: 0 }]);
+    setVariants((prev) => [...prev, { name: "", priceTL: "", stockText: "" }]);
   }
 
   function removeVariant(index: number) {
@@ -60,29 +63,37 @@ export default function ProductCreateForm({ categories }: Props) {
       setMessage(`Hata: KDV oranı geçersiz — ${VAT_INPUT_RULE}`);
       return;
     }
-    setSaving(true);
 
-    // TL → kuruş tam sayı aritmetiğiyle (F-01): en fazla 2 ondalık; aşan giriş sessizce yuvarlanmaz
+    // TL → kuruş tam sayı aritmetiğiyle (F-01): en fazla 2 ondalık; aşan giriş sessizce yuvarlanmaz.
+    // Boş fiyat artık 0 TL diye kaydedilmez (fiyatı unutulan ürün bedava görünürdü)
     const named = variants.filter((v) => v.name.trim());
-    const badPrice = named.find((v) => decimalToKurus(v.priceTL || "0") === null);
+    const badPrice = named.find((v) => parseTlInput(v.priceTL) === null);
     if (badPrice) {
-      setMessage(`Hata: "${badPrice.name}" fiyatı geçersiz — en fazla 2 ondalık basamak (ör. 289.90)`);
-      setSaving(false);
+      setMessage(
+        badPrice.priceTL.trim() === ""
+          ? `Hata: "${badPrice.name}" için fiyat yazın (ör. 289,90)`
+          : `Hata: "${badPrice.name}" fiyatı geçersiz — en fazla 2 ondalık basamak (ör. 289,90)`
+      );
+      return;
+    }
+    const badStock = named.find((v) => parseStockInput(v.stockText) === null);
+    if (badStock) {
+      setMessage(`Hata: "${badStock.name}" stoğu geçersiz — ${STOCK_INPUT_RULE}`);
       return;
     }
     const apiVariants = named.map((v, i) => ({
       name: v.name,
-      priceKurus: decimalToKurus(v.priceTL || "0")!,
+      priceKurus: parseTlInput(v.priceTL)!,
       isAvailable: true,
       sortOrder: i,
-      stockQuantity: v.stockQuantity,
+      stockQuantity: parseStockInput(v.stockText)!,
     }));
 
     if (apiVariants.length === 0) {
       setMessage("En az 1 varyant ekleyin");
-      setSaving(false);
       return;
     }
+    setSaving(true);
 
     try {
       const res = await fetch("/api/admin/products", {
@@ -172,12 +183,20 @@ export default function ProductCreateForm({ categories }: Props) {
                 <input style={styles.input} value={v.name} onChange={(e) => updateVariant(i, "name", e.target.value)} placeholder="500 ml" />
               </div>
               <div style={styles.field}>
-                <label style={styles.labelSmall}>Fiyat (₺)</label>
-                <input style={styles.input} type="number" step="0.01" value={v.priceTL} onChange={(e) => updateVariant(i, "priceTL", e.target.value)} placeholder="289.00" />
+                <label style={styles.labelSmall} htmlFor={`new-price-${i}`}>Fiyat (₺) *</label>
+                {/* Metin alanı: "289,90" de yazılabilir (telefon klavyesinde ondalık virgül) */}
+                <input id={`new-price-${i}`} style={{ ...styles.input, ...(v.priceTL.trim() && parseTlInput(v.priceTL) === null ? styles.invalid : {}) }}
+                  inputMode="decimal" autoComplete="off" value={v.priceTL} placeholder="289,90"
+                  aria-invalid={v.priceTL.trim() !== "" && parseTlInput(v.priceTL) === null}
+                  onChange={(e) => updateVariant(i, "priceTL", e.target.value)} />
               </div>
               <div style={styles.field}>
-                <label style={styles.labelSmall}>Stok</label>
-                <input style={styles.input} type="number" value={v.stockQuantity} onChange={(e) => updateVariant(i, "stockQuantity", parseInt(e.target.value || "0"))} />
+                <label style={styles.labelSmall} htmlFor={`new-stock-${i}`}>Stok (adet)</label>
+                {/* Boş bırakılırsa 0; alan silinip istenen sayı yazılır (eskiden "0" silinemiyordu) */}
+                <input id={`new-stock-${i}`} style={{ ...styles.input, ...(parseStockInput(v.stockText) === null ? styles.invalid : {}) }}
+                  inputMode="numeric" autoComplete="off" value={v.stockText} placeholder="0"
+                  aria-invalid={parseStockInput(v.stockText) === null}
+                  onChange={(e) => updateVariant(i, "stockText", e.target.value)} />
               </div>
               {variants.length > 1 && (
                 <div style={{ display: "flex", alignItems: "flex-end", minWidth: 0 }}>
@@ -215,4 +234,5 @@ const styles: Record<string, React.CSSProperties> = {
   variantRow: { padding: "1rem", background: "rgba(255,255,255,0.02)", borderRadius: "8px", marginBottom: "0.75rem", border: "1px solid rgba(255,255,255,0.04)" },
   addBtn: { padding: "0.375rem 0.75rem", background: "rgba(143,163,78,0.15)", border: "1px solid rgba(143,163,78,0.3)", borderRadius: "6px", color: "#c4d68e", fontSize: "0.8125rem", cursor: "pointer" },
   removeBtn: { padding: "0.5rem", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "6px", color: "#fca5a5", fontSize: "0.75rem", cursor: "pointer", marginBottom: "0.75rem" },
+  invalid: { borderColor: "rgba(239,68,68,0.8)" },
 };
