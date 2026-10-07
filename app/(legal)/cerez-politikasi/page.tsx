@@ -10,12 +10,13 @@ export const metadata: Metadata = {
 };
 
 /**
- * Listede yalnız sitede GERÇEKTEN kullanılanlar var: next-auth oturum çerezleri, sepet (localStorage) ve ödeme
- * adımı anahtarı (sessionStorage). Yeni çerez/izleme eklenirse bu sayfa güncellenmeli.
+ * Listede yalnız sitede GERÇEKTEN kullanılanlar var: next-auth oturum çerezleri, sepet (localStorage), ödeme adımı
+ * anahtarı ve bankaya geçerken ödeme formu taslağı (sessionStorage). Yeni çerez/izleme eklenirse bu sayfa
+ * güncellenmeli.
  */
 export default function CerezPolitikasiPage() {
   return (
-    <LegalPage title="Çerez Politikası" updated="2026-10-02">
+    <LegalPage title="Çerez Politikası" updated="2026-10-07">
       <p>
         Çerezler, sitelerin tarayıcınıza kaydettiği küçük metin dosyalarıdır. Sitemizde <strong>yalnız sitenin çalışması için
         zorunlu</strong> çerezler ve tarayıcı depolaması kullanılır. Analiz, reklam ya da takip çerezi kullanılmaz; bu yüzden
@@ -69,6 +70,14 @@ export default function CerezPolitikasiPage() {
             <td>ciftci_ece_checkout_key_v2 (sessionStorage)</td>
             <td>Ödeme adımında aynı siparişin iki kez oluşmasını önleme</td>
             <td>Sekme kapanana kadar</td>
+          </tr>
+          <tr>
+            <td>ciftci_ece_checkout_draft_v1 (sessionStorage)</td>
+            <td>
+              Kartla ödemede bankanın sayfasına geçerken ödeme formundaki bilgileriniz (ad, iletişim, adres, fatura); ödeme
+              olmadan dönerseniz bilgileri yeniden yazmadan ödeme adımından devam etmeniz için. Kart bilgisi içermez.
+            </td>
+            <td>Geri dönünce ya da sipariş onaylanınca silinir; en çok 2 saat, sekme kapanınca da silinir</td>
           </tr>
         </tbody>
       </table>

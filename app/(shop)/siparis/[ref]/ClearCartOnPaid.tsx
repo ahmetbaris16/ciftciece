@@ -9,6 +9,7 @@
 import { useEffect } from "react";
 import { useCart } from "@/lib/cart/CartContext";
 import { forgetCheckoutKey } from "@/lib/checkout/client-key";
+import { forgetCheckoutDraft } from "@/lib/checkout/draft";
 
 export default function ClearCartOnPaid() {
   const { clearCart, isHydrated } = useCart();
@@ -17,6 +18,8 @@ export default function ClearCartOnPaid() {
     clearCart();
     // Sipariş kesinleşti: aynı sepetle verilecek yeni sipariş yeni idempotency anahtarı alsın
     forgetCheckoutKey();
+    // Bankaya geçerken saklanan ödeme formu taslağı (kişisel veri) artık gerekmez
+    forgetCheckoutDraft();
   }, [isHydrated, clearCart]);
   return null;
 }

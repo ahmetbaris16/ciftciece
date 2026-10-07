@@ -4,6 +4,9 @@
  * Ödeme (checkout) — /odeme
  *
  * Adımlar: 1 İletişim → 2 Teslimat ve fatura → 3 Ödeme (yöntem, siparişe özel sözleşmeler, onay).
+ * Ödeme adımına bir kez gelindiyse "Değiştir" ile açılan adımdan doğrudan ödeme adımına dönülür (üstteki adım
+ * çubuğu ve "Ödeme adımına dön"); bilgiler baştan doldurulmaz. Kartla ödemede bankadan ödemesiz dönülürse
+ * form taslağı (lib/checkout/draft.ts) geri yüklenir, ödeme adımından devam edilir.
  * Kart: sipariş açılır → /api/payment/create → bankanın (Akbank) 3D Secure ortak ödeme sayfasına imzalı form
  * gönderilir; kart bilgisi sitemize gelmez. Havale ve kapıda ödeme: sipariş sayfasına geçilir.
  *
@@ -40,6 +43,14 @@ import { PAYMENT_METHOD_LABELS, isOptionAllowed, type PaymentMethodId, type Paym
 import { CHECKOUT_TERMS_VERSION, LEGAL_DOCUMENTS } from "@/lib/legal/documents";
 import { distanceSalesSections, preInformationSections, type OrderContext } from "@/lib/legal/content";
 import { checkoutKeyFor, forgetCheckoutKey } from "@/lib/checkout/client-key";
+import {
+  forgetCheckoutDraft,
+  peekCheckoutDraft,
+  saveCheckoutDraft,
+  type BillingState,
+  type ContactInfo,
+  type ShippingInfo,
+} from "@/lib/checkout/draft";
 import { PROVINCES_SORTED } from "@/lib/geo/provinces";
 import { formatPhoneTr, type BusinessInfo } from "@/lib/business/info";
 import LegalSections from "@/components/legal/LegalSections";
@@ -55,29 +66,7 @@ const STEPS: Array<{ id: Step; label: string }> = [
   { id: "teslimat", label: "Teslimat ve fatura" },
   { id: "odeme", label: "Ödeme" },
 ];
-
-interface ContactInfo {
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-}
-interface ShippingInfo {
-  address: string;
-  district: string;
-  city: string;
-  postalCode: string;
-}
-interface BillingState {
-  type: "INDIVIDUAL" | "CORPORATE";
-  companyName: string;
-  taxOffice: string;
-  taxNumber: string;
-  sameAsShipping: boolean;
-  billingAddress: string;
-  billingDistrict: string;
-  billingCity: string;
-}
+const STEP_INDEX: Record<Step, number> = { iletisim: 0, teslimat: 1, odeme: 2 };
 
 const CONTACT_FIELDS: CheckoutField[] = ["firstName", "lastName", "email", "phone"];
 const PAYMENT_FIELDS: CheckoutField[] = ["paymentMethod", "acceptTerms"];
@@ -100,22 +89,30 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
   const errorParam = searchParams.get("error");
   const returnError = errorParam ? (PAYMENT_RETURN_ERRORS[errorParam] ?? "Bir hata oluştu. Lütfen tekrar deneyin.") : null;
 
-  const [step, setStep] = useState<Step>(() => (errorParam ? "odeme" : "iletisim"));
-  const [contact, setContact] = useState<ContactInfo>({ firstName: "", lastName: "", email: "", phone: "" });
-  const [shipping, setShipping] = useState<ShippingInfo>({ address: "", district: "", city: "", postalCode: "" });
-  const [billing, setBilling] = useState<BillingState>({
-    type: "INDIVIDUAL",
-    companyName: "",
-    taxOffice: "",
-    taxNumber: "",
-    sameAsShipping: true,
-    billingAddress: "",
-    billingDistrict: "",
-    billingCity: "",
-  });
-  const [note, setNote] = useState("");
-  const [showNote, setShowNote] = useState(false);
-  const [chosenMethod, setChosenMethod] = useState<PaymentMethodId | null>(null);
+  // Bankadan ödemesiz dönüş (?error=): bilgiler bankaya geçerken saklanan taslaktan gelir, ödeme adımından
+  // devam edilir. Taslak yoksa (başka sekme, 2 saatten eski) boş ödeme adımı yerine ilk adım açılır.
+  // (Sunucuda ve ilk çizimde form zaten "Yükleniyor…" — sepet tarayıcıda yüklenene kadar; uyuşmazlık olmaz)
+  const [restored] = useState(() => (errorParam ? peekCheckoutDraft() : null));
+  const [step, setStep] = useState<Step>(restored ? "odeme" : "iletisim");
+  // Ulaşılan en ileri adım: buraya kadar olan adımlar üstteki çubuktan açılabilir (ileri giderken doğrulanır)
+  const [reached, setReached] = useState(restored ? 2 : 0);
+  const [contact, setContact] = useState<ContactInfo>(restored?.contact ?? { firstName: "", lastName: "", email: "", phone: "" });
+  const [shipping, setShipping] = useState<ShippingInfo>(restored?.shipping ?? { address: "", district: "", city: "", postalCode: "" });
+  const [billing, setBilling] = useState<BillingState>(
+    restored?.billing ?? {
+      type: "INDIVIDUAL",
+      companyName: "",
+      taxOffice: "",
+      taxNumber: "",
+      sameAsShipping: true,
+      billingAddress: "",
+      billingDistrict: "",
+      billingCity: "",
+    }
+  );
+  const [note, setNote] = useState(restored?.note ?? "");
+  const [showNote, setShowNote] = useState(Boolean(restored?.note));
+  const [chosenMethod, setChosenMethod] = useState<PaymentMethodId | null>((restored?.method as PaymentMethodId | null) ?? null);
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<CheckoutField, string>>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -125,6 +122,13 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
   // Sipariş açıldı ama ödeme başlatılamadıysa aynı siparişle tekrar denenir (ikinci sipariş/stok düşümü olmaz)
   const [pendingOrder, setPendingOrder] = useState<{ id: string; reference: string; key: string } | null>(null);
   const formTopRef = useRef<HTMLDivElement>(null);
+  // Fatura "Değiştir": adım açılınca fatura bölümüne kaydırılır
+  const scrollTargetRef = useRef<"billing" | null>(null);
+
+  // Taslak bir kez kullanılır: geri yüklenince silinir (kişisel veri tarayıcıda kalmasın)
+  useEffect(() => {
+    if (errorParam) forgetCheckoutDraft();
+  }, [errorParam]);
 
   const shippingState = useShippingSettings();
   const quoteState = useShippingQuote(cart.items);
@@ -157,14 +161,17 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
     if (isHydrated) void syncCart();
   }, [isHydrated, syncCart]);
 
-  // Adım değişince formun başına dön (mobilde özellikle); ilk açılışta kaydırılmaz
+  // Adım değişince formun başına dön (mobilde özellikle); fatura "Değiştir"inde fatura bölümüne. İlk açılışta
+  // kaydırılmaz
   const firstRender = useRef(true);
   useEffect(() => {
     if (firstRender.current) {
       firstRender.current = false;
       return;
     }
-    formTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const target = scrollTargetRef.current === "billing" ? document.getElementById("billing-title") : formTopRef.current;
+    scrollTargetRef.current = null;
+    target?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [step]);
 
   // ── Hesaplanan değerler (gösterim; sunucu yeniden hesaplar) ──
@@ -307,6 +314,7 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
         }
         order = { id: data.orderId as string, reference: data.order?.reference ?? "", key: orderKey };
         if (data.nextStep === "order") {
+          forgetCheckoutDraft();
           router.push(`/siparis/${order.reference}`);
           return;
         }
@@ -331,8 +339,12 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
         }
         return fail(typeof pay?.error === "string" ? pay.error : CHECKOUT_MESSAGES.paymentFailed);
       }
-      // Sepet burada temizlenmez: ödeme onaylanınca sipariş sayfası temizler (başarısız dönüşte sepet durur)
+      // Sepet burada temizlenmez: ödeme onaylanınca sipariş sayfası temizler (başarısız dönüşte sepet durur).
+      // Form da taslak olarak kalır: ödeme olmazsa müşteri bilgileri yeniden yazmadan ödeme adımına döner
       setPendingOrder(null);
+      if ((pay?.form?.action && pay.form.fields) || pay?.redirectUrl) {
+        saveCheckoutDraft({ contact, shipping, billing, note, method: selected.id });
+      }
       if (pay?.form?.action && pay.form.fields) {
         setRedirecting(true);
         submitPaymentForm(pay.form as { action: string; fields: Record<string, string> });
@@ -370,22 +382,49 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
     );
   }
 
-  const stepIndex = STEPS.findIndex((s) => s.id === step);
+  const stepIndex = STEP_INDEX[step];
+  // Ödeme adımına daha önce gelindi: önceki adımlarda "Ödeme adımına dön" gösterilir
+  const canReturnToPayment = reached >= 2;
 
-  const goShipping = () => {
-    const e = validateStep(ContactSchema, contact);
-    setErrors(e);
-    if (Object.keys(e).length === 0) setStep("teslimat");
+  /**
+   * Adıma geçiş. Geri gitmek serbest; ileri giderken aradaki adımlar doğrulanır (hatalı adım açılır, hatası
+   * görünür). Ödeme adımına bir kez gelindiyse "Değiştir"le açılan adımdan doğrudan ödemeye dönülür.
+   */
+  const goTo = (target: Step, scrollTo: "billing" | null = null) => {
+    const to = STEP_INDEX[target];
+    if (to > stepIndex) {
+      if (stepIndex === 0) {
+        const e = validateStep(ContactSchema, contact);
+        if (Object.keys(e).length > 0) return setErrors(e);
+      }
+      if (to === 2) {
+        const e = {
+          ...validateStep(ShippingSchema, shipping),
+          ...validateStep(BillingSchema, billingPayload()),
+          ...(note.trim().length > 500 ? { note: CHECKOUT_MESSAGES.note } : {}),
+        };
+        if (Object.keys(e).length > 0 || !shippingKnown) {
+          setErrors(e);
+          if (stepIndex !== 1) setStep("teslimat");
+          return;
+        }
+      }
+    }
+    setErrors({});
+    scrollTargetRef.current = scrollTo;
+    setStep(target);
+    setReached((r) => Math.max(r, to));
   };
-  const goPayment = () => {
-    const e = {
-      ...validateStep(ShippingSchema, shipping),
-      ...validateStep(BillingSchema, billingPayload()),
-      ...(note.trim().length > 500 ? { note: CHECKOUT_MESSAGES.note } : {}),
-    };
-    setErrors(e);
-    if (Object.keys(e).length === 0 && shippingKnown) setStep("odeme");
-  };
+
+  // "Değiştir" ile açılan adımın başında: ödeme adımına tek dokunuşla dönüş
+  const returnBar = canReturnToPayment && (
+    <div className={styles.returnBar}>
+      <p>Değişikliği yapıp ödeme adımına dönün; diğer bilgileriniz ve seçtiğiniz ödeme yöntemi duruyor.</p>
+      <button type="button" className={styles.returnBtn} onClick={() => goTo("odeme")}>
+        Ödeme adımına dön
+      </button>
+    </div>
+  );
 
   const field = (
     id: CheckoutField,
@@ -448,11 +487,22 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
             <CartChanges />
             <ol className={styles.steps} aria-label="Ödeme adımları">
               {STEPS.map((s, i) => {
-                const done = i < stepIndex;
                 const active = s.id === step;
+                // Tamamlanan adım (✓) ve ulaşılmış ileri adım açılabilir; ileri geçişte bilgiler doğrulanır
+                const done = !active && (i < stepIndex || i < reached);
+                const open = !active && i <= reached;
                 return (
-                  <li key={s.id} className={`${styles.step} ${active ? styles.stepActive : ""} ${done ? styles.stepDone : ""}`}>
-                    <button type="button" onClick={() => done && setStep(s.id)} disabled={!done} aria-current={active ? "step" : undefined}>
+                  <li
+                    key={s.id}
+                    className={`${styles.step} ${active ? styles.stepActive : ""} ${done ? styles.stepDone : ""} ${open && !done ? styles.stepOpen : ""}`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => open && goTo(s.id)}
+                      disabled={!open}
+                      aria-current={active ? "step" : undefined}
+                      aria-label={open ? `${s.label} adımına git` : undefined}
+                    >
                       <span className={styles.stepNum}>{done ? <CheckIcon /> : i + 1}</span>
                       <span className={styles.stepLabel}>{s.label}</span>
                     </button>
@@ -461,9 +511,17 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
               })}
             </ol>
 
+            {/* Bankadan dönüş ya da sipariş hatası ödeme adımı dışında da görünür */}
+            {submitError && step !== "odeme" && (
+              <div className={styles.alert} role="alert">
+                {submitError}
+              </div>
+            )}
+
             {/* ── 1. İletişim ── */}
             {step === "iletisim" && (
               <section className={styles.panel} aria-labelledby="contact-title">
+                {returnBar}
                 <h2 id="contact-title" className={styles.panelTitle}>
                   İletişim bilgileri
                 </h2>
@@ -506,9 +564,20 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
                   )}
                 </div>
                 <div className={styles.actions}>
-                  <button type="button" className={styles.primaryBtn} onClick={goShipping}>
-                    Teslimat bilgilerine geç
-                  </button>
+                  {canReturnToPayment ? (
+                    <>
+                      <button type="button" className={styles.secondaryBtn} onClick={() => goTo("teslimat")}>
+                        Teslimat bilgilerine geç
+                      </button>
+                      <button type="button" className={styles.primaryBtn} onClick={() => goTo("odeme")}>
+                        Ödeme adımına dön
+                      </button>
+                    </>
+                  ) : (
+                    <button type="button" className={styles.primaryBtn} onClick={() => goTo("teslimat")}>
+                      Teslimat bilgilerine geç
+                    </button>
+                  )}
                 </div>
               </section>
             )}
@@ -516,6 +585,7 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
             {/* ── 2. Teslimat ve fatura ── */}
             {step === "teslimat" && (
               <section className={styles.panel} aria-labelledby="ship-title">
+                {returnBar}
                 <h2 id="ship-title" className={styles.panelTitle}>
                   Teslimat adresi
                 </h2>
@@ -567,7 +637,9 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
                   </p>
                 )}
 
-                <h2 className={`${styles.panelTitle} ${styles.subTitle}`}>Fatura bilgileri</h2>
+                <h2 id="billing-title" className={`${styles.panelTitle} ${styles.subTitle}`}>
+                  Fatura bilgileri
+                </h2>
                 <div className={styles.segmented} role="radiogroup" aria-label="Fatura türü">
                   {(["INDIVIDUAL", "CORPORATE"] as const).map((t) => (
                     <button
@@ -652,11 +724,11 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
                 )}
 
                 <div className={styles.actions}>
-                  <button type="button" className={styles.secondaryBtn} onClick={() => setStep("iletisim")}>
+                  <button type="button" className={styles.secondaryBtn} onClick={() => goTo("iletisim")}>
                     Geri
                   </button>
-                  <button type="button" className={styles.primaryBtn} onClick={goPayment} disabled={!shippingKnown}>
-                    Ödeme adımına geç
+                  <button type="button" className={styles.primaryBtn} onClick={() => goTo("odeme")} disabled={!shippingKnown}>
+                    {canReturnToPayment ? "Ödeme adımına dön" : "Ödeme adımına geç"}
                   </button>
                 </div>
               </section>
@@ -675,14 +747,14 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
                     <dd>
                       {fullName}, {shipping.address}, {shipping.district} / {shipping.city}
                     </dd>
-                    <button type="button" className={styles.textBtn} onClick={() => setStep("teslimat")}>
+                    <button type="button" className={styles.textBtn} onClick={() => goTo("teslimat")} aria-label="Teslimat adresini değiştir">
                       Değiştir
                     </button>
                   </div>
                   <div>
                     <dt>Fatura</dt>
                     <dd>{billing.type === "CORPORATE" ? `${billing.companyName} (VKN ${billing.taxNumber})` : `Bireysel — ${fullName}`}</dd>
-                    <button type="button" className={styles.textBtn} onClick={() => setStep("teslimat")}>
+                    <button type="button" className={styles.textBtn} onClick={() => goTo("teslimat", "billing")} aria-label="Fatura bilgilerini değiştir">
                       Değiştir
                     </button>
                   </div>
@@ -691,7 +763,7 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
                     <dd>
                       {contact.email} · {contact.phone}
                     </dd>
-                    <button type="button" className={styles.textBtn} onClick={() => setStep("iletisim")}>
+                    <button type="button" className={styles.textBtn} onClick={() => goTo("iletisim")} aria-label="İletişim bilgilerini değiştir">
                       Değiştir
                     </button>
                   </div>
@@ -806,7 +878,7 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
                 </p>
 
                 <div className={styles.actions}>
-                  <button type="button" className={styles.secondaryBtn} onClick={() => setStep("teslimat")} disabled={submitting}>
+                  <button type="button" className={styles.secondaryBtn} onClick={() => goTo("teslimat")} disabled={submitting}>
                     Geri
                   </button>
                   <button type="button" id="place-order-btn" className={`${styles.primaryBtn} ${styles.payBtn}`} onClick={placeOrder} disabled={submitting || !shippingKnown || !selected}>

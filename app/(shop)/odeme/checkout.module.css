@@ -110,6 +110,26 @@
   text-decoration: underline;
 }
 
+/* Daha önce ulaşılmış ileri adım (ör. "Değiştir"den sonra Ödeme): açılabilir */
+.stepOpen button {
+  color: var(--color-text-secondary);
+}
+
+.stepOpen .stepNum {
+  border-color: var(--color-sage);
+  color: var(--color-sage);
+}
+
+.stepOpen button:hover .stepLabel {
+  text-decoration: underline;
+}
+
+.step button:focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 3px;
+  border-radius: 999px;
+}
+
 .stepNum {
   display: inline-flex;
   align-items: center;
@@ -163,6 +183,7 @@
 }
 
 .subTitle {
+  scroll-margin-top: calc(var(--header-h, 120px) + 16px);
   margin-top: var(--space-8);
   padding-top: var(--space-6);
   border-top: 1px solid var(--color-border-light);
@@ -375,6 +396,50 @@ select.input {
   color: var(--color-error);
   font-size: var(--text-sm);
   line-height: 1.6;
+}
+
+/* "Değiştir"le açılan adımda: ödeme adımına dönüş */
+.returnBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-4);
+  flex-wrap: wrap;
+  margin: 0 0 var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  border-radius: 12px;
+  background: rgba(138, 155, 122, 0.13);
+  border: 1px solid rgba(138, 155, 122, 0.4);
+}
+
+.returnBar p {
+  flex: 1 1 16rem;
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.returnBtn {
+  flex-shrink: 0;
+  min-height: 44px;
+  padding: 0 1.25rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.returnBtn:hover {
+  background: var(--color-primary-light);
+}
+
+.returnBtn:focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 3px;
 }
 
 /* ── Kargo ve fatura ──────────────────────────────────── */
@@ -967,6 +1032,20 @@ select.input {
     display: inline;
   }
 
+  /* Etkin adımın adı ("Teslimat ve fatura") sonraki adımın üstüne binmesin: etkin adım yazısı kadar yer alır,
+     diğerleri kalan yeri paylaşır */
+  .stepActive {
+    flex: 0 0 auto;
+  }
+
+  .step:not(:last-child)::after {
+    margin: 0 var(--space-2);
+  }
+
+  .stepActive:not(:last-child)::after {
+    min-width: 12px;
+  }
+
   .actions {
     flex-direction: column-reverse;
   }
@@ -981,6 +1060,10 @@ select.input {
 
   .payBtn {
     min-width: 0;
+  }
+
+  .returnBtn {
+    width: 100%;
   }
 
   .review > div {
