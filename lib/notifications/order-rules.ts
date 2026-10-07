@@ -42,6 +42,7 @@ import {
 } from "@/lib/email/templates/store";
 import type { RenderedEmail } from "@/lib/email/templates/account";
 import { addressText, loadOrderEmailData, type OrderEmailData } from "./order-data";
+import { ensureReviewCode } from "@/lib/reviews/review-code";
 import type { EmailDraft } from "./queue";
 import type { RuleContext } from "./rules";
 
@@ -147,7 +148,11 @@ const statusChanged: Handler = async (event, ctx) => {
   const to = str(p.to);
   const d = await orderData(event);
   if (!d) return [];
-  if (to === "DELIVERED") return toCustomer(d, "ORDER_DELIVERED", orderDeliveredEmail(d));
+  if (to === "DELIVERED") {
+    // Üye olmadan verilmiş siparişte değerlendirme kodu e-postada da yazar (paket fişindekiyle aynı kod)
+    const code = d.memberOrder || !d.customerEmail ? null : await ensureReviewCode(d.id);
+    return toCustomer(d, "ORDER_DELIVERED", orderDeliveredEmail(d, code?.code ?? null));
+  }
   if (to === "CANCELLED") {
     // İade kaydıyla birlikte kapanan sipariş: iade e-postası iptali de söyler (tek e-posta)
     if (str(p.refundId)) return [];

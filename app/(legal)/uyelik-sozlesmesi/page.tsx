@@ -30,7 +30,7 @@ export default async function UyelikSozlesmesiPage() {
       <p>
         Üyelik; siparişlerinizi tek yerden takip etmenizi, bilgilerinizin sonraki siparişlerde hazır gelmesini ve satın
         aldığınız ürünleri hesabınızdan değerlendirmenizi sağlar. Üye olmadan da sipariş verilebilir; teslim edilen ürünler
-        sipariş sayfasından değerlendirilebilir. Üyelik ücretsizdir.
+        paketteki tek kullanımlık değerlendirme koduyla sipariş sayfasından değerlendirilebilir. Üyelik ücretsizdir.
       </p>
 
       <h2>3. Üyenin yükümlülükleri</h2>

@@ -18,7 +18,7 @@ export default async function KvkkPage() {
   const business = await getBusinessInfo();
   const seller = sellerDisplayName(business);
   return (
-    <LegalPage title="KVKK Aydınlatma Metni" meta="6698 sayılı Kişisel Verilerin Korunması Kanunu md. 10 uyarınca" updated="2026-10-02">
+    <LegalPage title="KVKK Aydınlatma Metni" meta="6698 sayılı Kişisel Verilerin Korunması Kanunu md. 10 uyarınca" updated="2026-10-07">
       <p>
         Bu metin, kişisel verilerinizin veri sorumlusu sıfatıyla <strong>{seller}</strong> tarafından hangi amaçla, hangi
         hukuki sebeple, nasıl işlendiğini ve haklarınızı açıklar.
@@ -60,8 +60,8 @@ export default async function KvkkPage() {
           <tr>
             <td>Ürün değerlendirmeleri (puan, yorum); yayında adınız ve soyadınızın baş harfi görünür</td>
             <td>
-              Ürünü satın alan müşterinin (üye hesabından ya da sipariş sayfasından) yazdığı değerlendirmenin ürün sayfasında
-              yayımlanması
+              Ürünü satın alan müşterinin (üye hesabından ya da üye olmadan verdiği siparişin sayfasından, paketteki tek
+              kullanımlık değerlendirme koduyla) yazdığı değerlendirmenin ürün sayfasında yayımlanması
             </td>
             <td>Sözleşmenin kurulması ve ifası</td>
           </tr>

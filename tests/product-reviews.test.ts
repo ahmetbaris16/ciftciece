@@ -2,7 +2,8 @@
  * Ürün değerlendirmeleri: yalnız ürünü satın almış müşteri, sipariş TESLİM EDİLDİKTEN sonra yazar; yazınca hemen
  * yayınlanır.
  * - Üye: hesabına bağlı teslim edilmiş siparişten (misafir siparişi e-postayla üyeliğe bağlanmaz).
- * - Üye olmadan verilmiş sipariş: o siparişin sayfasından, sipariş numarasıyla (sipariş başına ürün başına tek).
+ * - Üye olmadan verilmiş sipariş: o siparişin sayfasından; sipariş numarası yetmez, tek kullanımlık değerlendirme
+ *   kodunu kullanmış tarayıcının izni gerekir (sipariş başına ürün başına tek). Kodun kendisi: review-code.test.ts.
  * Mağaza uygunsuz yorumu yayından kaldırır (kayıt silinmez); müşteri düzenlerse yeniden yayınlanır.
  */
 
@@ -10,7 +11,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { prisma } from "@/lib/db/prisma";
 import { POST as reviewsApi } from "@/app/api/reviews/route";
+import { POST as reviewCodeApi } from "@/app/api/reviews/code/route";
+import { ensureReviewCode, redeemReviewCode } from "@/lib/reviews/review-code";
 import {
+  ReviewNeedsCodeError,
   ReviewNeedsLoginError,
   ReviewNotAllowedError,
   getOrderReviewContext,
@@ -34,6 +38,15 @@ const review = { rating: 5, title: "Çok taze", text: "Zeytinler çok taze geldi
 
 const notAllowed = (eligibility: string) => (err: unknown) =>
   err instanceof ReviewNotAllowedError && err.eligibility === eligibility;
+
+/** Teslim edilmiş misafir siparişinin değerlendirme kodunu kullanır → tarayıcıya verilen izin anahtarı */
+async function grantFor(orderId: string): Promise<string> {
+  const code = await ensureReviewCode(orderId);
+  assert.ok(code);
+  const r = await redeemReviewCode(code.code);
+  assert.ok(r.ok && r.grantToken);
+  return r.grantToken;
+}
 
 test("üye: satın almayan yazamaz; sipariş verildi/kargoda ise 'teslim edilince'; teslim edilince yazar ve hemen yayında", async () => {
   const user = await customer();
@@ -76,17 +89,21 @@ test("üye hakkı: misafir siparişi üyeliğe bağlanmaz (sipariş sayfasından
   assert.equal(await reviewEligibility(cancelled.variant.productId, user.id), "not_purchased");
 });
 
-test("üye olmadan verilmiş sipariş: teslim edilince sipariş sayfasından yazar; adı siparişten; düzenleme aynı kayıt", async () => {
+test("üye olmadan verilmiş sipariş: teslim edilince kodla izin alan tarayıcı yazar; adı siparişten; düzenleme aynı kayıt", async () => {
   const { order, variant } = await createTestOrder({ method: "BANK_TRANSFER", dueInMinutes: 48 * 60 });
   const productId = variant.productId;
-  const input = { reference: order.reference, productId, ...review };
+  const noGrant = { reference: order.reference, productId, ...review, grantTokens: [] as string[] };
 
   // Teslim edilmeden yazılamaz; bölüm "teslim edilmedi" der
   await prisma.order.update({ where: { id: order.id }, data: { status: "SHIPPED" } });
-  await assert.rejects(submitOrderReview(input), notAllowed("awaiting_delivery"));
+  await assert.rejects(submitOrderReview(noGrant), notAllowed("awaiting_delivery"));
   assert.equal((await getOrderReviewContext(order.reference))?.delivered, false);
 
   await prisma.order.update({ where: { id: order.id }, data: { status: "DELIVERED" } });
+  // Sipariş numarası tek başına yetmez (F-33): izin yok ya da yabancı anahtar → kod gerekir
+  await assert.rejects(submitOrderReview(noGrant), ReviewNeedsCodeError);
+  await assert.rejects(submitOrderReview({ ...noGrant, grantTokens: ["uydurma-anahtar-uydurma-anahtar"] }), ReviewNeedsCodeError);
+  const input = { ...noGrant, grantTokens: [await grantFor(order.id)] };
   const ctx = await getOrderReviewContext(order.reference);
   assert.equal(ctx?.delivered, true);
   assert.equal(ctx?.userId, null);
@@ -122,13 +139,20 @@ test("sipariş sayfasından: siparişte olmayan ürün, bilinmeyen sipariş, ipt
   await prisma.order.update({ where: { id: order.id }, data: { status: "DELIVERED" } });
   const other = await createProduct({ priceKurus: 10_000, stock: 5 });
 
-  await assert.rejects(submitOrderReview({ reference: order.reference, productId: other.product.id, ...review }), notAllowed("not_purchased"));
-  await assert.rejects(submitOrderReview({ reference: "olmayan-siparis-no", productId: variant.productId, ...review }), notAllowed("not_purchased"));
+  const grantTokens = [await grantFor(order.id)];
+  await assert.rejects(
+    submitOrderReview({ reference: order.reference, productId: other.product.id, ...review, grantTokens }),
+    notAllowed("not_purchased")
+  );
+  await assert.rejects(
+    submitOrderReview({ reference: "olmayan-siparis-no", productId: variant.productId, ...review, grantTokens }),
+    notAllowed("not_purchased")
+  );
 
   const cancelled = await createTestOrder({ method: "BANK_TRANSFER", dueInMinutes: 48 * 60 });
   await prisma.order.update({ where: { id: cancelled.order.id }, data: { status: "CANCELLED" } });
   await assert.rejects(
-    submitOrderReview({ reference: cancelled.order.reference, productId: cancelled.variant.productId, ...review }),
+    submitOrderReview({ reference: cancelled.order.reference, productId: cancelled.variant.productId, ...review, grantTokens }),
     notAllowed("not_purchased")
   );
 
@@ -137,7 +161,7 @@ test("sipariş sayfasından: siparişte olmayan ürün, bilinmeyen sipariş, ipt
   const memberOrder = await createTestOrder({ method: "BANK_TRANSFER", dueInMinutes: 48 * 60 });
   await prisma.order.update({ where: { id: memberOrder.order.id }, data: { status: "DELIVERED", userId: member.id } });
   await assert.rejects(
-    submitOrderReview({ reference: memberOrder.order.reference, productId: memberOrder.variant.productId, ...review }),
+    submitOrderReview({ reference: memberOrder.order.reference, productId: memberOrder.variant.productId, ...review, grantTokens }),
     ReviewNeedsLoginError
   );
   // Üyenin hesabından yazdığı, kendi sipariş sayfasında görünür
@@ -148,23 +172,37 @@ test("sipariş sayfasından: siparişte olmayan ürün, bilinmeyen sipariş, ipt
   assert.equal(await prisma.productReview.count({ where: { orderId: { not: null } } }), 0);
 });
 
-test("API: sipariş numarasıyla girişsiz gönderim; teslim edilmemişte 403, üyelik siparişinde 401", async () => {
+test("API: misafir gönderimi kod izni ister — teslim edilmemişte 403, izinsiz 401 needsCode, kodu kullanan çerezle 200; üyelik siparişinde 401", async () => {
   const { order, variant } = await createTestOrder({ method: "BANK_TRANSFER", dueInMinutes: 48 * 60 });
   const body = { productId: variant.productId, ...review, orderRef: order.reference };
+  const code = (await ensureReviewCode(order.id))!.code;
 
   const early = await reviewsApi(jsonRequest("http://localhost/api/reviews", body));
   assert.equal(early.status, 403);
   assert.equal((await early.json()).eligibility, "awaiting_delivery");
 
   await prisma.order.update({ where: { id: order.id }, data: { status: "DELIVERED" } });
-  const ok = await reviewsApi(jsonRequest("http://localhost/api/reviews", body));
+  // Sipariş numarası tek başına yetmez
+  const noCode = await reviewsApi(jsonRequest("http://localhost/api/reviews", body));
+  assert.equal(noCode.status, 401);
+  assert.equal((await noCode.json()).needsCode, true);
+
+  // Kodu kullan → izin çerezi → aynı tarayıcıdan gönderim
+  const redeemed = await reviewCodeApi(jsonRequest("http://localhost/api/reviews/code", { code, orderRef: order.reference }));
+  assert.equal(redeemed.status, 200);
+  assert.equal((await redeemed.json()).reference, order.reference);
+  const cookie = redeemed.headers.get("set-cookie") ?? "";
+  assert.match(cookie, /ce_review_grants=/);
+  assert.match(cookie, /HttpOnly/i);
+  const grantCookie = cookie.split(";")[0];
+  const ok = await reviewsApi(jsonRequest("http://localhost/api/reviews", body, { cookie: grantCookie }));
   assert.equal(ok.status, 200);
   const data = await ok.json();
   assert.equal(data.review.status, "APPROVED");
 
   // Başka siteden gelen istek reddedilir
   const cross = await reviewsApi(
-    jsonRequest("http://localhost/api/reviews", body, { origin: "https://baska-site.example", host: "localhost" })
+    jsonRequest("http://localhost/api/reviews", body, { origin: "https://baska-site.example", host: "localhost", cookie: grantCookie })
   );
   assert.equal(cross.status, 403);
 

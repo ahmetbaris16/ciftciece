@@ -278,7 +278,11 @@ export function orderShippedEmail(d: OrderEmailData, shipmentId: string, additio
 
 // ── Teslim edildi ───────────────────────────────────────────────────────
 
-export function orderDeliveredEmail(d: OrderEmailData): RenderedEmail {
+/**
+ * reviewCode: üye olmadan verilmiş siparişin tek kullanımlık değerlendirme kodu (paket fişindekiyle aynı; F-33).
+ * Bağlantıya konmaz (e-posta tarayıcıları/önizlemeleri adresleri açabilir; kod yalnız müşterinin elinde kalsın).
+ */
+export function orderDeliveredEmail(d: OrderEmailData, reviewCode: string | null = null): RenderedEmail {
   return customerEmail(d, {
     subject: `Siparişiniz teslim edildi — #${d.reference}`,
     preheader: "Afiyet olsun! Görüşleriniz bizim için değerli.",
@@ -289,6 +293,15 @@ export function orderDeliveredEmail(d: OrderEmailData): RenderedEmail {
         "Siparişiniz teslim edildi; afiyet olsun! Ürünlerimizi beğendiyseniz değerlendirmeniz diğer müşterilerimize yol gösterir."
       ),
       progressSteps(STEPS, 5),
+      ...(reviewCode
+        ? [
+            keyValues([{ label: "Değerlendirme kodunuz", value: reviewCode, mono: true, strong: true }], { boxed: true }),
+            paragraph(
+              "Sipariş sayfanızdaki “Ürünleri değerlendirin” bölümüne bu kodu yazın. Kod tek kullanımlıktır ve paketinizdeki fişte de yazar; kimseyle paylaşmayın.",
+              { small: true, muted: true }
+            ),
+          ]
+        : []),
       button("Siparişi görüntüle ve değerlendir", `${orderUrl(d)}#degerlendir`),
       notice(
         "Bir sorun varsa (eksik, hasarlı ya da yanlış ürün) sipariş sayfanızdaki “İade / iptal” bölümünden ya da bu e-postayı yanıtlayarak bize bildirin. Teslimattan itibaren 14 gün içinde cayma hakkınızı kullanabilirsiniz (ambalajı açılmış gıda ürünleri hariç).",

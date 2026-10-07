@@ -18,6 +18,8 @@ import NoteForm from "@/components/admin/order/NoteForm";
 import CustomerEmailForm from "@/components/admin/order/CustomerEmailForm";
 import RequestActions from "@/components/admin/order/RequestActions";
 import EmailRequeueButton from "@/components/admin/order/EmailRequeueButton";
+import ReviewCodeActions from "@/components/admin/order/ReviewCodeActions";
+import { ensureReviewCode } from "@/lib/reviews/review-code";
 import { formatPrice, type Order } from "@/types";
 import { PAYMENT_METHOD_LABELS } from "@/lib/payment/methods";
 import { PROVIDER_LABELS, cardPaymentMode, isTestProvider } from "@/lib/payment/provider";
@@ -150,6 +152,13 @@ export default async function AdminSiparisDetay({ params }: Props) {
   const billing = order.billingInfo;
   // Akbank bilgileri girilene kadar kart ödemesi demo bankadır (lib/payment/provider.ts)
   const provider = cardPaymentMode() === "demo" ? "demo" : process.env.PAYMENT_PROVIDER;
+  // Üye olmadan verilmiş açık siparişin değerlendirme kodu (paket fişinde ve teslim e-postasında yazar)
+  const reviewCode = closed
+    ? null
+    : await ensureReviewCode(order.id).catch((err) => {
+        console.error("[admin/siparis] Değerlendirme kodu alınamadı:", err);
+        return null;
+      });
 
   return (
     <AdminShell user={user} activeSection="siparisler">
@@ -388,6 +397,26 @@ export default async function AdminSiparisDetay({ params }: Props) {
             )}
 
             <section className={`${s.card} ${s.more}`}>
+              {reviewCode && (
+                <details className={s.moreItem}>
+                  <summary>Değerlendirme kodu (üye olmayan müşteri)</summary>
+                  <div className={s.moreBody}>
+                    <p className={s.text}>
+                      <span style={{ fontFamily: "ui-monospace, Consolas, monospace", fontSize: "1.05rem", fontWeight: 700, letterSpacing: "0.08em" }}>
+                        {reviewCode.code}
+                      </span>{" "}
+                      · {reviewCode.usedAt ? `kullanıldı (${dateTimeTr(reviewCode.usedAt)})` : "henüz kullanılmadı"}
+                    </p>
+                    <p className={s.muted} style={{ marginTop: "0.4rem" }}>
+                      Kod paket fişinin altında ve teslim e-postasında yazar; müşteri sipariş teslim edildikten sonra bir kez
+                      kullanır ve o cihazdan değerlendirmesini yazıp düzenler. Sipariş numarası tek başına değerlendirme
+                      yazdırmaz. Müşteri kodu kaybettiyse ya da başka cihazdan yazmak istiyorsa yeni kod oluşturup ona
+                      iletin (eski kod çalışmaz).
+                    </p>
+                    <ReviewCodeActions orderId={order.id} />
+                  </div>
+                </details>
+              )}
               <details className={s.moreItem}>
                 <summary>Müşteriye e-posta yaz</summary>
                 <div className={s.moreBody}>

@@ -5,7 +5,8 @@
  * POST /api/reviews             — değerlendirme gönder/güncelle → hemen yayında (onay yok)
  *   - Üye: gövdede orderRef yok; hak hesabına bağlı teslim edilmiş siparişten (lib/repositories/product-review).
  *   - Üye olmadan verilmiş sipariş: gövdede orderRef (sipariş numarası) — sipariş sayfasındaki form gönderir; giriş
- *     gerekmez, sipariş numarası sipariş sayfasının da anahtarıdır.
+ *     gerekmez ama sipariş numarası yetmez (F-33): tek kullanımlık değerlendirme kodunu kullanmış tarayıcının izni
+ *     (çerez, /api/reviews/code) gerekir; yoksa 401 needsCode.
  *
  * Yönetici hesabı değerlendirme yazamaz. Yayınlanınca ürün sayfasının önbelleği tazelenir.
  */
@@ -16,6 +17,7 @@ import { scheduleNotifications } from "@/lib/notifications/run";
 import { getCurrentCustomer } from "@/lib/auth/session";
 import { isStaffRole } from "@/lib/auth/roles";
 import {
+  ReviewNeedsCodeError,
   ReviewNeedsLoginError,
   ReviewNotAllowedError,
   ReviewProductNotFoundError,
@@ -24,6 +26,7 @@ import {
   submitOrderReview,
   submitReview,
 } from "@/lib/repositories/product-review.repository";
+import { REVIEW_GRANT_COOKIE, parseGrantCookie } from "@/lib/reviews/review-code";
 import { clientIp, rateLimit } from "@/lib/security/rate-limit";
 import { isSameOrigin } from "@/lib/security/same-origin";
 import { ACCOUNT_MESSAGES, ReviewSchema, accountFieldErrors } from "@/lib/validation/account";
@@ -36,6 +39,8 @@ const NOT_ALLOWED: Record<ReviewNotAllowedError["eligibility"], string> = {
 };
 
 const NEEDS_LOGIN = "Bu siparişi üyeliğinizle verdiniz. Değerlendirmek için giriş yapın.";
+const NEEDS_CODE =
+  "Değerlendirme yazmak için paketinizdeki fişte ya da teslim e-postanızda yazan değerlendirme kodunu girin.";
 
 export async function GET(request: NextRequest) {
   const productId = request.nextUrl.searchParams.get("productId");
@@ -87,7 +92,11 @@ export async function POST(request: NextRequest) {
 
   try {
     const { review, productSlug } = orderRef
-      ? await submitOrderReview({ ...parsed.data, reference: orderRef })
+      ? await submitOrderReview({
+          ...parsed.data,
+          reference: orderRef,
+          grantTokens: parseGrantCookie(request.cookies.get(REVIEW_GRANT_COOKIE)?.value),
+        })
       : await submitReview({ ...parsed.data, userId: session!.id });
     revalidateProductPage(productSlug);
     scheduleNotifications();
@@ -98,6 +107,9 @@ export async function POST(request: NextRequest) {
     }
     if (err instanceof ReviewNeedsLoginError) {
       return NextResponse.json({ error: NEEDS_LOGIN, needsLogin: true }, { status: 401 });
+    }
+    if (err instanceof ReviewNeedsCodeError) {
+      return NextResponse.json({ error: NEEDS_CODE, needsCode: true }, { status: 401 });
     }
     if (err instanceof ReviewNotAllowedError) {
       return NextResponse.json({ error: NOT_ALLOWED[err.eligibility], eligibility: err.eligibility }, { status: 403 });

@@ -1,6 +1,8 @@
 /**
  * Admin — paketleme fişi (yazdırılır): gönderen, alıcı, ürünler ve adetleri, koli planı, müşteri notu, kapıda
  * tahsilat / alıcı ödemeli kargo uyarısı. Fiyat yazmaz (pakete konabilir).
+ * Üye olmadan verilmiş siparişte altta tek kullanımlık değerlendirme kodu (F-33): fiş pakete konunca kod yalnız
+ * paketi teslim alanın elinde olur (sipariş numarası tek başına değerlendirme yazdırmaz).
  */
 
 import { notFound } from "next/navigation";
@@ -10,6 +12,7 @@ import { getBusinessInfo } from "@/lib/business/business.repository";
 import { formatPhoneTr, sellerDisplayName } from "@/lib/business/info";
 import { formatPrice } from "@/types";
 import { siteUrl } from "@/lib/email/brand";
+import { ensureReviewCode } from "@/lib/reviews/review-code";
 import PrintButton from "./PrintButton";
 
 export const dynamic = "force-dynamic";
@@ -27,6 +30,11 @@ export default async function PackingSlip({ params }: { params: Promise<{ id: st
   const cod = order.paymentMethod === "CASH_ON_DELIVERY";
   const recipientPays = a?.shippingMode === "recipient";
   const units = order.items.reduce((n, i) => n + i.quantity, 0);
+  // Fiş basılınca kod oluşur (üyelik siparişinde yok: değerlendirme hesapla yazılır)
+  const reviewCode = await ensureReviewCode(order.id).catch((err) => {
+    console.error("[fis] Değerlendirme kodu alınamadı:", err);
+    return null;
+  });
 
   return (
     <div style={st.page}>
@@ -118,6 +126,17 @@ export default async function PackingSlip({ params }: { params: Promise<{ id: st
       <p style={{ ...st.small, marginTop: 24 }}>
         Teşekkür ederiz. Siparişinizin durumu ve belgeleri: {siteUrl()}/siparis/{order.reference}
       </p>
+
+      {reviewCode && (
+        <section style={st.review} aria-label="Değerlendirme kodu">
+          <p style={{ margin: 0, fontWeight: 700, fontSize: 14 }}>Ürünlerimizi değerlendirin</p>
+          <p style={{ ...st.p, margin: "4px 0 8px" }}>
+            Siparişiniz teslim edildikten sonra {siteUrl().replace(/^https?:\/\//, "")}/degerlendir adresine girip bu kodu yazın:
+          </p>
+          <p style={st.code}>{reviewCode.code}</p>
+          <p style={{ ...st.small, marginTop: 6 }}>Kod tek kullanımlıktır; kimseyle paylaşmayın.</p>
+        </section>
+      )}
     </div>
   );
 }
@@ -147,4 +166,6 @@ const st: Record<string, React.CSSProperties> = {
   table: { width: "100%", borderCollapse: "collapse", marginTop: 16 },
   th: { textAlign: "left", borderBottom: "1px solid #111", padding: "6px 4px", fontSize: 12 },
   td: { borderBottom: "1px solid #ddd", padding: "7px 4px" },
+  review: { marginTop: 18, border: "1.5px dashed #555", borderRadius: 6, padding: "12px 14px", breakInside: "avoid" },
+  code: { margin: 0, fontFamily: "'SFMono-Regular', Consolas, 'Courier New', monospace", fontSize: 24, fontWeight: 700, letterSpacing: "0.12em" },
 };

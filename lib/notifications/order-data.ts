@@ -15,6 +15,8 @@ import type { BillingInfo, ShippingAddress } from "@/types";
 export interface OrderEmailData {
   id: string;
   reference: string;
+  /** Üyelikle verilmiş sipariş (değerlendirme girişle); false = üye olmadan (değerlendirme koduyla) */
+  memberOrder: boolean;
   status: string;
   paymentMethod: "CARD" | "BANK_TRANSFER" | "CASH_ON_DELIVERY";
   createdAt: Date;
@@ -56,6 +58,7 @@ export async function loadOrderEmailData(orderId: string): Promise<OrderEmailDat
   return {
     id: order.id,
     reference: order.reference,
+    memberOrder: order.userId !== null,
     status: order.status,
     paymentMethod: order.paymentMethod,
     createdAt: order.createdAt,

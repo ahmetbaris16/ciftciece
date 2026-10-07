@@ -17,11 +17,12 @@ export const LEGAL_DOCUMENTS = {
     path: "/mesafeli-satis-sozlesmesi",
     version: "2026-10-02",
   },
-  // Üye olurken onaylanır (siparişte değil)
+  // Üye olurken onaylanır (siparişte değil). 2026-10-07: değerlendirme cümleleri (06.10 anında yayın, 07.10
+  // değerlendirme kodu)
   MEMBERSHIP_AGREEMENT: {
     title: "Üyelik Sözleşmesi",
     path: "/uyelik-sozlesmesi",
-    version: "2026-10-02",
+    version: "2026-10-07",
   },
 } as const;
 

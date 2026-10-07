@@ -7,6 +7,7 @@
 import { after, before, beforeEach, test } from "node:test";
 import assert from "node:assert/strict";
 import { prisma } from "@/lib/db/prisma";
+import { ensureReviewCode } from "@/lib/reviews/review-code";
 import { processOutbox } from "@/lib/notifications/dispatcher";
 import { sendDueEmails } from "@/lib/notifications/sender";
 import { saveBusinessInfo } from "@/lib/business/business.repository";
@@ -91,6 +92,13 @@ test("havale onayı → ödeme alındı; kargo → takip numaralı e-posta; tesl
   const shipped = (await emails(order.id)).find((e) => e.kind === "ORDER_SHIPPED")!;
   assert.ok(shipped.html.includes("112233445566"));
   assert.ok(shipped.html.includes("yurticikargo.com"));
+  // Üye olmadan verilmiş sipariş: teslim e-postasında tek kullanımlık değerlendirme kodu (paket fişindekiyle aynı);
+  // kod bağlantıya konmaz
+  const delivered = (await emails(order.id)).find((e) => e.kind === "ORDER_DELIVERED")!;
+  const code = (await ensureReviewCode(order.id))!.code;
+  assert.ok(delivered.html.includes(code), "teslim e-postasında değerlendirme kodu");
+  assert.ok(delivered.text.includes(code), "düz metinde değerlendirme kodu");
+  assert.ok(!delivered.html.includes(`=${code}`) && !delivered.html.includes(code.replace("-", "")), "kod bağlantıda değil");
   // Aynı olaylar yeniden işlense de e-posta çoğalmaz
   await prisma.outboxEvent.updateMany({ data: { publishedAt: null } });
   await processOutbox();

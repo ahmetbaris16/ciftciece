@@ -305,6 +305,8 @@ model Order {
   requests        CustomerRequest[]
   // Üye olmadan verilmiş siparişten (sipariş sayfasından) yazılan ürün değerlendirmeleri
   reviews         ProductReview[]
+  // Üye olmadan verilmiş siparişin tek kullanımlık değerlendirme kodu (paket fişinde ve teslim e-postasında)
+  reviewCode      OrderReviewCode?
   // Fatura bilgisi (bireysel/kurumsal) — sipariş anındaki hâli: {type, name, companyName, taxOffice,
   // taxNumber, address, sameAsShipping}. Boş = eski sipariş (teslimat bilgileriyle bireysel kabul edilir).
   billingInfo     Json?
@@ -597,6 +599,27 @@ model ProductReview {
   @@index([productId, status])
   @@index([status, createdAt])
   @@map("product_reviews")
+}
+
+// Üye olmadan verilmiş siparişin tek kullanımlık değerlendirme kodu (F-33): sipariş numarası tek başına değerlendirme
+// yazdırmaz. Kod paket fişinde ve teslim e-postasında yazar; kodun kendisi saklanmaz (SHA-256 özeti), sunucu sırrıyla
+// yeniden hesaplanır (lib/reviews/review-code.ts). Bir kez kullanılır: kullanan tarayıcıya süreli değerlendirme izni
+// verilir (çerez; burada özeti). Yönetici yeni kod üretirse sürüm artar, eski kod ve verilmiş izin geçersiz olur.
+model OrderReviewCode {
+  id             String    @id @default(cuid())
+  orderId        String    @unique
+  order          Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  version        Int       @default(1)
+  codeHash       String    @unique @db.Char(64)
+  // Kod kullanıldı (yalnız bir kez)
+  usedAt         DateTime?
+  // Kodu kullanan tarayıcıya verilen iznin özeti ve bitişi
+  grantHash      String?   @db.Char(64)
+  grantExpiresAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@map("order_review_codes")
 }
 
 enum ReviewStatus {

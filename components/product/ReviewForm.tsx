@@ -5,12 +5,13 @@
  * hemen yayınlanır.
  *
  * Ürün sayfası (üye):
- * - Girişsiz: "Giriş yapın" ya da üye olmadan verdiği siparişi bulsun (sipariş sayfasından değerlendirir)
+ * - Girişsiz: "Giriş yapın" ya da üye olmadan verdiği siparişi değerlendirme koduyla açsın (/degerlendir)
  * - Yönetici hesabı: değerlendirme yazılmaz (uygunsuz yorumu listedeki "Yayından kaldır" ile kaldırır)
  * - Satın almamış: neden yazamadığı; sipariş verilmiş ama teslim edilmemişse "teslim edilince"
  * - Daha önce yazmış: durumu (Yayında / Yayından kaldırıldı) + "Düzenle" (düzenleme de hemen yayınlanır)
  * Sipariş sayfası (`preset`): hak sunucuda denetlendi (sipariş teslim edildi); misafir siparişinde gönderim sipariş
- * numarasıyla (orderRef), üye siparişinde oturumla yapılır. Görünüm sade (kart içinde kart yok).
+ * numarası (orderRef) + değerlendirme kodunun verdiği izinle (çerez), üye siparişinde oturumla yapılır. Görünüm sade
+ * (kart içinde kart yok).
  */
 
 import Link from "next/link";
@@ -34,7 +35,7 @@ type Load =
 const NOT_ELIGIBLE: Record<Exclude<ReviewEligibility, "eligible">, string> = {
   awaiting_delivery: "Siparişiniz teslim edildiğinde bu ürünü değerlendirebilirsiniz.",
   not_purchased:
-    "Değerlendirmeleri yalnız bu ürünü satın alan müşterilerimiz yazar. Ürünü sitemizden aldığınızda, sipariş teslim edilince burada değerlendirme yazabilirsiniz. Üye olmadan verdiğiniz siparişi sipariş sayfasından değerlendirebilirsiniz.",
+    "Değerlendirmeleri yalnız bu ürünü satın alan müşterilerimiz yazar. Ürünü sitemizden aldığınızda, sipariş teslim edilince burada değerlendirme yazabilirsiniz. Üye olmadan verdiğiniz siparişi paketinizdeki değerlendirme koduyla değerlendirebilirsiniz.",
 };
 
 interface Props {
@@ -112,9 +113,11 @@ export default function ReviewForm({ productId, productSlug, preset }: Props) {
       });
       const data = await res.json().catch(() => null);
       if (res.status === 401) {
-        // Sipariş sayfasında: üyelikle verilmiş siparişte oturum yok/düşmüş → giriş gerektiğini söyle
+        // Sipariş sayfasında: üyelikle verilmiş siparişte oturum yok/düşmüş → giriş gerektiğini söyle; misafir
+        // siparişinde değerlendirme izni yok/bitmiş → bölüm yenilenir, kod alanı açılır
         if (presetMode) {
           setFormError(data?.error ?? "Değerlendirmek için giriş yapın.");
+          if (data?.needsCode) router.refresh();
           return;
         }
         setLoad({ state: "guest" });
@@ -160,15 +163,15 @@ export default function ReviewForm({ productId, productSlug, preset }: Props) {
         <p className={styles.formTitle}>Bu ürünü satın aldınız mı?</p>
         <p className={styles.formText}>
           Değerlendirmeleri ürünü satın alan müşterilerimiz, ürün teslim edildikten sonra yazar. Üyeyseniz giriş yapın. Üye
-          olmadan sipariş verdiyseniz sipariş sayfanızdan değerlendirebilirsiniz: teslimat e-postasındaki bağlantıyla ya da
-          sipariş numaranızla.
+          olmadan sipariş verdiyseniz paketinizdeki fişte ve teslim e-postanızda yazan değerlendirme koduyla
+          yazabilirsiniz.
         </p>
         <div className={styles.formActions}>
           <Link href={`/giris?next=${encodeURIComponent(back)}`} className={styles.btnPrimary}>
             Giriş Yap
           </Link>
-          <Link href="/siparis-takip" className={styles.btnSecondary}>
-            Siparişimi Bul
+          <Link href="/degerlendir" className={styles.btnSecondary}>
+            Kodla Değerlendir
           </Link>
         </div>
       </div>

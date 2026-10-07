@@ -17,7 +17,7 @@ export default async function GizlilikPage() {
   const business = await getBusinessInfo();
   const seller = sellerDisplayName(business);
   return (
-    <LegalPage title="Gizlilik Politikası" updated="2026-10-02">
+    <LegalPage title="Gizlilik Politikası" updated="2026-10-07">
       <p>
         Bu politika, <strong>{seller}</strong> olarak sitemizi ziyaret eden ve alışveriş yapan kişilerin kişisel verilerini
         nasıl işlediğimizi açıklar. Hukuki ayrıntı ve haklarınız: <Link href="/kvkk">KVKK Aydınlatma Metni</Link>.
@@ -76,7 +76,7 @@ export default async function GizlilikPage() {
 
       <h2>6. Çerezler</h2>
       <p>
-        Yalnız sitenin çalışması için zorunlu çerezler kullanıyoruz (oturum ve güvenlik). Analiz ya da reklam çerezi yoktur.
+        Yalnız sitenin çalışması için zorunlu çerezler kullanıyoruz (oturum, güvenlik ve değerlendirme izni). Analiz ya da reklam çerezi yoktur.
         Ayrıntı: <Link href="/cerez-politikasi">Çerez Politikası</Link>.
       </p>
 
