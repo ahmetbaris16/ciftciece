@@ -4,7 +4,7 @@
  * Ürün Detay — Sepete Ekle Bölümü (Client Component)
  *
  * Server component'dan ayrıştırıldı:
- * - Varyant seçimi (interaktif)
+ * - Seçenek (varyant) seçimi; seçeneğe özel bilgi varsa seçeneklerin altında yazar (lib/catalog/variant-notes.ts)
  * - Miktar seçimi: "+" / "−" ile gösterilen fiyat adetle birlikte değişir (toplam; altında "N adet × birim fiyat")
  * - Sepete ekle (cart context)
  * - İndirim sürüyorsa: "%X İndirim" etiketi, indirimli fiyat, üstü çizili eski fiyat ve kampanya tarihleri
@@ -15,6 +15,7 @@ import { useCart } from "@/lib/cart/CartContext";
 import { STORE } from "@/lib/config/store";
 import { formatPrice } from "@/types";
 import { unitPriceLabel } from "@/lib/catalog/unit-price";
+import { variantNote } from "@/lib/catalog/variant-notes";
 import { discountPercentLabel, formatDiscountPeriod } from "@/lib/pricing/discount";
 import type { ProductDiscountInfo, ProductVariant } from "@/types";
 import styles from "./AddToCartSection.module.css";
@@ -72,6 +73,7 @@ export default function AddToCartSection({ product }: { product: ProductData }) 
       : null;
   const percent = compareAt ? discountPercentLabel(compareAt, selectedVariant!.priceKurus) : 0;
   const unitLabel = priceAvailable ? unitPriceLabel(selectedVariant!.priceKurus, selectedVariant!.name) : null;
+  const note = variantNote(selectedVariant?.sku);
   const maxQuantity = selectedVariant?.stockQuantity ?? 99;
 
   // Seçenek değişince adet yeni seçeneğin stoğunu aşmasın
@@ -85,7 +87,7 @@ export default function AddToCartSection({ product }: { product: ProductData }) 
       {/* Variant Selector */}
       {product.variants.length > 1 && (
         <div className={styles.variantSection}>
-          <p className={styles.label}>Miktar / Boyut</p>
+          <p className={styles.label}>Seçenek</p>
           <div className={styles.variantGrid}>
             {product.variants.map((variant) => (
               <button
@@ -106,6 +108,11 @@ export default function AddToCartSection({ product }: { product: ProductData }) 
               </button>
             ))}
           </div>
+          {note && (
+            <p className={styles.variantNote} data-testid="variant-note">
+              {note}
+            </p>
+          )}
         </div>
       )}
 

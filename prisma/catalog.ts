@@ -139,35 +139,25 @@ export const PRODUCTS = [
 
   // ===================== ZEYTİN =====================
   {
-    // Siyah/sarı kapaklı kavanozlar iki ayrı ürün: fotoğraflar "Sofralık Zeytin.jpg" (siyah kapak) ve
-    // "Sofralık zeytin 2.jpg" (sarı kapak). Fiyatlar kullanıcının listesinden (2026-09-30).
-    name: "Çiftçi Ece Sofralık Siyah Zeytin (Siyah Kapak)",
-    slug: "ciftciece-sofralik-siyah-zeytin-siyah-kapak",
-    description: "Orhangazi'nin dünyaca ünlü siyah zeytininden, Çiftçi Ece etiketli siyah kapaklı kavanozda taze ve lezzetli. Balık etli, yağlı, çekirdekli.",
+    // Siyah ve sarı kapaklı kavanozlarda aynı zeytin (kullanıcı, 2026-10-07): tek ürün, iki seçenek; ad, açıklama ve
+    // içerik ortak. Tek fark siyah kapağın altındaki jelatin koruma — yalnız o seçenekte yazar
+    // (lib/catalog/variant-notes.ts). Fotoğraflar "Sofralık Zeytin.jpg" (siyah kapak) ve "Sofralık zeytin 2.jpg"
+    // (sarı kapak); fiyatlar kullanıcının listesinden (2026-09-30). Eskiden iki ayrı kart ("(Siyah Kapak)",
+    // "(Sarı Kapak)"): slug'lar REMOVED_PRODUCT_SLUGS'ta, SKU'lar senkronda bu ürüne taşınır (stok/sipariş korunur).
+    name: "Çiftçi Ece Sofralık Siyah Zeytin",
+    slug: "ciftciece-sofralik-siyah-zeytin",
+    description: "Orhangazi'nin dünyaca ünlü siyah zeytininden, Çiftçi Ece etiketli kavanozda taze ve lezzetli. Balık etli, yağlı, çekirdekli.",
     categorySlug: "zeytin",
     isPublished: true,
     isFeatured: true,
     sortOrder: 2,
     images: [
       { url: "/images/products/zeytin/ciftciece-sofralik-siyah-zeytin-siyah-kapak.jpg", altText: "Çiftçi Ece Sofralık Siyah Zeytin, siyah kapaklı kavanoz", sortOrder: 0 },
+      { url: "/images/products/zeytin/ciftciece-sofralik-siyah-zeytin-sari-kapak.jpg", altText: "Çiftçi Ece Sofralık Siyah Zeytin, sarı kapaklı kavanoz", sortOrder: 1 },
     ],
     variants: [
-      { name: "Kavanoz", sku: "SYZ-SIYAH", priceKurus: 35000, sortOrder: 0, stock: 60 },
-    ],
-  },
-  {
-    name: "Çiftçi Ece Sofralık Siyah Zeytin (Sarı Kapak)",
-    slug: "ciftciece-sofralik-siyah-zeytin-sari-kapak",
-    description: "Orhangazi'nin siyah zeytininden, Çiftçi Ece etiketli sarı kapaklı kavanozda taze ve lezzetli sofralık zeytin.",
-    categorySlug: "zeytin",
-    isPublished: true,
-    isFeatured: false,
-    sortOrder: 2,
-    images: [
-      { url: "/images/products/zeytin/ciftciece-sofralik-siyah-zeytin-sari-kapak.jpg", altText: "Çiftçi Ece Sofralık Siyah Zeytin, sarı kapaklı kavanoz", sortOrder: 0 },
-    ],
-    variants: [
-      { name: "Kavanoz", sku: "SYZ-SARI", priceKurus: 20000, sortOrder: 0, stock: 40 },
+      { name: "Siyah kapaklı kavanoz", sku: "SYZ-SIYAH", priceKurus: 35000, sortOrder: 0, stock: 60 },
+      { name: "Sarı kapaklı kavanoz", sku: "SYZ-SARI", priceKurus: 20000, sortOrder: 1, stock: 40 },
     ],
   },
   // Vakumlu 2 kg paket ürün olarak satılmıyor (fiyat listesinde yok) — ürün kaydı kaldırıldı
@@ -812,8 +802,8 @@ export const REVIEWS = [
 ];
 
 /**
- * Satıştan kaldırılan ürünler. Senkron aracı: siparişte kullanılmadıysa DB'den
- * siler, kullanıldıysa yayından kaldırır (sipariş geçmişi bozulmasın).
+ * Satıştan kaldırılan ürünler. Senkron aracı: siparişte kullanılmadıysa ve değerlendirmesi/indirim kaydı yoksa DB'den
+ * siler, varsa yayından kaldırır (sipariş geçmişi, değerlendirmeler ve indirim kayıtları bozulmasın).
  */
 export const REMOVED_PRODUCT_SLUGS = [
   "pismaniye", // 2026-09-29: kullanıcı talebiyle kaldırıldı
@@ -827,6 +817,10 @@ export const REMOVED_PRODUCT_SLUGS = [
   "kuru-domates",
   // 2026-09-30 (ikinci tur): birleşik Dağlı kaydı — 425 TL'lik tekil "Bülent Dağlı Kavanoz" kalıyor
   "dagli-kestane-sekeri",
+  // 2026-10-07: siyah/sarı kapaklı kavanozlar tek üründe iki seçenek ("ciftciece-sofralik-siyah-zeytin"); varyantlar
+  // (SYZ-SIYAH, SYZ-SARI) önce oraya taşınır, eski kartlar boş kalır
+  "ciftciece-sofralik-siyah-zeytin-siyah-kapak",
+  "ciftciece-sofralik-siyah-zeytin-sari-kapak",
 ];
 
 /**

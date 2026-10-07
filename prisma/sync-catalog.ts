@@ -14,7 +14,8 @@
  *  - Varyant yalnızca REMOVED_VARIANT_SKUS'taki SKU'lar için silinir (siparişte kullanılmışsa satışa kapatılır)
  *  - Fiyat yalnızca --prices ile ve yalnızca aynı SKU'lu varyantlarda güncellenir; değişiklik varyant fiyat geçmişine
  *    yazılır (indirimde "son 10 günün en düşük fiyatı" hesabı; panelden fiyat değişikliğiyle aynı kural)
- *  - REMOVED_PRODUCT_SLUGS: siparişte kullanılmadıysa silinir (sepet satırlarıyla birlikte), kullanıldıysa yayından kaldırılır
+ *  - REMOVED_PRODUCT_SLUGS: siparişte kullanılmadıysa ve değerlendirmesi/indirim kaydı yoksa silinir (sepet satırlarıyla
+ *    birlikte), varsa yayından kaldırılır (değerlendirme ve indirim kayıtları ürünle birlikte silinmesin)
  *  - Katalogda olmayan DB ürünlerine ve varyantlarına dokunulmaz (raporlanır)
  */
 
@@ -219,11 +220,17 @@ async function main() {
 
   // ── Kaldırılan ürünler ──
   for (const slug of REMOVED_PRODUCT_SLUGS) {
-    const db = await prisma.product.findUnique({ where: { slug }, include: { variants: { include: { orderItems: { take: 1 } } } } });
+    const db = await prisma.product.findUnique({
+      where: { slug },
+      include: { variants: { include: { orderItems: { take: 1 } } }, _count: { select: { reviews: true, discounts: true } } },
+    });
     if (!db) continue;
-    const used = db.variants.some((v) => v.orderItems.length > 0);
+    const ordered = db.variants.some((v) => v.orderItems.length > 0);
+    // Ürün silinince değerlendirmeleri ve indirim kayıtları da silinirdi (cascade): onlar varsa yalnız yayından kalkar
+    const used = ordered || db._count.reviews > 0 || db._count.discounts > 0;
     if (used && !db.isPublished) continue; // zaten yayında değil
-    log(`- ${slug}: ${used ? "siparişte kullanılmış → yayından kaldır" : "sil (sepet satırlarıyla birlikte)"}`);
+    const why = ordered ? "siparişte kullanılmış" : "değerlendirmesi/indirim kaydı var";
+    log(`- ${slug}: ${used ? `${why} → yayından kaldır` : "sil (sepet satırlarıyla birlikte)"}`);
     if (APPLY) {
       if (used) await prisma.product.update({ where: { id: db.id }, data: { isPublished: false } });
       else {
