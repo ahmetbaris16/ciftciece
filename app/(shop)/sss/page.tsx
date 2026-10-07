@@ -31,6 +31,11 @@ interface QA {
 export default async function SssPage() {
   const [shipping, payment, business] = await Promise.all([getShippingSettings(), getPaymentSettings(), getBusinessInfo()]);
   const freeAbove = shipping.freeThresholdKurus > 0 ? formatPrice(shipping.freeThresholdKurus) : null;
+  // Kargo sipariş başına sabit ücret (lib/shipping/quote.ts); ücret girilmemişse gönderi alıcı ödemeli
+  const fee = shipping.feeKurus !== null ? formatPrice(shipping.feeKurus) : null;
+  const feeText = fee
+    ? `${freeAbove ? "Altındaki siparişlerde" : "Siparişlerde"} sipariş başına ${fee} kargo ücreti alınır (ürün sayısından bağımsız); tutar siparişi onaylamadan önce ödeme adımında gösterilir.`
+    : `${freeAbove ? "Altındaki siparişlerde" : "Siparişlerde"} kargo ücreti teslimatta Yurtiçi Kargo görevlisine ödenir; bu durum siparişi onaylamadan önce ödeme adımında yazar.`;
   const hours = payment.bankTransfer.paymentWindowHours;
   const phone = formatPhoneTr(business.phone);
 
@@ -97,9 +102,7 @@ export default async function SssPage() {
         },
         {
           q: "Kargo ücreti ne kadar?",
-          text: freeAbove
-            ? `${freeAbove} ve üzeri siparişlerde kargo ücretsizdir. Altında ücret paketin ağırlığına ve boyutuna göre hesaplanır ve ödeme adımında gösterilir.`
-            : "Kargo ücreti paketin ağırlığına ve boyutuna göre hesaplanır ve ödeme adımında gösterilir.",
+          text: freeAbove ? `${freeAbove} ve üzeri siparişlerde kargo ücretsizdir. ${feeText}` : feeText,
           a: (
             <>
               {freeAbove && (
@@ -107,8 +110,7 @@ export default async function SssPage() {
                   <strong>{freeAbove} ve üzeri</strong> siparişlerde kargo ücretsiz.{" "}
                 </>
               )}
-              Diğer siparişlerde ücret paketin ağırlığına ve boyutuna göre hesaplanır ve siparişi onaylamadan önce ödeme
-              adımında gösterilir. Ayrıntı: <Link href="/teslimat">Teslimat Bilgileri</Link>.
+              {feeText} Ayrıntı: <Link href="/teslimat">Teslimat Bilgileri</Link>.
             </>
           ),
         },
