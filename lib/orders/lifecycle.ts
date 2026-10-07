@@ -24,7 +24,13 @@ import {
   refundedAmountKurus,
   type OrderRow,
 } from "@/lib/repositories/order.repository";
-import { isValidTrackingNumber, normalizeTrackingNumber, trackingLinkFor } from "@/lib/shipping/carriers";
+import {
+  TRACKING_RULE_TEXT,
+  isValidTrackingNumber,
+  normalizeTrackingNumber,
+  trackingFormatIssue,
+  trackingLinkFor,
+} from "@/lib/shipping/carriers";
 
 type Tx = Prisma.TransactionClient;
 
@@ -51,19 +57,34 @@ export interface ShipInput {
   carrier: string;
   trackingNumber: string;
   trackingUrl?: string | null;
+  /** Numara firmanın olağan biçimine uymuyor ama yönetici fişle karşılaştırıp doğruladı */
+  confirmUnusual?: boolean;
+}
+
+/** Takip numarası firmanın olağan biçimine uymuyor ve yönetici onaylamadı (panel "yine de kaydet" sorar) */
+export class UnusualTrackingNumberError extends OrderTransitionError {
+  constructor(message: string) {
+    super(message, 400);
+    this.name = "UnusualTrackingNumberError";
+  }
 }
 
 /**
  * Siparişi kargoya verir (R-22: takip numarası zorunlu). Ödenmiş ya da hazırlanan sipariş SHIPPED olur;
  * zaten kargodaysa ek gönderi (ek koli) kaydedilir. Ödeme incelemesindeki (R-12), parası tamamen iade edilmiş ya
  * da müşterinin iptal isteği karar bekleyen sipariş kargolanamaz.
+ * Numara firmanın olağan biçimine (Yurtiçi: yalnız rakam, çoğunlukla 12 hane) uymuyorsa yönetici onayı gerekir.
  */
 export async function shipOrder(orderId: string, input: ShipInput, actorId: string | null) {
-  const trackingNumber = normalizeTrackingNumber(input.trackingNumber);
-  if (!isValidTrackingNumber(trackingNumber)) {
-    throw new OrderTransitionError("Takip numarası geçersiz (6–40 harf/rakam).", 400);
-  }
   const carrier = input.carrier.trim().slice(0, 60) || "Yurtiçi Kargo";
+  const trackingNumber = normalizeTrackingNumber(input.trackingNumber, carrier);
+  if (!isValidTrackingNumber(trackingNumber)) {
+    throw new OrderTransitionError(`Takip numarası geçersiz. ${TRACKING_RULE_TEXT}`, 400);
+  }
+  const unusual = trackingFormatIssue(carrier, trackingNumber);
+  if (unusual && !input.confirmUnusual) {
+    throw new UnusualTrackingNumberError(`${unusual} Fişteki numarayı kontrol edin; doğruysa “Numara doğru” kutusunu işaretleyin.`);
+  }
   const explicitUrl = input.trackingUrl?.trim() || null;
   if (explicitUrl && !/^https:\/\//.test(explicitUrl)) {
     throw new OrderTransitionError("Takip bağlantısı https:// ile başlamalı.", 400);

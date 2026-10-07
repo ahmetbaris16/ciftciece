@@ -3,6 +3,7 @@
  */
 
 import { prisma } from "@/lib/db/prisma";
+import { confirmBankTransferPayment } from "@/lib/payment/offline";
 import { createOrder } from "@/lib/repositories/order.repository";
 import type { PaymentMethod } from "@/types";
 import { createProduct } from "./db";
@@ -42,6 +43,13 @@ export async function createTestOrder(
     offlinePaymentProvider: method === "BANK_TRANSFER" ? "havale" : method === "CASH_ON_DELIVERY" ? "kapida" : undefined,
   });
   return { order, variant };
+}
+
+/** Havale ödemesi alınmış (PAID) test siparişi */
+export async function createPaidTransferOrder(opts: { stock?: number; quantity?: number; priceKurus?: number } = {}) {
+  const t = await createTestOrder({ method: "BANK_TRANSFER", dueInMinutes: 48 * 60, ...opts });
+  await confirmBankTransferPayment(t.order.id, "admin-1");
+  return t;
 }
 
 /** Siparişin son ödeme zamanını geçmişe çeker (süre doldu taklidi) */

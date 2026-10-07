@@ -130,6 +130,21 @@ a.primary {
   color: #f3a0a0;
 }
 
+/* Alanın altındaki canlı durum (ör. takip numarası biçimi) */
+.status {
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: rgba(232, 228, 217, 0.55);
+}
+
+.statusOk {
+  color: #9fd39f;
+}
+
+.statusWarn {
+  color: #e8c07a;
+}
+
 .ok {
   margin: 0;
   font-size: 0.8125rem;
