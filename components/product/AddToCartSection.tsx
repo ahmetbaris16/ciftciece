@@ -4,7 +4,9 @@
  * Ürün Detay — Sepete Ekle Bölümü (Client Component)
  *
  * Server component'dan ayrıştırıldı:
- * - Seçenek (varyant) seçimi; seçeneğe özel bilgi varsa seçeneklerin altında yazar (lib/catalog/variant-notes.ts)
+ * - Seçenek (varyant) seçimi; seçeneğe özel bilgi varsa seçeneklerin altında yazar, seçenekler arasında fiyat farkı
+ *   varsa nedenini de (ör. kapak altı jelatin: "… kavanoz başına ₺150,00 daha fazladır"); seçenek değişince fiyat kısa
+ *   bir an vurgulanır (lib/catalog/variant-notes.ts)
  * - Miktar seçimi: "+" / "−" ile gösterilen fiyat adetle birlikte değişir (toplam; altında "N adet × birim fiyat")
  * - Sepete ekle (cart context)
  * - İndirim sürüyorsa: "%X İndirim" etiketi, indirimli fiyat, üstü çizili eski fiyat ve kampanya tarihleri
@@ -15,7 +17,7 @@ import { useCart } from "@/lib/cart/CartContext";
 import { STORE } from "@/lib/config/store";
 import { formatPrice } from "@/types";
 import { unitPriceLabel } from "@/lib/catalog/unit-price";
-import { variantNote } from "@/lib/catalog/variant-notes";
+import { variantExplanation } from "@/lib/catalog/variant-notes";
 import { discountPercentLabel, formatDiscountPeriod } from "@/lib/pricing/discount";
 import type { ProductDiscountInfo, ProductVariant } from "@/types";
 import styles from "./AddToCartSection.module.css";
@@ -40,6 +42,8 @@ export default function AddToCartSection({ product }: { product: ProductData }) 
   );
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
+  // Seçenek değişim sayısı: fiyat vurgusu yalnız değişimde oynar (sayfa açılışında değil)
+  const [priceFlash, setPriceFlash] = useState(0);
 
   const selectedVariant = product.variants.find((v) => v.id === selectedVariantId);
 
@@ -73,13 +77,15 @@ export default function AddToCartSection({ product }: { product: ProductData }) 
       : null;
   const percent = compareAt ? discountPercentLabel(compareAt, selectedVariant!.priceKurus) : 0;
   const unitLabel = priceAvailable ? unitPriceLabel(selectedVariant!.priceKurus, selectedVariant!.name) : null;
-  const note = variantNote(selectedVariant?.sku);
+  const explanation = selectedVariant ? variantExplanation(selectedVariant, product.variants) : null;
   const maxQuantity = selectedVariant?.stockQuantity ?? 99;
 
-  // Seçenek değişince adet yeni seçeneğin stoğunu aşmasın
+  // Seçenek değişince adet yeni seçeneğin stoğunu aşmasın; fiyat kısa bir an vurgulanır (değiştiği fark edilsin)
   const selectVariant = (variant: ProductVariant) => {
+    if (variant.id === selectedVariantId) return;
     setSelectedVariantId(variant.id);
     setQuantity((q) => Math.max(1, Math.min(q, variant.stockQuantity ?? 99)));
+    setPriceFlash((n) => n + 1);
   };
 
   return (
@@ -108,10 +114,15 @@ export default function AddToCartSection({ product }: { product: ProductData }) 
               </button>
             ))}
           </div>
-          {note && (
-            <p className={styles.variantNote} data-testid="variant-note">
-              {note}
-            </p>
+          {/* Seçilen seçeneğin bilgisi ve fiyat farkının nedeni; seçim değişince okunur */}
+          {explanation && (
+            <div className={styles.variantNote} aria-live="polite">
+              <InfoIcon />
+              <p>
+                <strong data-testid="variant-note">{explanation.note}</strong>{" "}
+                <span data-testid="variant-compare">{explanation.compare}</span>
+              </p>
+            </div>
           )}
         </div>
       )}
@@ -122,7 +133,10 @@ export default function AddToCartSection({ product }: { product: ProductData }) 
       <div className={styles.priceDisplay} data-testid="product-price">
         {priceAvailable ? (
           <>
-            <span className={`${styles.price} ${compareAt ? styles.priceSale : ""}`}>
+            <span
+              key={priceFlash}
+              className={`${styles.price} ${compareAt ? styles.priceSale : ""} ${priceFlash > 0 ? styles.priceFlash : ""}`}
+            >
               {formatPrice(selectedVariant!.priceKurus * quantity)}
             </span>
             {compareAt && (
@@ -225,6 +239,25 @@ function CartIcon() {
       <circle cx="9" cy="21" r="1" />
       <circle cx="20" cy="21" r="1" />
       <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+    </svg>
+  );
+}
+
+function InfoIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 16v-4M12 8h.01" />
     </svg>
   );
 }

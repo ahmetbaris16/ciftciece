@@ -61,12 +61,35 @@
   color: var(--color-text-muted);
 }
 
-/* Seçeneğe özel bilgi (ör. "Kapağın altında jelatin koruma bulunur.") */
+/* Seçilen seçeneğin bilgisi ve fiyat farkının nedeni (ör. kapak altı jelatin); seçim değişince içerik değişir */
 .variantNote {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
   margin: var(--space-3) 0 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(138, 155, 122, 0.4);
+  background: rgba(138, 155, 122, 0.12);
   font-size: var(--text-sm);
-  line-height: 1.5;
+  line-height: 1.55;
   color: var(--color-text-secondary);
+}
+
+.variantNote svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--color-sage);
+}
+
+.variantNote p {
+  margin: 0;
+}
+
+.variantNote strong {
+  display: block;
+  font-weight: 600;
+  color: var(--color-text);
 }
 
 /* Price */
@@ -99,6 +122,29 @@
 
 .priceSale {
   color: var(--color-sale);
+}
+
+/* Seçenek değişince fiyat kısa bir an vurgulanır (yerleşimi kaydırmadan: gölge + zemin) */
+.priceFlash {
+  border-radius: 6px;
+  animation: priceFlash 0.9s ease-out;
+}
+
+@keyframes priceFlash {
+  0% {
+    background-color: rgba(138, 155, 122, 0.3);
+    box-shadow: 0 0 0 6px rgba(138, 155, 122, 0.3);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .priceFlash {
+    animation: none;
+  }
 }
 
 .priceOriginal {
