@@ -2,15 +2,28 @@
 
 /**
  * Admin — Yeni Ürün Oluşturma Formu
+ *
+ * Fotoğraflar ürünü kaydetmeden önce seçilebilir: seçilince tarayıcıda küçültülür ve önizlenir, ürün
+ * oluşturulunca sırayla yüklenir (ilk fotoğraf kapak). Biri yüklenemezse ürün yine oluşur; düzenleme
+ * sayfası kaç fotoğrafın eksik kaldığını yazar.
  */
 
-import { useState, type FormEvent } from "react";
+import Image from "next/image";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { Category } from "@/types";
 import { parseTlInput } from "@/lib/payment/money";
 import { VAT_INPUT_RULE, parseVatPercent } from "@/lib/catalog/vat";
 import { STOCK_INPUT_RULE, parseStockInput } from "@/lib/catalog/stock-input";
 import VatRateField from "./VatRateField";
+import imgStyles from "./ProductImagesManager.module.css";
+import {
+  IMAGE_ACCEPT,
+  MAX_PRODUCT_IMAGES,
+  postProductImage,
+  prepareProductImage,
+  type PreparedImage,
+} from "./productImageUpload";
 
 interface Props {
   categories: Category[];
@@ -22,6 +35,11 @@ interface VariantInput {
   priceTL: string;
   /** Yazıldığı gibi; boş = 0 (alan silinip istenen sayı yazılabilsin diye metin tutulur) */
   stockText: string;
+}
+
+interface PendingPhoto extends PreparedImage {
+  key: string;
+  previewUrl: string;
 }
 
 export default function ProductCreateForm({ categories }: Props) {
@@ -41,6 +59,62 @@ export default function ProductCreateForm({ categories }: Props) {
   const [variants, setVariants] = useState<VariantInput[]>([
     { name: "", priceTL: "", stockText: "" },
   ]);
+
+  const photoInput = useRef<HTMLInputElement>(null);
+  const [photos, setPhotos] = useState<PendingPhoto[]>([]);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<string | null>(null);
+
+  // Önizleme adresleri sayfadan çıkınca bırakılır
+  const photosRef = useRef(photos);
+  useEffect(() => {
+    photosRef.current = photos;
+  }, [photos]);
+  useEffect(() => () => photosRef.current.forEach((p) => URL.revokeObjectURL(p.previewUrl)), []);
+
+  async function pickPhotos(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setPhotoBusy(true);
+    setPhotoError(null);
+    const errors: string[] = [];
+    const added: PendingPhoto[] = [];
+    const seen = new Set(photos.map((p) => p.key));
+    let room = MAX_PRODUCT_IMAGES - photos.length;
+    try {
+      for (const file of Array.from(files)) {
+        const key = `${file.name}:${file.size}:${file.lastModified}`;
+        if (seen.has(key)) continue;
+        if (room <= 0) {
+          errors.push(`Bir üründe en fazla ${MAX_PRODUCT_IMAGES} fotoğraf olabilir.`);
+          break;
+        }
+        const prepared = await prepareProductImage(file);
+        if (typeof prepared === "string") {
+          errors.push(prepared);
+          continue;
+        }
+        seen.add(key);
+        room--;
+        added.push({ ...prepared, key, previewUrl: URL.createObjectURL(prepared.blob) });
+      }
+    } finally {
+      setPhotos((prev) => [...prev, ...added]);
+      setPhotoError(errors.length > 0 ? errors.join(" ") : null);
+      setPhotoBusy(false);
+      if (photoInput.current) photoInput.current.value = "";
+    }
+  }
+
+  function removePhoto(key: string) {
+    const gone = photos.find((p) => p.key === key);
+    if (gone) URL.revokeObjectURL(gone.previewUrl);
+    setPhotos((prev) => prev.filter((p) => p.key !== key));
+  }
+
+  function makeCover(key: string) {
+    setPhotos((prev) => [...prev.filter((p) => p.key === key), ...prev.filter((p) => p.key !== key)]);
+  }
 
   function addVariant() {
     setVariants((prev) => [...prev, { name: "", priceTL: "", stockText: "" }]);
@@ -114,13 +188,28 @@ export default function ProductCreateForm({ categories }: Props) {
         return;
       }
 
-      // Fotoğraflar ürün kaydından sonra eklenir: düzenleme sayfasına geç
+      // Seçilen fotoğraflar sırayla yüklenir (ilk = kapak). Ürün oluştu: hata olsa da form yeniden
+      // gönderilmez (ikinci ürün açılırdı), düzenleme sayfası eksik kalanı söyler
       const createdId = (data as { product?: { id?: string } }).product?.id;
-      router.push(createdId ? `/admin/urunler/${createdId}?yeni=1` : "/admin/urunler");
+      if (!createdId) {
+        router.push("/admin/urunler");
+        router.refresh();
+        return;
+      }
+      let uploaded = 0;
+      for (const [i, photo] of photos.entries()) {
+        setProgress(`Fotoğraf ${i + 1} / ${photos.length} yükleniyor…`);
+        const failure = await postProductImage(createdId, photo, name.trim()).catch(() => "bağlantı hatası");
+        if (failure === null) uploaded++;
+      }
+      const missing = photos.length - uploaded;
+      const query = photos.length > 0 ? `&foto=${uploaded}${missing > 0 ? `&eksik=${missing}` : ""}` : "";
+      router.push(`/admin/urunler/${createdId}?yeni=1${query}`);
       router.refresh();
     } catch {
       setMessage("Bir hata oluştu");
       setSaving(false);
+      setProgress(null);
     }
   }
 
@@ -169,6 +258,61 @@ export default function ProductCreateForm({ categories }: Props) {
         <VatRateField value={vatPercent} onChange={setVatPercent} />
       </div>
 
+      <section className={imgStyles.wrap} aria-labelledby="new-product-photos">
+        <div className={imgStyles.head}>
+          <h2 id="new-product-photos" className={imgStyles.title}>
+            Fotoğraflar
+          </h2>
+          <button
+            type="button"
+            className={imgStyles.upload}
+            onClick={() => photoInput.current?.click()}
+            disabled={photoBusy || saving || photos.length >= MAX_PRODUCT_IMAGES}
+          >
+            {photoBusy ? "Hazırlanıyor…" : "Fotoğraf seç"}
+          </button>
+          <input
+            ref={photoInput}
+            type="file"
+            accept={IMAGE_ACCEPT}
+            multiple
+            hidden
+            onChange={(e) => void pickPhotos(e.target.files)}
+          />
+        </div>
+        <p className={imgStyles.hint}>
+          İlk fotoğraf ürün kartında ve ürün sayfasında kapak olarak görünür. Fotoğraflar otomatik küçültülür ve
+          “Ürün Oluştur”a basınca ürünle birlikte kaydedilir. Sonradan da eklenebilir.
+        </p>
+        {photoError && (
+          <p className={imgStyles.error} role="alert">
+            {photoError}
+          </p>
+        )}
+        {photos.length > 0 && (
+          <ul className={imgStyles.grid}>
+            {photos.map((p, i) => (
+              <li key={p.key} className={imgStyles.item}>
+                <div className={imgStyles.thumb}>
+                  <Image src={p.previewUrl} alt={`Seçilen fotoğraf ${i + 1}`} fill sizes="200px" style={{ objectFit: "cover" }} />
+                  {i === 0 && <span className={imgStyles.cover}>Kapak</span>}
+                </div>
+                <div className={imgStyles.actions}>
+                  {i > 0 && (
+                    <button type="button" onClick={() => makeCover(p.key)} disabled={saving}>
+                      Kapak yap
+                    </button>
+                  )}
+                  <button type="button" className={imgStyles.danger} onClick={() => removePhoto(p.key)} disabled={saving}>
+                    Çıkar
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
       <div style={styles.section}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
           <h2 style={styles.sectionTitle}>Varyantlar</h2>
@@ -214,7 +358,7 @@ export default function ProductCreateForm({ categories }: Props) {
         border: "none", borderRadius: "8px", color: "#fff",
         fontSize: "0.9375rem", fontWeight: 600, cursor: saving ? "not-allowed" : "pointer",
       }}>
-        {saving ? "Oluşturuluyor..." : "Ürün Oluştur"}
+        {saving ? (progress ?? "Oluşturuluyor...") : "Ürün Oluştur"}
       </button>
     </form>
   );

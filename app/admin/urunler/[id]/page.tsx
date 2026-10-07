@@ -16,13 +16,28 @@ import { formatPrice } from "@/types";
 
 interface Props {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ yeni?: string }>;
+  searchParams: Promise<{ yeni?: string; foto?: string; eksik?: string }>;
+}
+
+/** Yeni ürün formundan gelindiyse: kaç fotoğraf eklendi, kaçı yüklenemedi */
+function createdNotice(foto?: string, eksik?: string): { text: string; warn: boolean } {
+  const added = Number(foto ?? 0) || 0;
+  const missing = Number(eksik ?? 0) || 0;
+  if (missing > 0) {
+    return {
+      text: `Ürün oluşturuldu${added > 0 ? `, ${added} fotoğraf eklendi` : ""}. ${missing} fotoğraf yüklenemedi (bağlantı ya da sunucu hatası); aşağıdaki “Fotoğraf ekle” ile yeniden ekleyin.`,
+      warn: true,
+    };
+  }
+  if (added > 0) return { text: `Ürün oluşturuldu, ${added} fotoğraf eklendi.`, warn: false };
+  return { text: "Ürün oluşturuldu. Fotoğraflarını aşağıdan ekleyebilirsiniz.", warn: false };
 }
 
 export default async function AdminUrunDuzenle({ params, searchParams }: Props) {
   const user = await requireAdmin();
   const { id } = await params;
-  const { yeni } = await searchParams;
+  const { yeni, foto, eksik } = await searchParams;
+  const notice = yeni ? createdNotice(foto, eksik) : null;
   
   const [product, categories] = await Promise.all([
     getProductByIdForAdmin(id),
@@ -40,9 +55,16 @@ export default async function AdminUrunDuzenle({ params, searchParams }: Props) 
         <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "#e8e4d9", margin: "0 0 1.5rem" }}>
           {product.name}
         </h1>
-        {yeni && (
-          <p style={{ margin: "0 0 1rem", padding: "0.75rem 1rem", borderRadius: 10, background: "rgba(159,211,159,0.1)", color: "#9fd39f", fontSize: "0.875rem" }}>
-            Ürün oluşturuldu. Şimdi fotoğraflarını ekleyin.
+        {notice && (
+          <p
+            role="status"
+            style={{
+              margin: "0 0 1rem", padding: "0.75rem 1rem", borderRadius: 10, fontSize: "0.875rem", lineHeight: 1.6,
+              background: notice.warn ? "rgba(245,196,107,0.12)" : "rgba(159,211,159,0.1)",
+              color: notice.warn ? "#f5c46b" : "#9fd39f",
+            }}
+          >
+            {notice.text}
           </p>
         )}
         {discount && (

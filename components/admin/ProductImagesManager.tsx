@@ -2,50 +2,19 @@
 
 /**
  * Admin — ürün fotoğrafları: yükle (birden çok), kapak yap, açıklama (alt metin), kaldır.
- * Fotoğraf yüklemeden önce tarayıcıda küçültülür (en uzun kenar 1600 px, WebP; desteklenmiyorsa JPEG):
- * telefon fotoğrafı (5–10 MB) ~200–500 KB'a iner, veritabanı şişmez, sayfa hızlı açılır.
+ * Fotoğraf yüklemeden önce tarayıcıda küçültülür (productImageUpload.ts).
  */
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import styles from "./ProductImagesManager.module.css";
+import { IMAGE_ACCEPT, uploadProductImage } from "./productImageUpload";
 
 export interface AdminProductImage {
   id: string;
   url: string;
   altText: string | null;
-}
-
-const MAX_EDGE = 1600;
-const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
-
-const toBlob = (canvas: HTMLCanvasElement, type: string, quality: number) =>
-  new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, quality));
-
-async function shrink(file: File): Promise<{ blob: Blob; width: number; height: number }> {
-  const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
-  const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
-  const width = Math.max(1, Math.round(bitmap.width * scale));
-  const height = Math.max(1, Math.round(bitmap.height * scale));
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("canvas");
-  ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(bitmap, 0, 0, width, height);
-  let blob = await toBlob(canvas, "image/webp", 0.85);
-  if (!blob || blob.type !== "image/webp") {
-    // WebP kodlayamayan tarayıcı (eski Safari): JPEG; saydam alanlar beyaz olur
-    ctx.globalCompositeOperation = "destination-over";
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, width, height);
-    blob = await toBlob(canvas, "image/jpeg", 0.85);
-  }
-  bitmap.close();
-  if (!blob) throw new Error("encode");
-  return { blob, width, height };
 }
 
 export default function ProductImagesManager({
@@ -79,26 +48,13 @@ export default function ProductImagesManager({
     let done = 0;
     try {
       for (const file of list) {
-        setStatus(`${done + 1} / ${list.length} hazırlanıyor…`);
-        let shrunk: { blob: Blob; width: number; height: number };
-        try {
-          shrunk = await shrink(file);
-        } catch {
-          setError(`“${file.name}” açılamadı. JPEG, PNG ya da WebP fotoğraf seçin (iPhone'da “En Uyumlu” biçim).`);
+        const failure = await uploadProductImage(productId, file, productName, (stage) =>
+          setStatus(`${done + 1} / ${list.length} ${stage === "prepare" ? "hazırlanıyor" : "yükleniyor"}…`)
+        );
+        if (failure) {
+          setError(failure);
           break;
         }
-        if (shrunk.blob.size > MAX_UPLOAD_BYTES) {
-          setError(`“${file.name}” küçültüldükten sonra bile 2 MB'tan büyük.`);
-          break;
-        }
-        setStatus(`${done + 1} / ${list.length} yükleniyor…`);
-        const form = new FormData();
-        form.append("file", shrunk.blob, file.name.replace(/\.[^.]+$/, "") + (shrunk.blob.type === "image/webp" ? ".webp" : ".jpg"));
-        form.append("altText", productName);
-        form.append("width", String(shrunk.width));
-        form.append("height", String(shrunk.height));
-        const ok = await call(`/api/admin/products/${productId}/images`, { method: "POST", body: form });
-        if (!ok) break;
         done++;
       }
     } catch {
@@ -164,7 +120,7 @@ export default function ProductImagesManager({
         <input
           ref={input}
           type="file"
-          accept="image/jpeg,image/png,image/webp"
+          accept={IMAGE_ACCEPT}
           multiple
           hidden
           onChange={(e) => void upload(e.target.files)}
