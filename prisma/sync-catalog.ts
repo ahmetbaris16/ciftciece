@@ -6,6 +6,13 @@
  *   npm run db:sync-catalog -- --apply   → kategori, ürün bilgisi, görsel, yayın durumu, varyant ad/sıra,
  *                                          katalogda olup DB'de olmayan varyantları ve varyant taşımalarını uygular
  *   ... --apply --prices                 → ayrıca aynı SKU'daki fiyat farklarını da uygular
+ *   ... --only=slug1,slug2               → YALNIZ bu ürünler (katalog ya da REMOVED_PRODUCT_SLUGS slug'ları); kategoriler,
+ *                                          diğer ürünler ve kaldırılan varyantlar atlanır
+ *
+ * DİKKAT: tam senkron, katalogdaki görselleri ve yayın durumunu veritabanına yazar — panelden yüklenen fotoğrafları ve
+ * panelde açılıp kapatılan ürünleri GERİ ALIR. Panelde düzenlenmiş bir veritabanında önce kuru çalıştırın; yalnız belli
+ * bir katalog değişikliği uygulanacaksa --only kullanın (2026-10-07: kapak birleşmesi kullanıcının veritabanına böyle
+ * uygulandı).
  *
  * Güvenlik kuralları (sistemi bozmamak için):
  *  - Stok (inventory) yalnızca YENİ oluşturulan varyantta başlangıç değeri olarak yazılır; var olanlarda ASLA değişmez
@@ -25,6 +32,20 @@ import { CATEGORIES, PRODUCTS, REMOVED_PRODUCT_SLUGS, REMOVED_VARIANT_SKUS } fro
 const prisma = new PrismaClient();
 const APPLY = process.argv.includes("--apply");
 const PRICES = process.argv.includes("--prices");
+// --only=slug1,slug2: yalnız bu ürünler; yazım hatası sessizce "hiçbir şey" yapmasın diye bilinmeyen slug'da durulur
+const ONLY = (() => {
+  const arg = process.argv.find((a) => a.startsWith("--only="));
+  if (!arg) return null;
+  const slugs = arg.slice("--only=".length).split(",").map((x) => x.trim()).filter(Boolean);
+  const known = new Set([...PRODUCTS.map((p) => p.slug), ...REMOVED_PRODUCT_SLUGS]);
+  const unknown = slugs.filter((x) => !known.has(x));
+  if (slugs.length === 0 || unknown.length > 0) {
+    console.error(`--only: katalogda olmayan slug: ${unknown.join(", ") || "(boş)"}`);
+    process.exit(1);
+  }
+  return new Set(slugs);
+})();
+const selected = (slug: string) => !ONLY || ONLY.has(slug);
 const tl = (k: number) => `${(k / 100).toLocaleString("tr-TR")} TL`;
 
 const report: string[] = [];
@@ -47,10 +68,10 @@ async function updatePrice(variant: { id: string; priceKurus: number }, since: D
 }
 
 async function main() {
-  log(`Mod: ${APPLY ? "UYGULA" : "KURU ÇALIŞMA (değişiklik yok)"}${PRICES ? " + FİYATLAR" : ""}\n`);
+  log(`Mod: ${APPLY ? "UYGULA" : "KURU ÇALIŞMA (değişiklik yok)"}${PRICES ? " + FİYATLAR" : ""}${ONLY ? ` — yalnız: ${[...ONLY].join(", ")}` : ""}\n`);
 
-  // ── Kategoriler ──
-  for (const cat of CATEGORIES) {
+  // ── Kategoriler (--only'de atlanır) ──
+  for (const cat of ONLY ? [] : CATEGORIES) {
     const db = await prisma.category.findUnique({ where: { slug: cat.slug } });
     const data = {
       name: cat.name,
@@ -80,6 +101,7 @@ async function main() {
   };
 
   for (const prod of PRODUCTS) {
+    if (!selected(prod.slug)) continue;
     const category = cats.get(prod.categorySlug);
     if (!category) {
       log(`! kategori yok (${prod.categorySlug}) — ${prod.slug} atlandı${APPLY ? "" : " (uygulamada oluşacak)"}`);
@@ -197,8 +219,8 @@ async function main() {
     }
   }
 
-  // ── Kaldırılan varyantlar ──
-  for (const sku of REMOVED_VARIANT_SKUS) {
+  // ── Kaldırılan varyantlar (--only'de atlanır) ──
+  for (const sku of ONLY ? [] : REMOVED_VARIANT_SKUS) {
     const dv = await prisma.productVariant.findUnique({
       where: { sku },
       include: { product: { select: { slug: true } }, orderItems: { take: 1 } },
@@ -220,6 +242,7 @@ async function main() {
 
   // ── Kaldırılan ürünler ──
   for (const slug of REMOVED_PRODUCT_SLUGS) {
+    if (!selected(slug)) continue;
     const db = await prisma.product.findUnique({
       where: { slug },
       include: { variants: { include: { orderItems: { take: 1 } } }, _count: { select: { reviews: true, discounts: true } } },
@@ -243,9 +266,9 @@ async function main() {
     }
   }
 
-  // ── Katalogda olmayan DB ürünleri ──
+  // ── Katalogda olmayan DB ürünleri (--only'de atlanır) ──
   const known = new Set([...PRODUCTS.map((p) => p.slug), ...REMOVED_PRODUCT_SLUGS]);
-  for (const p of await prisma.product.findMany({ select: { slug: true, isPublished: true } })) {
+  for (const p of ONLY ? [] : await prisma.product.findMany({ select: { slug: true, isPublished: true } })) {
     if (!known.has(p.slug)) log(`? DB'de var, katalogda yok: ${p.slug}${p.isPublished ? "" : " (yayında değil)"}`);
   }
 
