@@ -5,7 +5,7 @@
  *
  * Server component'dan ayrıştırıldı:
  * - Varyant seçimi (interaktif)
- * - Miktar seçimi
+ * - Miktar seçimi: "+" / "−" ile gösterilen fiyat adetle birlikte değişir (toplam; altında "N adet × birim fiyat")
  * - Sepete ekle (cart context)
  * - İndirim sürüyorsa: "%X İndirim" etiketi, indirimli fiyat, üstü çizili eski fiyat ve kampanya tarihleri
  */
@@ -71,6 +71,14 @@ export default function AddToCartSection({ product }: { product: ProductData }) 
       ? selectedVariant!.compareAtPriceKurus
       : null;
   const percent = compareAt ? discountPercentLabel(compareAt, selectedVariant!.priceKurus) : 0;
+  const unitLabel = priceAvailable ? unitPriceLabel(selectedVariant!.priceKurus, selectedVariant!.name) : null;
+  const maxQuantity = selectedVariant?.stockQuantity ?? 99;
+
+  // Seçenek değişince adet yeni seçeneğin stoğunu aşmasın
+  const selectVariant = (variant: ProductVariant) => {
+    setSelectedVariantId(variant.id);
+    setQuantity((q) => Math.max(1, Math.min(q, variant.stockQuantity ?? 99)));
+  };
 
   return (
     <div className={styles.wrap}>
@@ -85,7 +93,7 @@ export default function AddToCartSection({ product }: { product: ProductData }) 
                 className={`${styles.variantBtn} ${
                   selectedVariantId === variant.id ? styles.variantSelected : ""
                 } ${!variant.isAvailable ? styles.variantUnavailable : ""}`}
-                onClick={() => setSelectedVariantId(variant.id)}
+                onClick={() => selectVariant(variant)}
                 disabled={!variant.isAvailable}
                 aria-pressed={selectedVariantId === variant.id}
               >
@@ -103,23 +111,20 @@ export default function AddToCartSection({ product }: { product: ProductData }) 
 
       {/* Fiyat (indirimde: etiket + indirimli fiyat + üstü çizili eski fiyat) */}
       {compareAt && percent > 0 && <span className={styles.saleBadge}>%{percent} İndirim</span>}
-      <div className={styles.priceDisplay}>
+      {/* Birden çok adette fiyat = toplam (adet × birim fiyat); birim ve kg/L fiyatı altında yazar */}
+      <div className={styles.priceDisplay} data-testid="product-price">
         {priceAvailable ? (
           <>
             <span className={`${styles.price} ${compareAt ? styles.priceSale : ""}`}>
-              {formatPrice(selectedVariant!.priceKurus)}
+              {formatPrice(selectedVariant!.priceKurus * quantity)}
             </span>
             {compareAt && (
               <span className={styles.priceOriginal}>
                 <span className="sr-only">İndirimden önceki fiyat: </span>
-                {formatPrice(compareAt)}
+                {formatPrice(compareAt * quantity)}
               </span>
             )}
-            {unitPriceLabel(selectedVariant!.priceKurus, selectedVariant!.name) && (
-              <span className={styles.unitPrice}>
-                ({unitPriceLabel(selectedVariant!.priceKurus, selectedVariant!.name)})
-              </span>
-            )}
+            {quantity === 1 && unitLabel && <span className={styles.unitPrice}>({unitLabel})</span>}
           </>
         ) : (
           <span className={styles.priceContact}>
@@ -128,6 +133,12 @@ export default function AddToCartSection({ product }: { product: ProductData }) 
           </span>
         )}
       </div>
+      {priceAvailable && quantity > 1 && (
+        <p className={styles.qtyNote} data-testid="product-price-breakdown">
+          {quantity} adet × {formatPrice(selectedVariant!.priceKurus)}
+          {unitLabel && <span className={styles.unitPrice}> ({unitLabel})</span>}
+        </p>
+      )}
       {compareAt && product.discount && (
         <p className={styles.saleNote}>
           İndirim {formatDiscountPeriod(product.discount.startsAt, product.discount.endsAt)} tarihleri arasında geçerlidir.
@@ -150,16 +161,13 @@ export default function AddToCartSection({ product }: { product: ProductData }) 
             </button>
             <span className={styles.qtyValue} aria-live="polite" aria-atomic="true">
               {quantity}
+              {priceAvailable && <span className="sr-only"> adet, toplam {formatPrice(selectedVariant!.priceKurus * quantity)}</span>}
             </span>
             <button
               className={styles.qtyBtn}
-              onClick={() =>
-                setQuantity((q) =>
-                  Math.min(q + 1, selectedVariant?.stockQuantity ?? 99)
-                )
-              }
+              onClick={() => setQuantity((q) => Math.min(q + 1, maxQuantity))}
               aria-label="Artır"
-              disabled={quantity >= (selectedVariant?.stockQuantity ?? 99)}
+              disabled={quantity >= maxQuantity}
             >
               +
             </button>

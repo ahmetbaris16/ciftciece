@@ -64,8 +64,17 @@
 /* Price */
 .priceDisplay {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--space-2);
+  gap: 0 var(--space-2);
+}
+
+/* Birden çok adette: "3 adet × ₺350,00" (fiyatın hemen altında) */
+.qtyNote {
+  margin: calc(var(--space-4) * -1) 0 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
 }
 
 .price {
