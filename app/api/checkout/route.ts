@@ -11,12 +11,11 @@
  * 2. Her varyant için server'dan fiyat ve stok kontrol (Prisma)
  * 3. Kargo: sabit Yurtiçi Kargo ücreti; ücretsiz kargo sınırı aşıldıysa ücretsiz (lib/shipping/quote);
  *    ücret henüz girilmemişse gönderi alıcı ödemeli
- * 4. Ödeme yöntemi (kart / havale / kapıda ödeme) ayara ve tutar sınırına göre doğrulanır
- * 5. Toplam = ara toplam + kargo + yöntem ücreti (kapıda ödeme bedeli)
+ * 4. Ödeme yöntemi (kart / havale) ayara göre doğrulanır; kapıda ödeme sunulmaz (2026-10-07)
+ * 5. Toplam = ara toplam + kargo
  * 6. DB'ye order kaydet (createOrder — transaction + stok düş)
  *    - kart: PENDING, 30 dk içinde ödenmezse iptal (lib/payment/reservation.ts); istemci /api/payment/create ile ödemeye geçer
  *    - havale: PENDING, ayardaki süre (varsayılan 48 sa) içinde ödenmezse iptal
- *    - kapıda ödeme: PROCESSING (kesin sipariş)
  * 7. orderId + sonraki adım (nextStep) döndür
  *
  * GÜVENLİK:
@@ -68,7 +67,7 @@ function orderResponse(order: Order, replayed: boolean) {
   return NextResponse.json({
     success: true,
     orderId: order.id,
-    // "pay": kart ödemesini başlat (/api/payment/create); "order": sipariş sayfasına git (havale bilgisi / kapıda ödeme)
+    // "pay": kart ödemesini başlat (/api/payment/create); "order": sipariş sayfasına git (havale bilgisi)
     nextStep: order.paymentMethod === "CARD" && order.status === "PENDING" ? "pay" : "order",
     order: {
       reference: order.reference,
@@ -278,9 +277,7 @@ export async function POST(request: NextRequest) {
   const paymentDueAt =
     paymentMethod === "CARD"
       ? cardPaymentDueAt(now)
-      : paymentMethod === "BANK_TRANSFER"
-        ? new Date(now + paymentSettings.bankTransfer.paymentWindowHours * 3_600_000)
-        : null;
+      : new Date(now + paymentSettings.bankTransfer.paymentWindowHours * 3_600_000);
 
   // Üye girişliyse sipariş hesaba bağlanır (Hesabım → Siparişlerim, "Satın aldı" rozeti)
   const customer = await getCurrentCustomer().catch(() => null);
@@ -311,9 +308,8 @@ export async function POST(request: NextRequest) {
       paymentMethod,
       paymentFeeKurus: option.feeKurus,
       paymentDueAt,
-      initialStatus: paymentMethod === "CASH_ON_DELIVERY" ? "PROCESSING" : "PENDING",
-      offlinePaymentProvider:
-        paymentMethod === "BANK_TRANSFER" ? "havale" : paymentMethod === "CASH_ON_DELIVERY" ? "kapida" : undefined,
+      initialStatus: "PENDING",
+      offlinePaymentProvider: paymentMethod === "BANK_TRANSFER" ? "havale" : undefined,
       consents: {
         documents: CHECKOUT_CONSENT_DOCUMENTS.map((document) => ({ document, version: LEGAL_DOCUMENTS[document].version })),
         acceptedAt: consentAcceptedAt,

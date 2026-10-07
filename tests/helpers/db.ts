@@ -125,7 +125,6 @@ export async function enableBankTransfer(paymentWindowHours = 48) {
       iban: "TR330006100519786457841326",
       paymentWindowHours,
     },
-    cashOnDelivery: { enabled: false, feeKurus: 0, maxOrderKurus: null },
   });
   await prisma.siteSetting.upsert({
     where: { key: "payment" },

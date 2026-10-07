@@ -190,8 +190,9 @@ export const CheckoutSchema = z.object({
   // Fatura bilgisi ve sipariş notu (isteğe bağlı; yoksa bireysel, teslimattaki ad-soyad)
   billing: BillingSchema.optional(),
   note: z.string({ error: CHECKOUT_MESSAGES.note }).trim().max(500, { error: CHECKOUT_MESSAGES.note }).optional(),
-  // Kullanılabilirlik (ayar, tutar sınırı) sunucuda lib/payment/methods ile ayrıca kontrol edilir
-  paymentMethod: z.enum(["CARD", "BANK_TRANSFER", "CASH_ON_DELIVERY"], { error: CHECKOUT_MESSAGES.paymentMethod }),
+  // Kullanılabilirlik (ayar, tutar sınırı) sunucuda lib/payment/methods ile ayrıca kontrol edilir.
+  // Kapıda ödeme sunulmaz (2026-10-07): istek gelirse "bir ödeme yöntemi seçin" hatası döner.
+  paymentMethod: z.enum(["CARD", "BANK_TRANSFER"], { error: CHECKOUT_MESSAGES.paymentMethod }),
   // Ön Bilgilendirme Formu + Mesafeli Satış Sözleşmesi onayı ve müşteriye gösterilen sürüm
   // (lib/legal/documents.ts). Sunucu sürümü kendi sürümüyle karşılaştırır, onayı sipariş kaydına yazar.
   acceptTerms: z.literal(true, { error: CHECKOUT_MESSAGES.acceptTerms }),

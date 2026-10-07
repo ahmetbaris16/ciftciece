@@ -98,6 +98,7 @@ function orderRows(order: OrderContext): Array<{ label: string; value: string }>
           ? "Ücretsiz"
           : tl(order.shippingKurus),
   });
+  // Yalnız eski kayıtlar (kapıda ödeme artık sunulmuyor)
   if (order.paymentFeeKurus > 0) rows.push({ label: "Kapıda ödeme hizmet bedeli", value: tl(order.paymentFeeKurus) });
   rows.push({ label: "Tüm vergiler dahil toplam", value: tl(order.totalKurus) });
   rows.push({ label: "Ödeme yöntemi", value: order.paymentMethodLabel });
@@ -126,7 +127,7 @@ function buyerSection(order?: OrderContext): LegalSection {
 const PAYMENT_TEXTS = [
   "Kredi/banka kartı: ödeme bankanın 3D Secure güvenli ödeme sayfasında yapılır; kart bilgileri sitemize iletilmez ve saklanmaz.",
   "Havale/EFT: sipariş sonrası gösterilen hesaba, açıklamaya sipariş numarası yazılarak, belirtilen süre içinde ödenir; süresinde ödenmeyen sipariş iptal edilir ve stok ayırması kalkar.",
-  "Kapıda ödeme (sunulduğu siparişlerde): ödeme teslimatta kargo görevlisine yapılır; varsa hizmet bedeli ödeme sayfasında toplama eklenerek gösterilir.",
+  "Kapıda ödeme seçeneği yoktur.",
   "Tüm fiyatlar Türk Lirası olup KDV dahildir.",
 ];
 
@@ -167,7 +168,7 @@ export function preInformationSections(business: BusinessInfo, order?: OrderCont
       : {
           heading: "Sözleşme konusu ürünler ve fiyat",
           paragraphs: [
-            "Ürünlerin temel nitelikleri (ad, gramaj/hacim, adet), KDV dahil birim fiyatı ve toplam fiyat; kargo ücreti ve varsa ödeme yöntemi bedeli, ödeme adımında siparişi onaylamadan hemen önce ve sipariş onay e-postasında gösterilir.",
+            "Ürünlerin temel nitelikleri (ad, gramaj/hacim, adet), KDV dahil birim fiyatı ve toplam fiyat ile kargo ücreti, ödeme adımında siparişi onaylamadan hemen önce ve sipariş onay e-postasında gösterilir.",
           ],
         },
     { heading: "Ödeme", list: PAYMENT_TEXTS },

@@ -1,7 +1,7 @@
 /**
  * POST /api/payment/create
  *
- * Sipariş ID ile KART ödemesini başlatır (havale ve kapıda ödeme bu adımı kullanmaz).
+ * Sipariş ID ile KART ödemesini başlatır (havale bu adımı kullanmaz).
  * Her çağrı yeni bir ödeme denemesi açar (payment_attempts); önceki deneme ezilmez. Açık bir deneme
  * zaten ödenmişse yeni form açılmaz (lib/payment/card.ts).
  */

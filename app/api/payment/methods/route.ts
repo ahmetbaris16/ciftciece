@@ -1,5 +1,5 @@
 /**
- * GET /api/payment/methods — ödeme sayfasında gösterilecek yöntemler (kart / havale / kapıda ödeme).
+ * GET /api/payment/methods — ödeme sayfasında gösterilecek yöntemler (kart / havale; kapıda ödeme yok).
  * Seçilebilenler `available: true`; kart sanal POS bağlanana kadar "yakında" olarak döner (seçilemez).
  * IBAN gibi ayrıntılar sipariş sonrası sayfada gösterilir.
  * Seçim sipariş anında /api/checkout'ta yeniden doğrulanır.

@@ -3,9 +3,9 @@
 /**
  * Admin — Ödeme yöntemleri
  *  - Havale/EFT: banka adı, hesap sahibi, IBAN, ödeme süresi. IBAN girilmeden müşteriye gösterilmez.
- *  - Kapıda ödeme: varsayılan kapalı; hizmet bedeli ve üst tutar sınırı.
  *  - Kart (Akbank Sanal POS): göster/gizle + durum (demo / test / canlı). Banka bilgileri sunucu ortam
  *    değişkenlerinde (hPanel; kurulum: docs/YAYIN.md, docs/AKBANK_TEST.md); burada yalnız durum görünür.
+ * Kapıda ödeme sunulmaz (işletme kararı, 2026-10-07).
  */
 
 import { useState } from "react";
@@ -23,14 +23,6 @@ const CARD_STATUS: Record<ProviderStatus["mode"], { label: string; color: string
   live: { label: "Canlı", color: "#9fd39f", text: "Kartla ödemeler gerçek tahsilattır." },
 };
 
-const parseTl = (text: string): number | null => {
-  const t = text.trim().replace(/\s/g, "");
-  if (t === "") return null;
-  const n = Number(t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t);
-  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : NaN;
-};
-const tl = (kurus: number | null) => (kurus === null ? "" : String(kurus / 100).replace(".", ","));
-
 export default function PaymentSettingsForm({
   initial,
   provider,
@@ -45,9 +37,6 @@ export default function PaymentSettingsForm({
   const [holder, setHolder] = useState(initial.bankTransfer.accountHolder);
   const [iban, setIban] = useState(initial.bankTransfer.iban ? formatIban(initial.bankTransfer.iban) : "");
   const [windowHours, setWindowHours] = useState(String(initial.bankTransfer.paymentWindowHours));
-  const [codEnabled, setCodEnabled] = useState(initial.cashOnDelivery.enabled);
-  const [codFee, setCodFee] = useState(tl(initial.cashOnDelivery.feeKurus));
-  const [codMax, setCodMax] = useState(tl(initial.cashOnDelivery.maxOrderKurus));
   const [status, setStatus] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -57,7 +46,6 @@ export default function PaymentSettingsForm({
     cardEnabled && provider.mode === "live" && "Kart",
     cardEnabled && provider.mode !== "live" && "Kart (müşteriye “yakında”, seçilemez)",
     bankReady && "Havale/EFT",
-    codEnabled && "Kapıda ödeme",
   ].filter(Boolean) as string[];
 
   const save = async () => {
@@ -66,10 +54,6 @@ export default function PaymentSettingsForm({
     if (!ibanOk) return err("IBAN geçersiz: TR ile başlayan 26 karakter olmalı ve kontrol hanesi tutmalı.");
     const hours = Number(windowHours);
     if (!Number.isInteger(hours) || hours < 6 || hours > 168) return err("Havale ödeme süresi 6–168 saat arasında olmalı.");
-    const fee = parseTl(codFee);
-    if (Number.isNaN(fee)) return err("Kapıda ödeme bedeli geçerli bir tutar olmalı.");
-    const max = parseTl(codMax);
-    if (Number.isNaN(max) || max === 0) return err("Kapıda ödeme üst sınırı geçerli bir tutar olmalı (boş = sınır yok).");
 
     setSaving(true);
     try {
@@ -85,7 +69,6 @@ export default function PaymentSettingsForm({
             iban: normalizeIban(iban),
             paymentWindowHours: hours,
           },
-          cashOnDelivery: { enabled: codEnabled, feeKurus: fee ?? 0, maxOrderKurus: max },
         }),
       });
       const data = await res.json().catch(() => null);
@@ -140,26 +123,6 @@ export default function PaymentSettingsForm({
           </label>
         </div>
         <p style={s.hint}>Bu sürede ödenmeyen sipariş kendiliğinden iptal olur, stok geri döner.</p>
-      </fieldset>
-
-      {/* Kapıda ödeme */}
-      <fieldset style={s.box}>
-        <legend style={s.legend}>Kapıda ödeme</legend>
-        <label style={s.check}>
-          <input type="checkbox" checked={codEnabled} onChange={(e) => setCodEnabled(e.target.checked)} />
-          Kapıda ödemeyi sun
-        </label>
-        <div style={s.grid}>
-          <label style={s.field}>
-            <span style={s.label}>Hizmet bedeli (TL)</span>
-            <input style={s.input} inputMode="decimal" value={codFee} placeholder="0" onChange={(e) => setCodFee(e.target.value)} />
-          </label>
-          <label style={s.field}>
-            <span style={s.label}>En yüksek sipariş tutarı (TL)</span>
-            <input style={s.input} inputMode="decimal" value={codMax} placeholder="Sınır yok" onChange={(e) => setCodMax(e.target.value)} />
-          </label>
-        </div>
-        <p style={s.hint}>Açmadan önce Yurtiçi Kargo ile tahsilatlı teslimat anlaşması yapın.</p>
       </fieldset>
 
       {/* Kart */}

@@ -79,8 +79,7 @@ export default async function AdminDashboardPage() {
             ))}
           </ol>
           <p style={{ ...s.muted, margin: "0.75rem 0 0" }}>
-            Kapıda ödemeli sipariş doğrudan &quot;Kargolanacak&quot;a düşer.
-            {stages.talep > 0 ? ` ${stages.talep} siparişte müşteri talebi karar bekliyor.` : ""}{" "}
+            {stages.talep > 0 ? `${stages.talep} siparişte müşteri talebi karar bekliyor. ` : ""}
             <Link href="/admin/siparisler?durum=iptal" style={s.link}>
               İptal / iade ({stages.iptal})
             </Link>

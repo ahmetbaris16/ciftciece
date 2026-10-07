@@ -40,11 +40,11 @@ export default async function SssPage() {
       items: [
         {
           q: "Hangi ödeme yöntemleriyle ödeyebilirim?",
-          text: "Ödeme sayfasında o an kullanılabilen yöntemler görünür: kredi/banka kartı (3D Secure), havale/EFT ve sunulduğu siparişlerde kapıda ödeme.",
+          text: "Kredi/banka kartıyla (bankanın 3D Secure güvenli ödeme sayfasında) ya da havale/EFT ile ödeyebilirsiniz. Kapıda ödeme seçeneğimiz yoktur.",
           a: (
             <>
-              Ödeme sayfasında o an kullanılabilen yöntemler görünür: <strong>kredi/banka kartı</strong> (bankanın 3D Secure
-              güvenli ödeme sayfasında), <strong>havale/EFT</strong> ve sunulduğu siparişlerde <strong>kapıda ödeme</strong>.
+              <strong>Kredi/banka kartıyla</strong> (bankanın 3D Secure güvenli ödeme sayfasında) ya da{" "}
+              <strong>havale/EFT</strong> ile ödeyebilirsiniz. Kapıda ödeme seçeneğimiz yoktur.
             </>
           ),
         },

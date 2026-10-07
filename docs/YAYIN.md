@@ -84,7 +84,7 @@ gider. Sipariş teyit e-postası (sözleşmelerle birlikte) yasal zorunluluktur.
 | `CRON_SECRET` | En az 24 karakter rastgele değer (`openssl rand -hex 24`); 6. adımda kullanılır |
 | `PAYMENT_PROVIDER` | `akbank` |
 | `AKBANK_ENV` | Sanal POS gelene kadar boş bırakılabilir; test bilgileri gelince `test`, sonra `prod` |
-| `AKBANK_MERCHANT_SAFE_ID`, `AKBANK_TERMINAL_SAFE_ID`, `AKBANK_SECRET_KEY` | Akbank verince (docs/AKBANK_TEST.md). Boşken kart **demo**dur: müşteri “yakında” görür, sipariş havale/EFT ve kapıda ödemeyle alınır; yönetici girişiyle banka sayfasının demo kopyası açılır (aşağıda “Banka sunumu”) |
+| `AKBANK_MERCHANT_SAFE_ID`, `AKBANK_TERMINAL_SAFE_ID`, `AKBANK_SECRET_KEY` | Akbank verince (docs/AKBANK_TEST.md). Boşken kart **demo**dur: müşteri “yakında” görür, sipariş havale/EFT ile alınır (kapıda ödeme yok); yönetici girişiyle banka sayfasının demo kopyası açılır (aşağıda “Banka sunumu”) |
 
 Tanımlanmaması gerekenler: `ALLOW_STUB_PAYMENTS`, `LOCAL_PRODUCTION_TEST`, `AKBANK_API_URL`,
 `AKBANK_GATEWAY_URL` (yalnız yerel deneme), `ADMIN_PASSWORD` (yalnız ilk kurulumda, bilgisayarınızda).

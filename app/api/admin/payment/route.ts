@@ -1,7 +1,8 @@
 /**
  * Admin Ödeme Ayarları
  * GET /api/admin/payment — mevcut ayarlar
- * PUT /api/admin/payment — kart (taksit), havale/EFT (IBAN), kapıda ödeme (bedel, üst sınır)
+ * PUT /api/admin/payment — kart (taksit), havale/EFT (IBAN). Kapıda ödeme sunulmaz (lib/payment/methods.ts);
+ * eski panelden gelen "cashOnDelivery" alanı yok sayılır.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -28,11 +29,6 @@ const SettingsSchema = z
       paymentWindowHours: z.number().int().min(6, { error: "Havale süresi en az 6 saat olmalı." }).max(168, {
         error: "Havale süresi en fazla 168 saat (7 gün) olabilir.",
       }),
-    }),
-    cashOnDelivery: z.object({
-      enabled: z.boolean(),
-      feeKurus: z.number().int().min(0).max(100_000_00),
-      maxOrderKurus: z.number().int().min(1).max(1_000_000_00).nullable(),
     }),
   })
   .superRefine((v, ctx) => {

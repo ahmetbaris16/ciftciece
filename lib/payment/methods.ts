@@ -7,17 +7,21 @@
  *  - BANK_TRANSFER    Havale/EFT. Sipariş verilir, müşteriye IBAN + açıklama (sipariş no) gösterilir; satıcı
  *                     parayı görünce admin'de tek tıkla "ödeme alındı" der. Süresinde ödenmezse sipariş
  *                     kendiliğinden iptal olur, stok geri döner (satıcı takip etmek zorunda kalmaz).
- *  - CASH_ON_DELIVERY Kapıda ödeme. Varsayılan KAPALI: kargo firmasıyla tahsilatlı gönderi anlaşması ve
- *                     teslim alınmayan paket riski satıcıdadır; isteyen admin'den açar, hizmet bedeli ve
- *                     üst tutar sınırı koyabilir.
+ *
+ * Kapıda ödeme SUNULMAZ (işletme kararı, 2026-10-07): ödeme sayfasında ve ayarlarda yok, sunucu da kabul etmez.
+ * Veritabanındaki CASH_ON_DELIVERY değeri ve sipariş ekranlarındaki kapıda ödeme dalları yalnız eski kayıtlar
+ * içindir (silinmez; yıkıcı migration yok).
  *
  * Ayarlar admin → Ayarlar → Ödeme'den girilir (site_settings "payment"). IBAN, banka adı gibi bilgiler
  * uydurulmaz: girilmeden havale seçeneği müşteriye gösterilmez.
  */
 
+import type { PaymentMethod } from "@/types";
+
 export const PAYMENT_SETTING_KEY = "payment";
 
-export const PAYMENT_METHOD_IDS = ["CARD", "BANK_TRANSFER", "CASH_ON_DELIVERY"] as const;
+/** Müşteriye sunulan yöntemler */
+export const PAYMENT_METHOD_IDS = ["CARD", "BANK_TRANSFER"] as const;
 export type PaymentMethodId = (typeof PAYMENT_METHOD_IDS)[number];
 
 export const INSTALLMENT_CHOICES = [1, 2, 3, 6, 9, 12] as const;
@@ -37,22 +41,15 @@ export interface PaymentSettings {
     /** Sipariş bu kadar saat içinde ödenmezse otomatik iptal (stok iade) */
     paymentWindowHours: number;
   };
-  cashOnDelivery: {
-    enabled: boolean;
-    /** Kapıda ödeme hizmet bedeli (kuruş); 0 = ücretsiz */
-    feeKurus: number;
-    /** Bu tutarın üstündeki siparişlerde kapıda ödeme sunulmaz; null = sınır yok */
-    maxOrderKurus: number | null;
-  };
 }
 
 export const DEFAULT_PAYMENT_SETTINGS: PaymentSettings = {
   card: { enabled: true, maxInstallment: 6 },
   bankTransfer: { enabled: true, bankName: "", accountHolder: "", iban: "", paymentWindowHours: 48 },
-  cashOnDelivery: { enabled: false, feeKurus: 0, maxOrderKurus: null },
 };
 
-export const PAYMENT_METHOD_LABELS: Record<PaymentMethodId, string> = {
+/** Sipariş ekranları için etiketler (kapıda ödeme yalnız eski kayıtlarda görünür) */
+export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   CARD: "Kredi / Banka Kartı",
   BANK_TRANSFER: "Havale / EFT",
   CASH_ON_DELIVERY: "Kapıda Ödeme",
@@ -92,9 +89,9 @@ export interface PaymentOption {
   testMode?: boolean;
   /** Sanal POS bağlı değil: banka sayfasının demo kopyası, gerçek para çekilmez (yalnız yönetici görür) */
   demoMode?: boolean;
-  /** Bu yöntemle toplama eklenen ücret (kuruş) */
+  /** Bu yöntemle toplama eklenen ücret (kuruş); sunulan yöntemlerde 0 */
   feeKurus: number;
-  /** Kapıda ödeme üst sınırı; istemci toplam değişince yeniden kontrol eder */
+  /** Yöntemin üst tutar sınırı (null = yok); istemci toplam değişince yeniden kontrol eder */
   maxOrderKurus: number | null;
 }
 
@@ -116,7 +113,7 @@ export function isBankTransferReady(b: PaymentSettings["bankTransfer"]): boolean
 export type CardAvailability = "ready" | "test" | "demo" | "unavailable";
 
 /**
- * Müşteriye gösterilecek yöntemler. Sıra: kart, havale, kapıda ödeme. Seçilebilenler `available: true`;
+ * Müşteriye gösterilecek yöntemler. Sıra: kart, havale. Seçilebilenler `available: true`;
  * kart sanal POS bağlanana kadar "yakında" olarak listelenir (seçilemez).
  */
 export function availablePaymentOptions(s: PaymentSettings, card: CardAvailability | boolean): PaymentOption[] {
@@ -156,19 +153,6 @@ export function availablePaymentOptions(s: PaymentSettings, card: CardAvailabili
       maxOrderKurus: null,
     });
   }
-  if (s.cashOnDelivery.enabled) {
-    out.push({
-      id: "CASH_ON_DELIVERY",
-      title: PAYMENT_METHOD_LABELS.CASH_ON_DELIVERY,
-      description:
-        s.cashOnDelivery.feeKurus > 0
-          ? "Ödemeyi teslimatta kargo görevlisine yaparsınız. Kapıda ödeme hizmet bedeli toplama eklenir."
-          : "Ödemeyi teslimatta kargo görevlisine yaparsınız.",
-      available: true,
-      feeKurus: s.cashOnDelivery.feeKurus,
-      maxOrderKurus: s.cashOnDelivery.maxOrderKurus,
-    });
-  }
   return out;
 }
 
@@ -185,13 +169,13 @@ const int = (v: unknown, min: number, max: number, fallback: number) => {
 };
 const str = (v: unknown, max = 120) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
+/** Eski kayıttaki "cashOnDelivery" alanı (kapıda ödeme ayarı) okunmaz: yöntem açık kaydedilmiş olsa da sunulmaz */
 export function parsePaymentSettings(raw: string | null | undefined): PaymentSettings {
   if (!raw) return DEFAULT_PAYMENT_SETTINGS;
   try {
     const v = JSON.parse(raw) as Partial<Record<keyof PaymentSettings, Record<string, unknown>>>;
     const d = DEFAULT_PAYMENT_SETTINGS;
     const maxInst = int(v.card?.maxInstallment, 1, 12, d.card.maxInstallment);
-    const maxOrder = v.cashOnDelivery?.maxOrderKurus;
     return {
       card: {
         enabled: v.card?.enabled !== false,
@@ -203,11 +187,6 @@ export function parsePaymentSettings(raw: string | null | undefined): PaymentSet
         accountHolder: str(v.bankTransfer?.accountHolder),
         iban: normalizeIban(str(v.bankTransfer?.iban, 40)),
         paymentWindowHours: int(v.bankTransfer?.paymentWindowHours, 6, 168, d.bankTransfer.paymentWindowHours),
-      },
-      cashOnDelivery: {
-        enabled: v.cashOnDelivery?.enabled === true,
-        feeKurus: int(v.cashOnDelivery?.feeKurus, 0, 100_000_00, 0),
-        maxOrderKurus: maxOrder === null || maxOrder === undefined ? null : int(maxOrder, 0, 1_000_000_00, 0) || null,
       },
     };
   } catch (err) {

@@ -8,7 +8,7 @@
  * çubuğu ve "Ödeme adımına dön"); bilgiler baştan doldurulmaz. Kartla ödemede bankadan ödemesiz dönülürse
  * form taslağı (lib/checkout/draft.ts) geri yüklenir, ödeme adımından devam edilir.
  * Kart: sipariş açılır → /api/payment/create → bankanın (Akbank) 3D Secure ortak ödeme sayfasına imzalı form
- * gönderilir; kart bilgisi sitemize gelmez. Havale ve kapıda ödeme: sipariş sayfasına geçilir.
+ * gönderilir; kart bilgisi sitemize gelmez. Havale: sipariş sayfasına geçilir (IBAN orada). Kapıda ödeme yok.
  *
  * Güvenlik ve doğruluk:
  * - Tutar, kargo ve ödeme yöntemi sunucuda yeniden hesaplanır/doğrulanır; buradaki gösterimdir.
@@ -961,7 +961,7 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
                 </div>
                 {feeKurus > 0 && (
                   <div>
-                    <dt>Kapıda ödeme bedeli</dt>
+                    <dt>Ödeme yöntemi ücreti</dt>
                     <dd>{formatPrice(feeKurus)}</dd>
                   </div>
                 )}

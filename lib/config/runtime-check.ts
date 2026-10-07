@@ -69,7 +69,7 @@ export function checkProductionConfig(env: EnvVars): ConfigCheckResult {
 
   // Ödeme sağlayıcısı (R-13: test sağlayıcısı canlıda asla)
   const provider = env.PAYMENT_PROVIDER?.trim() || "demo";
-  const demoNote = "müşteriler kartı “yakında” görür, yönetici banka sayfasının demo kopyasıyla deneyebilir; sipariş havale/EFT ve açıksa kapıda ödemeyle alınır.";
+  const demoNote = "müşteriler kartı “yakında” görür, yönetici banka sayfasının demo kopyasıyla deneyebilir; sipariş havale/EFT ile alınır.";
   if (env.ALLOW_STUB_PAYMENTS === "true" && !(isLocalApp && localTest)) {
     errors.push("ALLOW_STUB_PAYMENTS canlıda tanımlanamaz: test sağlayıcısı her kart ödemesini başarılı sayar.");
   }
