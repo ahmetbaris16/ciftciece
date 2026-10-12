@@ -240,6 +240,7 @@
   width: 100%;
   height: 100%;
   overflow: hidden;
+  isolation: isolate; /* Safari: dönüşümlü çocuklar (paylaş paneli) yuvarlak köşe kırpmasından taşmasın */
   border-radius: calc(var(--r) - 10px);
   background: #ffffff;
   color: #202124;
@@ -314,27 +315,61 @@
   letter-spacing: -0.005em;
 }
 
+.iconBtn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* dokunma alanı: simge küçük, hedef ~40px */
+.iconBtn::before {
+  content: "";
+  position: absolute;
+  inset: -1em;
+}
+
+.iconBtn:focus-visible {
+  outline: 2px solid #1a73e8;
+  outline-offset: 0.25em;
+  border-radius: 50%;
+}
+
 .tabs {
   display: flex;
   flex-shrink: 0;
   border-bottom: 1px solid #dadce0;
 }
 
-.tabs span {
+.tab {
   position: relative;
   flex: 1;
+  min-height: 3.2em;
   padding: 0.8em 0 0.75em;
-  text-align: center;
+  border: 0;
+  background: transparent;
+  font: inherit;
   font-size: 0.98em;
   font-weight: 500;
   color: #5f6368;
+  text-align: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
-.tabs .tabActive {
+.tab[aria-selected="true"] {
   color: #1a73e8;
 }
 
-.tabs .tabActive::after {
+.tab[aria-selected="true"]::after {
   content: "";
   position: absolute;
   left: 18%;
@@ -343,6 +378,17 @@
   height: 0.28em;
   border-radius: 0.28em 0.28em 0 0;
   background: #1a73e8;
+}
+
+.tab:focus-visible {
+  outline: 2px solid #1a73e8;
+  outline-offset: -2px;
+}
+
+@media (hover: hover) {
+  .tab:hover {
+    background: #f1f3f4;
+  }
 }
 
 /* yorum alanı (dikey kaydırma) */
@@ -356,6 +402,26 @@
 
 .scroller::-webkit-scrollbar {
   display: none;
+}
+
+.scroller[hidden] {
+  display: none;
+}
+
+/* sekme değişince yalnız opaklık (compositor); hareket azaltmada kapalı */
+@media (prefers-reduced-motion: no-preference) {
+  .panel:not([hidden]) {
+    animation: panelFade 0.2s ease-out;
+  }
+}
+
+@keyframes panelFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .scroller:focus-visible {
@@ -522,6 +588,443 @@
   color: #202124;
 }
 
+/* ── Genel Bakış ── */
+.ovHead {
+  padding: 1.1em 1.3em 0.9em;
+}
+
+.ovName {
+  margin: 0;
+  font-size: 1.5em;
+  font-weight: 400;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: #202124;
+}
+
+.ovTag {
+  margin: 0.25em 0 0;
+  font-size: 0.95em;
+  color: #5f6368;
+}
+
+.ovRating {
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+  margin: 0.6em 0 0;
+  font-size: 0.95em;
+  color: #5f6368;
+}
+
+.ovRatingNum {
+  color: #202124;
+}
+
+.actions {
+  display: flex;
+  justify-content: space-around;
+  padding: 0.3em 0.8em 1.1em;
+  border-bottom: 1px solid #ebedf0;
+}
+
+.action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5em;
+  min-width: 4.6em;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 0.9em;
+  font-weight: 500;
+  color: #1a73e8;
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.actionIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.2em;
+  height: 3.2em;
+  border: 1px solid #dadce0;
+  border-radius: 50%;
+}
+
+.action:focus-visible {
+  outline: none;
+}
+
+.action:focus-visible .actionIcon {
+  outline: 2px solid #1a73e8;
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  .action:hover .actionIcon {
+    border-color: #d2e3fc;
+    background: #e8f0fe;
+  }
+}
+
+.facts {
+  margin: 0;
+  padding: 0.35em 0 0.6em;
+  list-style: none;
+}
+
+.fact {
+  display: flex;
+  align-items: flex-start;
+  gap: 1em;
+  padding: 0.85em 1.3em;
+}
+
+.factIcon {
+  flex-shrink: 0;
+  margin-top: 0.1em;
+  color: #1a73e8;
+}
+
+.factBody {
+  min-width: 0;
+  font-size: 1.02em;
+  line-height: 1.45;
+  color: #202124;
+  overflow-wrap: anywhere;
+}
+
+.factLine {
+  margin: 0;
+}
+
+.factSub {
+  color: #5f6368;
+}
+
+.open {
+  color: #188038;
+  font-weight: 500;
+}
+
+.closed {
+  color: #d93025;
+  font-weight: 500;
+}
+
+.hours {
+  margin: 0;
+}
+
+.hoursRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 1em;
+}
+
+.hoursRow dt,
+.hoursRow dd {
+  margin: 0;
+}
+
+.hoursRow dd {
+  color: #5f6368;
+}
+
+.link {
+  color: #1a73e8;
+  text-decoration: none;
+}
+
+.link:focus-visible,
+.social:focus-visible {
+  outline: 2px solid #1a73e8;
+  outline-offset: 2px;
+  border-radius: 0.2em;
+}
+
+/* ── Hakkında ── */
+.block {
+  padding: 1.1em 1.3em 1.15em;
+  border-bottom: 1px solid #ebedf0;
+}
+
+.block:last-child {
+  border-bottom: 0;
+}
+
+.blockTitle {
+  margin: 0 0 0.55em;
+  font-family: inherit;
+  font-size: 1.08em;
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: 0;
+  color: #202124;
+}
+
+.blockText {
+  margin: 0;
+  font-size: 1.02em;
+  line-height: 1.55;
+  color: #3c4043;
+}
+
+.perks {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7em;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.perks li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75em;
+  font-size: 1.02em;
+  line-height: 1.45;
+  color: #3c4043;
+}
+
+.perks svg {
+  flex-shrink: 0;
+  margin-top: 0.15em;
+  color: #188038;
+}
+
+.social {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7em;
+  font-size: 1.02em;
+  color: #1a73e8;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+/* ── Paylaş paneli (ekranın içinde, alttan açılır) ── */
+.scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: rgba(0, 0, 0, 0.42);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.25s ease, visibility 0s linear 0.25s;
+}
+
+.scrimOpen {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.25s ease, visibility 0s;
+}
+
+.sheet {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
+  padding: 0.7em 1.2em 2.6em;
+  border-radius: 1.5em 1.5em 0 0;
+  background: #ffffff;
+  box-shadow: 0 -0.3em 1.3em rgba(0, 0, 0, 0.18);
+  transform: translateY(100%);
+  visibility: hidden;
+  outline: none;
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), visibility 0s linear 0.3s;
+}
+
+.sheetOpen {
+  transform: none;
+  visibility: visible;
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), visibility 0s;
+}
+
+.sheetGrip {
+  display: block;
+  width: 3em;
+  height: 0.28em;
+  margin: 0 auto 0.7em;
+  border-radius: 0.3em;
+  background: #dadce0;
+}
+
+.sheetHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sheetTitle {
+  margin: 0;
+  font-family: inherit;
+  font-size: 1.3em;
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: 0;
+  color: #202124;
+}
+
+.sheetClose {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #5f6368;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.sheetClose::before {
+  content: "";
+  position: absolute;
+  inset: -0.9em;
+}
+
+.sheetClose:focus-visible {
+  outline: 2px solid #1a73e8;
+  outline-offset: 0.2em;
+  border-radius: 50%;
+}
+
+.sheetPlace {
+  margin: 0.1em 0 0;
+  font-size: 0.92em;
+  color: #5f6368;
+}
+
+.targets {
+  display: flex;
+  gap: 1.4em;
+  margin: 1.1em 0 1em;
+  padding: 0;
+  list-style: none;
+}
+
+.target {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5em;
+  min-width: 4em;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 0.88em;
+  color: #3c4043;
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.targetIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.4em;
+  height: 3.4em;
+  border-radius: 50%;
+  color: #ffffff;
+}
+
+.tWhatsapp {
+  background: #25d366;
+}
+
+.tMail {
+  background: #ea4335;
+}
+
+.tMore {
+  background: #5f6368;
+}
+
+.target:focus-visible {
+  outline: none;
+}
+
+.target:focus-visible .targetIcon {
+  outline: 2px solid #1a73e8;
+  outline-offset: 2px;
+}
+
+.linkRow {
+  display: flex;
+  align-items: center;
+  gap: 0.8em;
+  padding: 0.5em 0.5em 0.5em 0.9em;
+  border: 1px solid #dadce0;
+  border-radius: 0.8em;
+}
+
+.linkText {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.9em;
+  color: #3c4043;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: all;
+}
+
+.copyBtn {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.4em;
+  min-height: 2.6em;
+  padding: 0 0.9em;
+  border: 0;
+  border-radius: 0.6em;
+  background: #e8f0fe;
+  font: inherit;
+  font-size: 0.9em;
+  font-weight: 500;
+  color: #1a73e8;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.copyBtn:focus-visible {
+  outline: 2px solid #1a73e8;
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  .copyBtn:hover {
+    background: #d2e3fc;
+  }
+}
+
+.note {
+  min-height: 1.4em;
+  margin: 0.7em 0 0;
+  font-size: 0.9em;
+  line-height: 1.4;
+  color: #188038;
+}
+
+.noteErr {
+  color: #d93025;
+}
+
 .homeIndicator {
   flex-shrink: 0;
   width: 10em;
@@ -530,6 +1033,8 @@
   border-radius: 0.4em;
   background: #1c1c1e;
   opacity: 0.9;
+  position: relative;
+  z-index: 3; /* paylaş panelinin üstünde kalır */
 }
 
 /* ekran camı yansıması */
@@ -697,6 +1202,13 @@
   .phone,
   .stage:hover .phone {
     transform: none;
+    transition: none;
+  }
+
+  .scrim,
+  .scrimOpen,
+  .sheet,
+  .sheetOpen {
     transition: none;
   }
 }

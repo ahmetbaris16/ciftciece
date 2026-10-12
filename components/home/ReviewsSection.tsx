@@ -1,21 +1,39 @@
 "use client";
 
 /**
- * ReviewsSection — gerçek bir akıllı telefonda Google Haritalar "Yorumlar" ekranı gibi görünür.
+ * ReviewsSection — gerçek bir akıllı telefonda Google Haritalar işletme ekranı gibi görünür.
  *
  * - Telefon: metal çerçeve, yan tuşlar, dinamik ada, ekran yansıması, zemin gölgesi; hafif perspektif.
- * - Ekran: gerçek yerel saat (dakikada bir güncellenir), sinyal/Wi-Fi/pil simgeleri, uygulama başlığı,
- *   sekmeler, puan özeti (gerçek yorumlardan hesaplanır) ve yorum listesi (DB'deki gerçek yorumlar).
- *   Ekran süslemeleri (durum çubuğu, sekmeler, geri okları) dekoratiftir: aria-hidden.
+ * - Ekran: gerçek yerel saat (dakikada bir güncellenir), sinyal/Wi-Fi/pil simgeleri (dekoratif: aria-hidden),
+ *   üç sekme ve paylaş düğmesi ÇALIŞIR:
+ *     · Genel Bakış: puan, ara / konum / paylaş düğmeleri, adres, açık-kapalı durumu ve saatler, telefon
+ *     · Yorumlar (açılışta): puan özeti (gerçek yorumlardan hesaplanır) ve yorum listesi (DB'deki gerçek yorumlar)
+ *     · Hakkında: işletme açıklaması, hizmetler, Instagram
+ *   Bilgiler lib/config/store.ts'den ve sitenin mevcut metinlerinden gelir (TrustStrip, VacuumService); burada
+ *   yeni iddia yazılmaz.
+ * - Paylaş (üstteki simge ve Genel Bakış'taki düğme): telefonun içinde alttan açılan panel — WhatsApp, e-posta,
+ *   (tarayıcı destekliyorsa) cihazın paylaşım menüsü ve bağlantıyı kopyala. Paylaşılan adres sitenin ana sayfasıdır.
+ *   Açıkken arka plan inert (klavye/ekran okuyucu panelin içinde kalır); Esc, ✕ ya da karartıya tıklama kapatır,
+ *   odak açan düğmeye döner.
+ * - Sekmeler WAI-ARIA sekme kalıbıyla: ← → Home End ile gezilir. Diğer sekmelerin içeriği `hidden` ile DOM'da durur.
  * - Yorumlar dikey kaydırılır (telefondaki gibi); içerik ekrana sığıyorsa sayfa kaydırması engellenmez.
  * - Giriş: CSS scroll-driven animation (animation-timeline: view()); desteklemeyen tarayıcıda
  *   IntersectionObserver ile tek seferlik yumuşak giriş. Scroll hijacking YOK.
- * - prefers-reduced-motion: giriş ve eğim geçişleri kapalı.
+ * - Performans: yeni hareketler yalnız transform/opacity; blur/backdrop-filter yok; ek bağımlılık yok.
+ * - prefers-reduced-motion: giriş, eğim, sekme ve panel geçişleri kapalı.
  */
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-import { STORE } from "@/lib/config/store";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
+import { STORE, getFormattedHours, getStoreStatus } from "@/lib/config/store";
 import styles from "./ReviewsSection.module.css";
 
 interface Review {
@@ -30,6 +48,14 @@ interface Review {
 interface ReviewsSectionProps {
   reviews: Review[];
 }
+
+type TabKey = "overview" | "reviews" | "about";
+
+const TABS: ReadonlyArray<{ key: TabKey; label: string }> = [
+  { key: "overview", label: "Genel Bakış" },
+  { key: "reviews", label: "Yorumlar" },
+  { key: "about", label: "Hakkında" },
+];
 
 const AVATAR_COLORS = ["#1a73e8", "#d93025", "#188038", "#e37400", "#9334e6", "#0b8a9b"];
 
@@ -77,6 +103,94 @@ function usePhoneTime(): string {
   return time;
 }
 
+type StoreStatus = ReturnType<typeof getStoreStatus>;
+
+/** Mağaza açık mı: tarayıcı saatine bağlı, SSR ile uyuşmazlık olmasın diye mount sonrası; durum değişmedikçe yeniden çizmez */
+function useStoreStatus(): StoreStatus | null {
+  const [status, setStatus] = useState<StoreStatus | null>(null);
+  useEffect(() => {
+    const update = () => {
+      const next = getStoreStatus();
+      setStatus((prev) =>
+        prev && prev.isOpen === next.isOpen && prev.label === next.label && prev.closesAt === next.closesAt && prev.opensAt === next.opensAt
+          ? prev
+          : next
+      );
+    };
+    const first = window.setTimeout(update, 0);
+    const id = window.setInterval(update, 60000);
+    return () => {
+      window.clearTimeout(first);
+      window.clearInterval(id);
+    };
+  }, []);
+  return status;
+}
+
+const noopSubscribe = () => () => {};
+
+/** Sitenin ana sayfa adresi (paylaşılan bağlantı). Sunucuda boş; tarayıcıda gerçek adres — uyuşmazlık olmaz. */
+function useSiteUrl(): string {
+  return useSyncExternalStore(
+    noopSubscribe,
+    () => `${window.location.origin}/`,
+    () => ""
+  );
+}
+
+/** Tarayıcının/cihazın paylaşım menüsü (Web Share API) var mı */
+function useCanNativeShare(): boolean {
+  return useSyncExternalStore(
+    noopSubscribe,
+    () => typeof navigator.share === "function",
+    () => false
+  );
+}
+
+const SHARE_TEXT = `${STORE.name} — ${STORE.description}`;
+
+/** Panoya kopyalar: önce Clipboard API; olmazsa (eski tarayıcı, güvenli olmayan bağlantı) geçici alan + execCommand. */
+async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // izin verilmedi ya da sayfa odakta değil: yedek yöntem
+  }
+  const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  try {
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    // 16px: iOS odaklanınca yakınlaştırmasın
+    area.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;font-size:16px";
+    document.body.appendChild(area);
+    area.select();
+    area.setSelectionRange(0, text.length);
+    const ok = document.execCommand("copy");
+    document.body.removeChild(area);
+    return ok;
+  } catch {
+    return false;
+  } finally {
+    previous?.focus({ preventScroll: true });
+  }
+}
+
+/** Her gün aynı saatse tek satır ("07:00 – 00:00"); değilse null (gün gün liste gösterilir) */
+const HOURS = getFormattedHours();
+const hoursText = (h: (typeof HOURS)[number]) => (h.isOpen ? `${h.open} – ${h.close}` : "Kapalı");
+const UNIFORM_HOURS = HOURS.every((h) => h.isOpen === HOURS[0].isOpen && h.open === HOURS[0].open && h.close === HOURS[0].close)
+  ? hoursText(HOURS[0])
+  : null;
+
+function statusDetail(s: StoreStatus): string {
+  if (s.isOpen) return s.closesAt === "00:00" ? "gece yarısına kadar" : `${s.closesAt}'e kadar`;
+  return s.opensAt ? `${s.opensAt}'de açılıyor` : "";
+}
+
 function Stars({ rating, className = "" }: { rating: number; className?: string }) {
   return (
     <span className={`${styles.stars} ${className}`} role="img" aria-label={`5 üzerinden ${rating} yıldız`}>
@@ -92,8 +206,20 @@ function Stars({ rating, className = "" }: { rating: number; className?: string 
 export default function ReviewsSection({ reviews }: ReviewsSectionProps) {
   const total = reviews.length;
   const time = usePhoneTime();
+  const storeStatus = useStoreStatus();
   const [entered, setEntered] = useState(false);
+  const [tab, setTab] = useState<TabKey>("reviews");
+  const [shareOpen, setShareOpen] = useState(false);
+  /** Her açılışta paylaş panelinin içi sıfırdan kurulur (eski "kopyalandı" notu kalmasın) */
+  const [shareRun, setShareRun] = useState(0);
   const stageRef = useRef<HTMLDivElement>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const shareTrigger = useRef<HTMLElement | null>(null);
+  const tabRefs = useRef<Partial<Record<TabKey, HTMLButtonElement | null>>>({});
+  const uid = useId();
+  const tabId = (k: TabKey) => `${uid}-tab-${k}`;
+  const panelId = (k: TabKey) => `${uid}-panel-${k}`;
+  const shareTitleId = `${uid}-share-title`;
 
   // Giriş animasyonu için yedek (scroll-driven animation yoksa CSS bu sınıfı kullanır)
   useEffect(() => {
@@ -112,11 +238,47 @@ export default function ReviewsSection({ reviews }: ReviewsSectionProps) {
     return () => io.disconnect();
   }, []);
 
+  // Paylaş paneli açıkken: odak panele, Esc kapatır; kapanınca odak açan düğmeye döner
+  useEffect(() => {
+    if (!shareOpen) return;
+    sheetRef.current?.focus({ preventScroll: true });
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShareOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    const trigger = shareTrigger.current;
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      trigger?.focus({ preventScroll: true });
+    };
+  }, [shareOpen]);
+
   if (total === 0) return null; // yayında yorum yoksa bölüm hiç görünmez
 
   const avg = reviews.reduce((s, r) => s + r.rating, 0) / total;
   const avgLabel = avg.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   const dist = [5, 4, 3, 2, 1].map((n) => ({ n, count: reviews.filter((r) => r.rating === n).length }));
+
+  const openShare = (e: ReactMouseEvent<HTMLElement>) => {
+    shareTrigger.current = e.currentTarget;
+    setShareRun((n) => n + 1);
+    setShareOpen(true);
+  };
+  const closeShare = () => setShareOpen(false);
+
+  const onTabKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    const i = TABS.findIndex((t) => t.key === tab);
+    let next = -1;
+    if (e.key === "ArrowRight") next = (i + 1) % TABS.length;
+    else if (e.key === "ArrowLeft") next = (i + TABS.length - 1) % TABS.length;
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = TABS.length - 1;
+    if (next < 0) return;
+    e.preventDefault();
+    const key = TABS[next].key;
+    setTab(key);
+    tabRefs.current[key]?.focus();
+  };
 
   return (
     <section className={styles.section} aria-labelledby="reviews-heading">
@@ -152,19 +314,142 @@ export default function ReviewsSection({ reviews }: ReviewsSectionProps) {
                     </span>
                   </div>
 
-                  <div className={styles.appBar} aria-hidden="true">
+                  <div className={styles.appBar} inert={shareOpen}>
                     <BackIcon />
-                    <span className={styles.placeName}>Çiftçi Ece</span>
-                    <ShareIcon />
+                    <span className={styles.placeName} aria-hidden="true">
+                      Çiftçi Ece
+                    </span>
+                    <button
+                      type="button"
+                      className={styles.iconBtn}
+                      onClick={openShare}
+                      aria-label="Paylaş"
+                      aria-haspopup="dialog"
+                      aria-expanded={shareOpen}
+                    >
+                      <ShareIcon />
+                    </button>
                   </div>
 
-                  <div className={styles.tabs} aria-hidden="true">
-                    <span>Genel Bakış</span>
-                    <span className={styles.tabActive}>Yorumlar</span>
-                    <span>Hakkında</span>
+                  <div className={styles.tabs} role="tablist" aria-label="Mağaza bilgileri" onKeyDown={onTabKeyDown} inert={shareOpen}>
+                    {TABS.map((t) => (
+                      <button
+                        key={t.key}
+                        ref={(el) => {
+                          tabRefs.current[t.key] = el;
+                        }}
+                        type="button"
+                        role="tab"
+                        id={tabId(t.key)}
+                        className={styles.tab}
+                        aria-selected={tab === t.key}
+                        aria-controls={panelId(t.key)}
+                        tabIndex={tab === t.key ? 0 : -1}
+                        onClick={() => setTab(t.key)}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
                   </div>
 
-                  <div className={styles.scroller} role="region" aria-label="Müşteri yorumları" tabIndex={0}>
+                  {/* ── Genel Bakış ── */}
+                  <div
+                    role="tabpanel"
+                    id={panelId("overview")}
+                    aria-labelledby={tabId("overview")}
+                    className={`${styles.scroller} ${styles.panel}`}
+                    hidden={tab !== "overview"}
+                    tabIndex={0}
+                    inert={shareOpen}
+                  >
+                    <div className={styles.ovHead}>
+                      <p className={styles.ovName}>{STORE.name}</p>
+                      <p className={styles.ovTag}>{STORE.tagline}</p>
+                      <p className={styles.ovRating}>
+                        <span className={styles.ovRatingNum}>{avgLabel}</span>
+                        <Stars rating={Math.round(avg)} className={styles.starsSm} />
+                        <span>({total})</span>
+                      </p>
+                    </div>
+
+                    <div className={styles.actions}>
+                      <a className={styles.action} href={`tel:${STORE.contact.phone}`}>
+                        <span className={styles.actionIcon} aria-hidden="true">
+                          <PhoneIcon />
+                        </span>
+                        <span>Ara</span>
+                      </a>
+                      <a className={styles.action} href="#magaza">
+                        <span className={styles.actionIcon} aria-hidden="true">
+                          <PinIcon />
+                        </span>
+                        <span>Konum</span>
+                      </a>
+                      <button type="button" className={styles.action} onClick={openShare} aria-haspopup="dialog">
+                        <span className={styles.actionIcon} aria-hidden="true">
+                          <ShareIcon />
+                        </span>
+                        <span>Paylaş</span>
+                      </button>
+                    </div>
+
+                    <ul className={styles.facts} role="list">
+                      <li className={styles.fact}>
+                        <span className={styles.factIcon} aria-hidden="true">
+                          <PinIcon />
+                        </span>
+                        <div className={styles.factBody}>{STORE.address.full}</div>
+                      </li>
+                      <li className={styles.fact}>
+                        <span className={styles.factIcon} aria-hidden="true">
+                          <ClockIcon />
+                        </span>
+                        <div className={styles.factBody}>
+                          {storeStatus && (
+                            <p className={styles.factLine}>
+                              <span className={storeStatus.isOpen ? styles.open : styles.closed}>
+                                {storeStatus.isOpen ? "Açık" : "Kapalı"}
+                              </span>
+                              {statusDetail(storeStatus) && <span className={styles.factSub}> · {statusDetail(storeStatus)}</span>}
+                            </p>
+                          )}
+                          {UNIFORM_HOURS ? (
+                            <p className={styles.factLine}>Her gün {UNIFORM_HOURS}</p>
+                          ) : (
+                            <dl className={styles.hours}>
+                              {HOURS.map((h) => (
+                                <div key={h.day} className={styles.hoursRow}>
+                                  <dt>{h.day}</dt>
+                                  <dd>{hoursText(h)}</dd>
+                                </div>
+                              ))}
+                            </dl>
+                          )}
+                        </div>
+                      </li>
+                      <li className={styles.fact}>
+                        <span className={styles.factIcon} aria-hidden="true">
+                          <PhoneIcon />
+                        </span>
+                        <div className={styles.factBody}>
+                          <a className={styles.link} href={`tel:${STORE.contact.phone}`}>
+                            {STORE.contact.phoneFormatted}
+                          </a>
+                        </div>
+                      </li>
+                    </ul>
+                  </div>
+
+                  {/* ── Yorumlar ── */}
+                  <div
+                    role="tabpanel"
+                    id={panelId("reviews")}
+                    aria-labelledby={tabId("reviews")}
+                    className={`${styles.scroller} ${styles.panel}`}
+                    hidden={tab !== "reviews"}
+                    tabIndex={0}
+                    inert={shareOpen}
+                  >
                     <div className={styles.summary}>
                       <div className={styles.score}>
                         <span className={styles.scoreNum}>{avgLabel}</span>
@@ -213,7 +498,72 @@ export default function ReviewsSection({ reviews }: ReviewsSectionProps) {
                     </ul>
                   </div>
 
+                  {/* ── Hakkında ── */}
+                  <div
+                    role="tabpanel"
+                    id={panelId("about")}
+                    aria-labelledby={tabId("about")}
+                    className={`${styles.scroller} ${styles.panel}`}
+                    hidden={tab !== "about"}
+                    tabIndex={0}
+                    inert={shareOpen}
+                  >
+                    <section className={styles.block}>
+                      <h3 className={styles.blockTitle}>İşletme hakkında</h3>
+                      <p className={styles.blockText}>{STORE.description}</p>
+                    </section>
+                    <section className={styles.block}>
+                      <h3 className={styles.blockTitle}>Hizmetler</h3>
+                      <ul className={styles.perks} role="list">
+                        {/* Metinler sitedeki TrustStrip ve VacuumService ile aynı kapsamdadır */}
+                        <li>
+                          <CheckIcon />
+                          <span>Orhangazi, Zeytinciler Çarşısı&apos;nda fiziksel mağaza</span>
+                        </li>
+                        <li>
+                          <CheckIcon />
+                          <span>Sipariş verin, paketleyip gönderelim</span>
+                        </li>
+                        <li>
+                          <CheckIcon />
+                          <span>Rafımızdaki ürünlerin aynısı</span>
+                        </li>
+                        <li>
+                          <CheckIcon />
+                          <span>Siyah zeytin için vakumlu paketleme</span>
+                        </li>
+                      </ul>
+                    </section>
+                    <section className={styles.block}>
+                      <h3 className={styles.blockTitle}>Bizi takip edin</h3>
+                      <a
+                        className={styles.social}
+                        href={STORE.contact.instagramUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`Instagram: ${STORE.contact.instagram} (yeni sekmede açılır)`}
+                      >
+                        <InstagramIcon />
+                        <span>{STORE.contact.instagram}</span>
+                      </a>
+                    </section>
+                  </div>
+
                   <div className={styles.homeIndicator} aria-hidden="true" />
+
+                  {/* ── Paylaş paneli (telefonun içinde, alttan açılır) ── */}
+                  <div className={`${styles.scrim} ${shareOpen ? styles.scrimOpen : ""}`} onClick={closeShare} aria-hidden="true" />
+                  <div
+                    ref={sheetRef}
+                    role="dialog"
+                    aria-labelledby={shareTitleId}
+                    tabIndex={-1}
+                    inert={!shareOpen}
+                    className={`${styles.sheet} ${shareOpen ? styles.sheetOpen : ""}`}
+                  >
+                    {shareRun > 0 && <ShareBody key={shareRun} titleId={shareTitleId} onClose={closeShare} />}
+                  </div>
+
                   <div className={styles.glare} aria-hidden="true" />
                 </div>
               </div>
@@ -245,6 +595,98 @@ export default function ReviewsSection({ reviews }: ReviewsSectionProps) {
         </div>
       </div>
     </section>
+  );
+}
+
+/** Paylaş panelinin içi: seçenekler ve bağlantı. Her açılışta yeniden kurulur (key). */
+function ShareBody({ titleId, onClose }: { titleId: string; onClose: () => void }) {
+  const shareUrl = useSiteUrl();
+  const canNativeShare = useCanNativeShare();
+  const [note, setNote] = useState<{ text: string; ok: boolean } | null>(null);
+  const timer = useRef<number | undefined>(undefined);
+
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+
+  const say = (text: string, ok: boolean) => {
+    window.clearTimeout(timer.current);
+    setNote({ text, ok });
+    timer.current = window.setTimeout(() => setNote(null), 3500);
+  };
+
+  const copy = async () => {
+    const ok = await copyText(shareUrl);
+    say(ok ? "Bağlantı kopyalandı" : "Kopyalanamadı. Bağlantıyı seçip elle kopyalayın.", ok);
+  };
+
+  const nativeShare = async () => {
+    try {
+      await navigator.share({ title: STORE.name, text: SHARE_TEXT, url: shareUrl });
+      onClose();
+    } catch (err) {
+      // Kullanıcı menüyü kapattıysa (AbortError) bir şey söylenmez
+      if (!(err instanceof DOMException && err.name === "AbortError")) say("Paylaşım menüsü açılamadı.", false);
+    }
+  };
+
+  const message = `${SHARE_TEXT}\n${shareUrl}`;
+  const whatsappHref = `https://wa.me/?text=${encodeURIComponent(message)}`;
+  const mailHref = `mailto:?subject=${encodeURIComponent(STORE.name)}&body=${encodeURIComponent(message)}`;
+
+  return (
+    <>
+      <span className={styles.sheetGrip} aria-hidden="true" />
+      <div className={styles.sheetHead}>
+        <h3 id={titleId} className={styles.sheetTitle}>
+          Paylaş
+        </h3>
+        <button type="button" className={styles.sheetClose} onClick={onClose} aria-label="Kapat">
+          <CloseIcon />
+        </button>
+      </div>
+      <p className={styles.sheetPlace}>
+        {STORE.name} · {STORE.address.district}
+      </p>
+
+      <ul className={styles.targets} role="list">
+        <li>
+          <a className={styles.target} href={whatsappHref} target="_blank" rel="noopener noreferrer" onClick={onClose}>
+            <span className={`${styles.targetIcon} ${styles.tWhatsapp}`} aria-hidden="true">
+              <WhatsAppIcon />
+            </span>
+            <span>WhatsApp</span>
+          </a>
+        </li>
+        <li>
+          <a className={styles.target} href={mailHref} onClick={onClose}>
+            <span className={`${styles.targetIcon} ${styles.tMail}`} aria-hidden="true">
+              <MailIcon />
+            </span>
+            <span>E-posta</span>
+          </a>
+        </li>
+        {canNativeShare && (
+          <li>
+            <button type="button" className={styles.target} onClick={nativeShare}>
+              <span className={`${styles.targetIcon} ${styles.tMore}`} aria-hidden="true">
+                <MoreIcon />
+              </span>
+              <span>Diğer</span>
+            </button>
+          </li>
+        )}
+      </ul>
+
+      <div className={styles.linkRow}>
+        <span className={styles.linkText}>{shareUrl}</span>
+        <button type="button" className={styles.copyBtn} onClick={copy}>
+          <CopyIcon />
+          Kopyala
+        </button>
+      </div>
+      <p className={`${styles.note} ${note && !note.ok ? styles.noteErr : ""}`} role="status" aria-live="polite">
+        {note?.text ?? ""}
+      </p>
+    </>
   );
 }
 
@@ -288,13 +730,112 @@ function BackIcon() {
   );
 }
 
+/* ---- Uygulama simgeleri ---- */
+const ICON_PROPS = {
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 1.9,
+  strokeLinecap: "round",
+  strokeLinejoin: "round",
+  "aria-hidden": true,
+} as const;
+
 function ShareIcon() {
   return (
-    <svg viewBox="0 0 24 24" width="1.45em" height="1.45em" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg {...ICON_PROPS} width="1.45em" height="1.45em">
       <circle cx="18" cy="5" r="2.6" />
       <circle cx="6" cy="12" r="2.6" />
       <circle cx="18" cy="19" r="2.6" />
       <path d="M8.3 10.8 15.7 6.2M8.3 13.2l7.4 4.6" />
+    </svg>
+  );
+}
+
+function PhoneIcon() {
+  return (
+    <svg {...ICON_PROPS} width="1.35em" height="1.35em">
+      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+    </svg>
+  );
+}
+
+function PinIcon() {
+  return (
+    <svg {...ICON_PROPS} width="1.35em" height="1.35em">
+      <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+      <circle cx="12" cy="10" r="3" />
+    </svg>
+  );
+}
+
+function ClockIcon() {
+  return (
+    <svg {...ICON_PROPS} width="1.35em" height="1.35em">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg {...ICON_PROPS} width="1.2em" height="1.2em" strokeWidth={2.4}>
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg {...ICON_PROPS} width="1.3em" height="1.3em" strokeWidth={2.2}>
+      <path d="M18 6 6 18M6 6l12 12" />
+    </svg>
+  );
+}
+
+function MailIcon() {
+  return (
+    <svg {...ICON_PROPS} width="1.5em" height="1.5em">
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <path d="m22 7-10 6L2 7" />
+    </svg>
+  );
+}
+
+function CopyIcon() {
+  return (
+    <svg {...ICON_PROPS} width="1.15em" height="1.15em">
+      <rect x="9" y="9" width="13" height="13" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
+
+function MoreIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="1.5em" height="1.5em" fill="currentColor" aria-hidden="true">
+      <circle cx="5" cy="12" r="1.9" />
+      <circle cx="12" cy="12" r="1.9" />
+      <circle cx="19" cy="12" r="1.9" />
+    </svg>
+  );
+}
+
+function WhatsAppIcon() {
+  return (
+    <svg {...ICON_PROPS} width="1.55em" height="1.55em" strokeWidth={2}>
+      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+    </svg>
+  );
+}
+
+function InstagramIcon() {
+  return (
+    <svg {...ICON_PROPS} width="1.35em" height="1.35em">
+      <rect x="2" y="2" width="20" height="20" rx="5" />
+      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+      <path d="M17.5 6.5h.01" />
     </svg>
   );
 }
