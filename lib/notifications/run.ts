@@ -23,7 +23,7 @@ export interface NotificationRunResult {
 
 const EMPTY: NotificationRunResult = {
   dispatch: { processed: 0, emails: 0, failed: 0 },
-  send: { sent: 0, failed: 0, retried: 0, notConfigured: false },
+  send: { sent: 0, failed: 0, retried: 0, notConfigured: false, blocked: null },
 };
 
 let running: Promise<NotificationRunResult> | null = null;

@@ -30,6 +30,9 @@ const b64 = (s: string) => Buffer.from(s, "base64").toString("utf8");
 
 export class FakeSmtpServer {
   readonly received: ReceivedEmail[] = [];
+  /** Giriş (AUTH) denemeleri: yanlış şifreyle sunucuya kaç kez gelindi */
+  authAttempts = 0;
+  failedAuths = 0;
   readonly opts: FakeSmtpOptions;
   private server: net.Server | null = null;
   private sockets = new Set<net.Socket>();
@@ -84,7 +87,9 @@ export class FakeSmtpServer {
     let loginUser = "";
 
     const checkAuth = (user: string, pass: string) => {
+      this.authAttempts++;
       if (this.opts.password !== undefined && pass !== this.opts.password) {
+        this.failedAuths++;
         write("535 5.7.8 Authentication credentials invalid");
         return;
       }

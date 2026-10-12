@@ -16,24 +16,14 @@ import { getBusinessInfo } from "@/lib/business/business.repository";
 import AdminAccountForm from "@/components/admin/AdminAccountForm";
 import EmailTools from "@/components/admin/EmailTools";
 import { ADMIN_PASSWORD_RULE, USERNAME_RULE, getAdminAccount } from "@/lib/auth/admin-account";
-import { emailMode } from "@/lib/email/config";
+import { getEmailStatus } from "@/lib/email/health";
 import { getLaunchChecklist, type CheckState } from "@/lib/admin/dashboard";
 import { USE_DB } from "@/lib/data/source";
 import st from "./settings.module.css";
 
 export const dynamic = "force-dynamic";
 
-const EMAIL_STATE = {
-  smtp: { ok: true, text: "E-posta gönderimi çalışıyor: sipariş e-postaları müşterilere ve size gidiyor." },
-  "dev-outbox": {
-    ok: false,
-    text: "Bu bilgisayarda e-posta hesabı ayarlı değil: sipariş e-postaları kimseye gitmez, yalnız deneme dosyasına (.mock-data/outbox.json) yazılır. Gerçek adreslere gitmesi için harbi klasöründeki “E-posta Ayarla”yı çalıştırın.",
-  },
-  none: {
-    ok: false,
-    text: "E-posta gönderimi ayarlı değil: sipariş e-postaları bekliyor, müşterilere gitmiyor. Hosting'de e-posta (SMTP) bilgileri girilince kendiliğinden gönderilir (docs/YAYIN.md).",
-  },
-} as const;
+const EMAIL_TONE = { ok: st.ok, info: st.info, warn: st.warn, error: st.error } as const;
 
 const CHECK_STATE: Record<CheckState, { label: string; className: string }> = {
   ok: { label: "Tamam", className: st.stateOk },
@@ -43,15 +33,15 @@ const CHECK_STATE: Record<CheckState, { label: string; className: string }> = {
 
 export default async function AdminAyarlarPage() {
   const user = await requireAdmin();
-  const [shippingSettings, paymentSettings, business, account, checklist] = await Promise.all([
+  const [shippingSettings, paymentSettings, business, account, checklist, mail] = await Promise.all([
     getShippingSettings(),
     getPaymentSettings(),
     getBusinessInfo(),
     USE_DB ? getAdminAccount(user.id) : Promise.resolve(null),
     getLaunchChecklist(),
+    getEmailStatus(),
   ]);
   const openChecks = checklist.filter((c) => c.state !== "ok").length;
-  const mail = EMAIL_STATE[emailMode()];
 
   return (
     <AdminShell user={user} activeSection="ayarlar">
@@ -77,7 +67,10 @@ export default async function AdminAyarlarPage() {
 
         <section className={st.card} id="eposta">
           <h2 className={st.h2}>E-posta</h2>
-          <p className={mail.ok ? st.ok : st.warn}>{mail.text}</p>
+          <div className={EMAIL_TONE[mail.tone]} data-testid="email-status" data-tone={mail.tone}>
+            <p className={st.statusText}>{mail.text}</p>
+            {mail.detail && <p className={st.statusDetail}>{mail.detail}</p>}
+          </div>
           <EmailTools defaultTo={business.notificationEmail || business.email} showRun={false} />
           <Link href="/admin/epostalar" className={st.link}>
             Gönderilen e-postaları gör ›

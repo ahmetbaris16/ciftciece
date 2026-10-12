@@ -44,12 +44,36 @@
 }
 
 .ok,
-.warn {
+.info,
+.warn,
+.error {
   margin: 0 0 0.9rem;
   padding: 0.6rem 0.8rem;
   border-radius: 8px;
   font-size: 0.8125rem;
   line-height: 1.5;
+}
+
+.info {
+  background: rgba(158, 197, 240, 0.08);
+  border: 1px solid rgba(158, 197, 240, 0.3);
+  color: #9ec5f0;
+}
+
+.error {
+  background: rgba(243, 160, 160, 0.08);
+  border: 1px solid rgba(243, 160, 160, 0.35);
+  color: #f3a0a0;
+}
+
+.statusText {
+  margin: 0;
+  font-weight: 600;
+}
+
+.statusDetail {
+  margin: 0.35rem 0 0;
+  color: #e8e4d9;
 }
 
 .ok {

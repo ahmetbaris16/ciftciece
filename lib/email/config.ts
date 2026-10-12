@@ -15,6 +15,8 @@
  * Şifre hiçbir yerde loglanmaz/gösterilmez.
  */
 
+import { createHmac, randomBytes } from "node:crypto";
+
 export type EmailMode = "smtp" | "dev-outbox" | "none";
 
 export interface SmtpConfig {
@@ -65,6 +67,20 @@ export function smtpConfigFromEnv(env: Env = process.env): SmtpConfig | null {
     fromName: from.name || "Çiftçi Ece",
     fromAddress: from.address,
   };
+}
+
+const FINGERPRINT_SECRET = process.env.NEXTAUTH_SECRET || randomBytes(32).toString("hex");
+
+/**
+ * Ayarın kimliği (sunucu, port, hesap, şifre): sunucu sırrıyla HMAC, 16 karakter; şifre geri çıkarılamaz.
+ * Bağlantı önbelleği ve gönderim durumu (health.ts) şifre değişince bunu görür ("E-posta Ayarla" yeniden
+ * çalıştırılınca açık site eski şifreyle denemeye devam etmez; eski hata yeni ayara yazılmaz).
+ */
+export function smtpConfigFingerprint(cfg: SmtpConfig): string {
+  return createHmac("sha256", FINGERPRINT_SECRET)
+    .update([cfg.host, cfg.port, cfg.secure, cfg.requireTLS, cfg.user, cfg.pass].join("\u0000"))
+    .digest("hex")
+    .slice(0, 16);
 }
 
 export function emailMode(env: Env = process.env): EmailMode {

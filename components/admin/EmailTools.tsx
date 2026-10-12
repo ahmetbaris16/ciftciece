@@ -11,7 +11,7 @@ import f from "./order/forms.module.css";
 
 interface RunResult {
   dispatch: { processed: number; emails: number; failed: number };
-  send: { sent: number; failed: number; retried: number; notConfigured: boolean };
+  send: { sent: number; failed: number; retried: number; notConfigured: boolean; blocked: "auth" | "connection" | null };
 }
 
 async function post(url: string, body: unknown): Promise<{ ok: boolean; data: { error?: string; result?: unknown } | null }> {
@@ -43,6 +43,8 @@ export default function EmailTools({ defaultTo, showRun = true }: { defaultTo: s
             }
           : { ok: false, text: data?.error ?? "Gönderilemedi." }
       );
+      // Üstteki e-posta durumu (çalışıyor / şifre kabul edilmedi) bu sonuca göre güncellenir
+      router.refresh();
     } catch {
       setMessage({ ok: false, text: "Bağlantı hatası. Tekrar deneyin." });
     } finally {
@@ -63,10 +65,17 @@ export default function EmailTools({ defaultTo, showRun = true }: { defaultTo: s
       setMessage(
         r.send.notConfigured
           ? { ok: false, text: "E-posta gönderimi ayarlı değil; e-postalar kuyrukta bekliyor." }
-          : {
-              ok: r.send.failed === 0,
-              text: `${r.send.sent} e-posta gönderildi${r.send.retried ? `, ${r.send.retried} tanesi sonra yeniden denenecek` : ""}${r.send.failed ? `, ${r.send.failed} tanesi gönderilemedi` : ""}.`,
-            }
+          : r.send.blocked
+            ? {
+                ok: false,
+                text: `${r.send.sent ? `${r.send.sent} e-posta gönderildi; ` : ""}gönderim durdu: ${
+                  r.send.blocked === "auth" ? "e-posta hesabı şifreyi kabul etmedi" : "e-posta sunucusuna bağlanılamadı"
+                } (yukarıdaki açıklamaya bakın). Bekleyen e-postalar silinmedi; ayar düzelince gönderilir.`,
+              }
+            : {
+                ok: r.send.failed === 0,
+                text: `${r.send.sent} e-posta gönderildi${r.send.retried ? `, ${r.send.retried} tanesi sonra yeniden denenecek` : ""}${r.send.failed ? `, ${r.send.failed} tanesi gönderilemedi` : ""}.`,
+              }
       );
       router.refresh();
     } catch {

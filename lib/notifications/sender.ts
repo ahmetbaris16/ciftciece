@@ -8,11 +8,25 @@
  *
  * Yeniden deneme: 1 dk, 5 dk, 15 dk, 1 sa, 4 sa, 12 sa (6 deneme). Kalıcı hata (adres yok, reddedildi)
  * hemen FAILED olur. Admin panelinden yeniden kuyruğa alınabilir.
+ *
+ * Sunucu düzeyinde hata (lib/email/health.ts): hesap şifreyi reddederse e-postanın deneme hakkı harcanmaz, tur
+ * durur ve kuyruk aynı ayarla 15 dk sunucuya bağlanmaz (yanlış şifreyle art arda giriş hesabı kilitletebilir);
+ * ayar düzelince bekleyenler sırayla gider. Sunucuya bağlanılamazsa o e-postanın denemesi sayılır, tur durur
+ * (kalan e-postalar her biri 15 sn zaman aşımı beklemesin).
  */
 
 import { prisma } from "@/lib/db/prisma";
-import { emailMode } from "@/lib/email/config";
-import { deliver, EmailNotConfiguredError, maskEmail, PermanentEmailError } from "@/lib/email/transport";
+import { emailMode, smtpConfigFromEnv } from "@/lib/email/config";
+import type { SmtpFailureKind } from "@/lib/email/errors";
+import { recordSmtpFailure, recordSmtpSuccess, smtpAuthPaused } from "@/lib/email/health";
+import {
+  deliver,
+  EmailNotConfiguredError,
+  maskEmail,
+  PermanentEmailError,
+  SmtpAuthError,
+  SmtpConnectionError,
+} from "@/lib/email/transport";
 
 export const RETRY_DELAYS_MS = [60_000, 5 * 60_000, 15 * 60_000, 60 * 60_000, 4 * 60 * 60_000, 12 * 60 * 60_000];
 export const MAX_EMAIL_ATTEMPTS = RETRY_DELAYS_MS.length;
@@ -23,10 +37,12 @@ export interface SendResult {
   failed: number;
   retried: number;
   notConfigured: boolean;
+  /** Tur sunucu düzeyinde hatayla durdu ya da şifre hatası beklemesinde olduğu için hiç başlamadı */
+  blocked: SmtpFailureKind | null;
 }
 
 export async function sendDueEmails(opts: { limit?: number; now?: Date } = {}): Promise<SendResult> {
-  const result: SendResult = { sent: 0, failed: 0, retried: 0, notConfigured: false };
+  const result: SendResult = { sent: 0, failed: 0, retried: 0, notConfigured: false, blocked: null };
   if (emailMode() === "none") {
     result.notConfigured = true;
     return result;
@@ -43,6 +59,12 @@ export async function sendDueEmails(opts: { limit?: number; now?: Date } = {}): 
     where: { status: "QUEUED", expiresAt: { lt: now } },
     data: { status: "CANCELLED", lastError: "Süresi geçtiği için gönderilmedi." },
   });
+
+  const cfg = smtpConfigFromEnv();
+  if (cfg && (await smtpAuthPaused(cfg, now))) {
+    result.blocked = "auth";
+    return result;
+  }
 
   const due = await prisma.emailMessage.findMany({
     where: { status: "QUEUED", availableAt: { lte: now } },
@@ -89,6 +111,17 @@ export async function sendDueEmails(opts: { limit?: number; now?: Date } = {}): 
         break;
       }
       const message = (err instanceof Error ? err.message : String(err)).slice(0, 1000);
+      if (err instanceof SmtpAuthError) {
+        // Ayarın sorunu: deneme sayılmaz, e-posta sırasını korur
+        await prisma.emailMessage.update({
+          where: { id },
+          data: { status: "QUEUED", lockedUntil: null, attempts: { decrement: 1 }, lastError: message },
+        });
+        if (cfg) await recordSmtpFailure(cfg, "auth", message).catch((e) => console.error("[email] durum yazılamadı:", e));
+        result.blocked = "auth";
+        console.error(`[email] e-posta hesabı şifreyi kabul etmedi; gönderim duraklatıldı: ${message}`);
+        break;
+      }
       const permanent = err instanceof PermanentEmailError;
       if (permanent || msg.attempts >= MAX_EMAIL_ATTEMPTS) {
         await prisma.emailMessage.update({
@@ -106,7 +139,15 @@ export async function sendDueEmails(opts: { limit?: number; now?: Date } = {}): 
         result.retried++;
         console.warn(`[email] geçici hata, yeniden denenecek (${msg.kind}): ${message}`);
       }
+      if (err instanceof SmtpConnectionError) {
+        if (cfg) await recordSmtpFailure(cfg, "connection", message).catch((e) => console.error("[email] durum yazılamadı:", e));
+        result.blocked = "connection";
+        break;
+      }
     }
+  }
+  if (cfg && result.sent > 0 && !result.blocked) {
+    await recordSmtpSuccess(cfg).catch((e) => console.error("[email] durum yazılamadı:", e));
   }
   return result;
 }

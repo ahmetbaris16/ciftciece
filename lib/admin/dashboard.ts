@@ -11,7 +11,7 @@ import { missingBusinessFields } from "@/lib/business/info";
 import { getPaymentSettings } from "@/lib/payment/settings.repository";
 import { isBankTransferReady } from "@/lib/payment/methods";
 import { isTestProvider, paymentProviderStatus } from "@/lib/payment/provider";
-import { emailMode } from "@/lib/email/config";
+import { getEmailStatus } from "@/lib/email/health";
 import { getShippingSettings } from "@/lib/shipping/shipping.repository";
 import { lastCronRun } from "@/lib/cron/heartbeat";
 
@@ -128,18 +128,18 @@ export interface CheckItem {
 
 /** Yayın ve banka (sanal POS) incelemesi kontrol listesi */
 export async function getLaunchChecklist(): Promise<CheckItem[]> {
-  const [business, payment, shipping, cron] = await Promise.all([
+  const [business, payment, shipping, cron, mail] = await Promise.all([
     getBusinessInfo(),
     getPaymentSettings(),
     getShippingSettings(),
     USE_DB ? lastCronRun().catch(() => null) : Promise.resolve(null),
+    getEmailStatus(),
   ]);
   const cronKey = (process.env.CRON_SECRET?.trim().length ?? 0) >= 24;
   const cronAgeMin = cron ? Math.floor((Date.now() - cron.at.getTime()) / 60_000) : null;
   const cronFresh = cronAgeMin !== null && cronAgeMin <= 15;
   const missing = missingBusinessFields(business);
   const provider = paymentProviderStatus();
-  const mail = emailMode();
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
   const unpricedVat = USE_DB
     ? await prisma.product.count({ where: { isPublished: true, vatRateBps: null } })
@@ -177,11 +177,9 @@ export async function getLaunchChecklist(): Promise<CheckItem[]> {
     },
     {
       label: "E-posta gönderimi",
-      state: mail === "smtp" ? "ok" : "todo",
-      detail:
-        mail === "smtp"
-          ? "Hostinger e-postası bağlı; sipariş e-postaları gidiyor."
-          : "E-posta (SMTP) bilgileri hosting'e girilmedi: sipariş e-postaları müşterilere gitmiyor.",
+      // Gerçek durum: ayar girilmiş olması yetmez, sunucunun son cevabı (lib/email/health.ts)
+      state: mail.checkState,
+      detail: mail.detail ? `${mail.text} ${mail.detail}` : mail.text,
       href: "/admin/ayarlar#eposta",
     },
     {

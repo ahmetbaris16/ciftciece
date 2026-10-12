@@ -12,6 +12,7 @@ import EmailRequeueButton from "@/components/admin/order/EmailRequeueButton";
 import { prisma } from "@/lib/db/prisma";
 import { USE_DB } from "@/lib/data/source";
 import { emailConfigWarnings, emailMode, smtpConfigFromEnv } from "@/lib/email/config";
+import { getEmailStatus } from "@/lib/email/health";
 import { EMAIL_STATUS_TR, emailKindLabel } from "@/lib/email/kinds";
 import { getBusinessInfo } from "@/lib/business/business.repository";
 
@@ -39,7 +40,7 @@ export default async function AdminEpostalarPage({ searchParams }: { searchParam
   const mode = emailMode();
   const smtp = smtpConfigFromEnv();
   const warnings = emailConfigWarnings();
-  const business = await getBusinessInfo();
+  const [business, status] = await Promise.all([getBusinessInfo(), getEmailStatus()]);
 
   const where = FILTERS[filter].where;
   const [total, rows, counts] = USE_DB
@@ -88,20 +89,14 @@ export default async function AdminEpostalarPage({ searchParams }: { searchParam
         <p style={st.sub}>Siteden müşterilere ve size giden tüm e-postalar. Hata olursa sistem kendisi yeniden dener.</p>
 
         <section style={st.card}>
-          {mode === "smtp" && smtp ? (
-            <p style={{ ...st.status, color: "#9fd39f" }}>
-              Gönderim açık · {smtp.fromName} &lt;{smtp.fromAddress}&gt; · {smtp.host}:{smtp.port} {smtp.secure ? "(SSL)" : smtp.requireTLS ? "(STARTTLS)" : "(şifresiz)"}
-            </p>
-          ) : mode === "dev-outbox" ? (
-            <p style={{ ...st.status, color: "#9ec5f0" }}>
-              Bu bilgisayarda e-posta hesabı ayarlı değil: e-postalar kimseye gitmez, yalnız deneme dosyasına
-              (.mock-data/outbox.json) yazılır. Gerçek adreslere gitmesi için harbi klasöründeki “E-posta Ayarla”yı çalıştırın
-              (Gmail uygulama şifresi ya da Hostinger e-posta hesabı), sonra siteyi yeniden açın.
-            </p>
-          ) : (
-            <p style={{ ...st.status, color: "#f3a0a0" }}>
-              Gönderim ayarlı değil: e-postalar kuyrukta bekliyor, müşterilere gitmiyor. Hostinger&apos;da SMTP_HOST, SMTP_PORT, SMTP_USER,
-              SMTP_PASS ve EMAIL_FROM ortam değişkenlerini girin (docs/YAYIN.md).
+          <p style={{ ...st.status, color: TONE_COLOR[status.tone] }} data-testid="email-status" data-tone={status.tone}>
+            {status.text}
+          </p>
+          {status.detail && <p style={st.detail}>{status.detail}</p>}
+          {mode === "smtp" && smtp && (
+            <p style={st.muted}>
+              Gönderen hesap: {smtp.fromName} &lt;{smtp.fromAddress}&gt; · {smtp.host}:{smtp.port}{" "}
+              {smtp.secure ? "(SSL)" : smtp.requireTLS ? "(STARTTLS)" : "(şifresiz)"}
             </p>
           )}
           {warnings.length > 0 && mode === "smtp" && (
@@ -181,6 +176,8 @@ export default async function AdminEpostalarPage({ searchParams }: { searchParam
   );
 }
 
+const TONE_COLOR = { ok: "#9fd39f", info: "#9ec5f0", warn: "#e8c07a", error: "#f3a0a0" } as const;
+
 const st: Record<string, React.CSSProperties> = {
   back: { display: "inline-block", marginBottom: "0.75rem", color: "rgba(232,228,217,0.6)", fontSize: "0.875rem", textDecoration: "none" },
   page: { padding: "1.5rem clamp(1rem, 3vw, 2rem)", maxWidth: 980, color: "#e8e4d9" },
@@ -194,6 +191,7 @@ const st: Record<string, React.CSSProperties> = {
     border: "1px solid rgba(255,255,255,0.07)",
   },
   status: { margin: "0 0 0.5rem", fontWeight: 600, fontSize: "0.9375rem", lineHeight: 1.5, wordBreak: "break-word" },
+  detail: { margin: "0 0 0.5rem", fontSize: "0.8125rem", lineHeight: 1.55, color: "#e8e4d9" },
   warnings: { margin: "0 0 0.5rem", paddingLeft: "1.1rem", color: "#e8c07a", fontSize: "0.8125rem", lineHeight: 1.5 },
   counts: { margin: "0 0 0.85rem", fontSize: "0.8125rem", color: "rgba(232,228,217,0.6)" },
   filters: { display: "flex", flexWrap: "wrap", gap: "0.375rem", marginBottom: "1rem" },

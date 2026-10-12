@@ -4,8 +4,11 @@
  *
  *   npm run email:test -- alici@ornek.com
  *
- * Bilgisayarda harbi/"E-posta Ayarla.bat" bilgileri sorup .env'e yazar ve bunu çağırır. .env, Next.js'in okuduğu
+ * Bilgisayarda harbi/"E-posta Ayarla.bat" bilgileri sorar, önce bununla dener (bilgileri ortam değişkeni olarak
+ * verir; ortam değişkeni .env'den önce gelir), yalnız gönderim başarılıysa .env'e yazar. .env, Next.js'in okuduğu
  * gibi okunur (@next/env: aynı tırnak ve $ kuralları). Şifre ekrana ya da kayda yazılmaz.
+ *
+ * Çıkış kodu: 0 gönderildi · 1 gönderilemedi · 2 kullanım hatası · 3 hesap şifreyi kabul etmedi
  */
 
 import path from "node:path";
@@ -13,23 +16,6 @@ import path from "node:path";
 import { loadEnvConfig } from "@next/env";
 
 loadEnvConfig(path.resolve(__dirname, ".."), true, { info: () => {}, error: console.error });
-
-/** SMTP hatası → ne yapılmalı (şifre içermez) */
-function explain(message: string): string {
-  if (/EAUTH|\b535\b|\b534\b|authentication|Username and Password not accepted/i.test(message)) {
-    return "Kullanıcı adı ya da şifre kabul edilmedi. Gmail kullanıyorsanız normal şifreniz değil, Google hesabınızda oluşturduğunuz 16 harfli “Uygulama şifresi” gerekir (2 adımlı doğrulama açık olmalı). Hostinger'da e-posta hesabının şifresini hPanel → E-postalar'dan kontrol edin.";
-  }
-  if (/ENOTFOUND|EAI_AGAIN|getaddrinfo/i.test(message)) {
-    return "Sunucu adı bulunamadı: SMTP_HOST'u ve internet bağlantısını kontrol edin.";
-  }
-  if (/ETIMEDOUT|ECONNECTION|ECONNREFUSED|ESOCKET|timeout|Greeting never received/i.test(message)) {
-    return "Sunucuya bağlanılamadı: SMTP_HOST / SMTP_PORT (465 ya da 587), internet bağlantısı ya da güvenlik duvarı.";
-  }
-  if (/\b55[0-4]\b|sender|from address|not owned|relay/i.test(message)) {
-    return "Sunucu gönderen ya da alıcı adresini reddetti: EMAIL_FROM'daki adres SMTP_USER ile aynı olmalı; alıcı adresini kontrol edin.";
-  }
-  return "Ayrıntı yukarıda. Bilgileri kontrol edip E-posta Ayarla'yı yeniden çalıştırın.";
-}
 
 async function main() {
   const to = (process.argv[2] ?? "").trim();
@@ -48,7 +34,8 @@ async function main() {
   for (const w of emailConfigWarnings()) console.warn(`Uyarı: ${w}`);
   console.log(`Gönderiliyor: ${cfg.host}:${cfg.port} (${cfg.secure ? "SSL" : cfg.requireTLS ? "STARTTLS" : "şifresiz"}) · gönderen ${cfg.fromName} <${cfg.fromAddress}>`);
 
-  const { deliver, maskEmail } = await import("../lib/email/transport");
+  const { deliver, maskEmail, SmtpAuthError } = await import("../lib/email/transport");
+  const { explainSmtpError } = await import("../lib/email/errors");
   const { testEmail } = await import("../lib/email/templates/account");
   const { parseBusinessInfo } = await import("../lib/business/info");
   // Veritabanı gerekmesin: işletme bilgisi varsayılanlarla (e-posta altbilgisi)
@@ -60,8 +47,10 @@ async function main() {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`GÖNDERİLEMEDİ: ${message}`);
-    console.error(explain(message));
-    process.exitCode = 1;
+    console.error("");
+    const inSetup = process.env.CE_EMAIL_SETUP === "1";
+    console.error(explainSmtpError(message, { host: cfg.host, port: cfg.port, user: cfg.user, production: false, inSetup }));
+    process.exitCode = err instanceof SmtpAuthError ? 3 : 1;
   }
 }
 

@@ -63,8 +63,10 @@ gider. Sipariş teyit e-postası (sözleşmelerle birlikte) yasal zorunluluktur.
 3. Sitede ayrıca Admin → Ayarlar → İşletme: **e-posta** (müşteriye görünen, yanıtların geleceği adres) ve
    **bildirim e-postası** (yeni sipariş, ödeme uyarısı, iletişim mesajı size buraya gelir).
 4. Yayından önce bu bilgisayarda denemek için: `harbi/E-posta Ayarla.bat` aynı bilgileri (ya da deneme için bir
-   Gmail hesabı + Google "Uygulama şifresi") yerel `.env`'e yazar ve deneme e-postası gönderir
-   (`npm run email:test -- adres@ornek.com`). Ayar yokken yerelde e-postalar yalnız `.mock-data/outbox.json`'a yazılır.
+   Gmail hesabı + Google "Uygulama şifresi") önce deneme e-postasıyla sınar, yalnız gönderim başarılıysa yerel
+   `.env`'e yazar (`npm run email:test -- adres@ornek.com`). Gmail normal Google şifresini kabul etmez; 16 harfli
+   uygulama şifresi gerekir (hesapta 2 adımlı doğrulama açık olmalı). Ayar yokken yerelde e-postalar yalnız
+   `.mock-data/outbox.json`'a yazılır.
 
 ## 4. Node.js uygulaması (hPanel)
 
@@ -138,6 +140,9 @@ curl -fsS -m 60 -H "Authorization: Bearer CRON_SECRET_DEGERI" https://alanadiniz
 2. `/admin/giris` → yönetici girişi → **Panel**: "Yayın ve banka incelemesi kontrol listesi"ndeki maddeleri
    tamamlayın (işletme bilgileri, IBAN, e-posta, cron, kargo tarifesi, KDV, yasal metinler).
 3. Admin → **E-postalar** → "Deneme e-postası gönder": gelen kutunuza (gereksiz klasörüne de bakın) gelmeli.
+   Üstteki durum kutusu sunucunun gerçek cevabını gösterir: yeşil "çalışıyor" ancak bir e-posta gerçekten
+   gönderilince çıkar; kırmızıysa (şifre kabul edilmedi, sunucuya bağlanılamadı) ne yapılacağı orada yazar.
+   Şifre reddedilince kuyruk 15 dakika aynı şifreyle denemez (hesap kilitlenmesin); bekleyen e-postalar silinmez.
 4. Ana sayfa, kategori, ürün, arama, sepet, ödeme sayfası açılıyor mu; ürün fotoğrafları görünüyor mu
    (Admin → Ürünler → ürün → Fotoğraflar ile yenileri eklenir).
 5. Havale ile deneme siparişi verin → teyit e-postası (sözleşmelerle) ve sipariş sayfasında IBAN görünüyor mu →
