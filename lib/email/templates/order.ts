@@ -414,6 +414,55 @@ export function requestReceivedEmail(d: OrderEmailData, type: "CANCEL" | "RETURN
   });
 }
 
+// ── Teslimat bilgisi değişti ────────────────────────────────────────────
+
+/**
+ * Teslimat bilgisi değişince müşteriye bilgi (kim değiştirmiş olursa olsun): değişikliği başkası yaptıysa
+ * müşteri fark edip hemen ulaşabilsin.
+ */
+export function deliveryChangedEmail(d: OrderEmailData, by: "CUSTOMER" | "ADMIN"): RenderedEmail {
+  return customerEmail(d, {
+    subject: `Teslimat bilgileriniz güncellendi — #${d.reference}`,
+    preheader: "Siparişiniz yeni adrese gönderilecek.",
+    title: "Teslimat bilgileriniz güncellendi",
+    blocks: [
+      hello(d),
+      paragraph(
+        by === "CUSTOMER"
+          ? "Siparişinizin teslimat bilgilerini sipariş sayfanızdan güncellediniz. Siparişiniz aşağıdaki bilgilerle gönderilecek."
+          : "Siparişinizin teslimat bilgilerini güncelledik. Siparişiniz aşağıdaki bilgilerle gönderilecek."
+      ),
+      keyValues([{ label: "Teslimat", value: addressText(d.address) }], { boxed: true }),
+      notice(
+        `Bu değişikliği siz yapmadıysanız hemen bize ulaşın: ${formatPhoneTr(d.business.phone)}. Siparişiniz kargoya verilene kadar teslimat bilgilerini sipariş sayfanızdan yeniden değiştirebilirsiniz.`,
+        "warn"
+      ),
+      button("Siparişi görüntüle", orderUrl(d)),
+    ],
+  });
+}
+
+/**
+ * Başka cihazdan adres değiştirmek isteyen müşteriye 24 saatlik bağlantı (lib/orders/access.ts). Bağlantı yalnız
+ * sipariş e-postasına gider: sipariş numarasını bilen başkası adresi değiştiremez.
+ */
+export function deliveryLinkEmail(d: OrderEmailData, link: string, hours: number): RenderedEmail {
+  return customerEmail(d, {
+    subject: `Teslimat adresini değiştirme bağlantınız — #${d.reference}`,
+    preheader: `Bağlantı ${hours} saat geçerlidir.`,
+    title: "Teslimat bilgilerinizi değiştirin",
+    blocks: [
+      hello(d),
+      paragraph(
+        `Siparişinizin teslimat bilgilerini (alıcı, telefon, adres) değiştirmek için aşağıdaki düğmeye basın. Bağlantı ${hours} saat geçerlidir ve yalnız bu sipariş içindir; siparişiniz kargoya verilene kadar kullanılabilir.`
+      ),
+      button("Teslimat bilgilerini değiştir", link),
+      paragraph("Bu isteği siz yapmadıysanız e-postayı dikkate almayın; teslimat bilgileriniz değişmez.", { muted: true, small: true }),
+    ],
+    reason: "Bu e-postayı sipariş sayfanızdan istenen teslimat bilgisi değişikliği için aldınız.",
+  });
+}
+
 // ── Admin'den özel mesaj ────────────────────────────────────────────────
 
 export function customMessageEmail(d: OrderEmailData, subject: string, message: string): RenderedEmail {

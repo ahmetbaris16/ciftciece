@@ -40,6 +40,7 @@ import { cardPaymentDueAt } from "@/lib/payment/reservation";
 import { clientIp } from "@/lib/security/rate-limit";
 import { scheduleNotifications } from "@/lib/notifications/run";
 import { CHECKOUT_CONSENT_DOCUMENTS, CHECKOUT_TERMS_VERSION, LEGAL_DOCUMENTS } from "@/lib/legal/documents";
+import { ORDER_ACCESS_COOKIE, addOrderAccess, orderAccessCookieOptions } from "@/lib/orders/access";
 import {
   type BillingInput,
   CheckoutSchema,
@@ -60,11 +61,15 @@ function fail(
   return NextResponse.json({ success: false, code, error, ...extra }, { status });
 }
 
-/** Başarılı yanıt — yeni sipariş ve aynı anahtarla tekrar gelen istek (replayed) aynı biçimde döner */
-function orderResponse(order: Order, replayed: boolean) {
+/**
+ * Başarılı yanıt — yeni sipariş ve aynı anahtarla tekrar gelen istek (replayed) aynı biçimde döner. Siparişi veren
+ * tarayıcıya sipariş izni çerezi bırakılır: teslimat bilgisini sipariş sayfasından değiştirebilsin
+ * (lib/orders/access.ts; sipariş numarası tek başına yetmez).
+ */
+function orderResponse(order: Order, replayed: boolean, request: NextRequest) {
   // Sipariş e-postaları yanıt döndükten sonra (müşteri beklemez)
   if (!replayed) scheduleNotifications();
-  return NextResponse.json({
+  const res = NextResponse.json({
     success: true,
     orderId: order.id,
     // "pay": kart ödemesini başlat (/api/payment/create); "order": sipariş sayfasına git (havale bilgisi)
@@ -77,6 +82,12 @@ function orderResponse(order: Order, replayed: boolean) {
     },
     ...(replayed ? { replayed: true } : {}),
   });
+  res.cookies.set(
+    ORDER_ACCESS_COOKIE,
+    addOrderAccess(request.cookies.get(ORDER_ACCESS_COOKIE)?.value, order.reference),
+    orderAccessCookieOptions()
+  );
+  return res;
 }
 
 /** Doğrulanmış fatura girişi → siparişe yazılan fatura bilgisi (yoksa bireysel, teslimattaki ad-soyad) */
@@ -147,7 +158,7 @@ export async function POST(request: NextRequest) {
     if (existing.order.status === "CANCELLED" || existing.order.status === "REFUNDED") {
       return fail(409, "ORDER_CLOSED", CHECKOUT_MESSAGES.orderClosed, { reference: existing.order.reference });
     }
-    return orderResponse(existing.order, true);
+    return orderResponse(existing.order, true, request);
   };
   try {
     const replayed = await replay();
@@ -319,7 +330,7 @@ export async function POST(request: NextRequest) {
       idempotencyHash,
     });
 
-    return orderResponse(order, false);
+    return orderResponse(order, false, request);
   } catch (err) {
     // Aynı anahtarlı eşzamanlı istek önce yazdıysa: UNIQUE ihlali (P2002) ya da onun aldığı son stok
     // yüzünden stok hatası. Her iki durumda da o sipariş döndürülür, ikinci sipariş açılmaz.

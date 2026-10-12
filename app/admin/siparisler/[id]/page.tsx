@@ -12,6 +12,8 @@ import AdminShell from "@/components/admin/AdminShell";
 import OrderActions from "@/components/admin/OrderActions";
 import ReconcileButton from "@/components/admin/ReconcileButton";
 import ShipForm from "@/components/admin/order/ShipForm";
+import DeliveryForm from "@/components/admin/order/DeliveryForm";
+import { canChangeDelivery } from "@/lib/orders/lifecycle";
 import RefundForm from "@/components/admin/order/RefundForm";
 import InvoiceForm from "@/components/admin/order/InvoiceForm";
 import NoteForm from "@/components/admin/order/NoteForm";
@@ -150,6 +152,11 @@ export default async function AdminSiparisDetay({ params }: Props) {
     !order.needsAttention && (order.status === "PAID" || order.status === "PROCESSING") && !fullyRefunded && !openCancel;
   const failedEmails = d.emails.filter((e) => e.status === "FAILED").length;
   const billing = order.billingInfo;
+  // Teslimat bilgisi: kargoya verilene kadar değişebilir; son değişiklik (geçmiş yeniden eskiye sıralı) uyarı ve
+  // kargolama denetimi için (kargoya ver, ekrandaki adres eskidiyse reddedilir)
+  const deliveryEditable = canChangeDelivery(order.status);
+  const deliveryChange = d.events.find((e) => e.type === "ADDRESS" && !e.visibleToCustomer) ?? null;
+  const addressSeenAt = deliveryChange?.createdAt.getTime() ?? 0;
   // Akbank bilgileri girilene kadar kart ödemesi demo bankadır (lib/payment/provider.ts)
   const provider = cardPaymentMode() === "demo" ? "demo" : process.env.PAYMENT_PROVIDER;
   // Üye olmadan verilmiş açık siparişin değerlendirme kodu (paket fişinde ve teslim e-postasında yazar)
@@ -230,6 +237,27 @@ export default async function AdminSiparisDetay({ params }: Props) {
           </div>
         )}
 
+        {deliveryChange && deliveryChange.actorType === "CUSTOMER" && deliveryEditable && (
+          <div className={`${s.card} ${s.request}`} role="status" data-testid="admin-delivery-changed">
+            <h2 className={s.h2} style={{ color: "#e8c07a" }}>
+              Müşteri teslimat bilgilerini değiştirdi
+            </h2>
+            <p className={s.muted} style={{ marginBottom: "0.4rem" }}>
+              {dateTimeTr(deliveryChange.createdAt)} · aşağıdaki Teslimat kartında yeni bilgiler var
+            </p>
+            <p className={s.text} style={{ whiteSpace: "pre-wrap" }}>
+              {deliveryChange.message}
+            </p>
+            <p className={s.muted} style={{ marginTop: "0.5rem" }}>
+              Paket fişini yazdırdıysanız{" "}
+              <a href={`/admin/siparisler/${order.id}/fis`} target="_blank" rel="noopener noreferrer">
+                yeniden yazdırın
+              </a>
+              ; gönderiyi kargoda yeni adresle açın.
+            </p>
+          </div>
+        )}
+
         {openRequests.map((r) => (
           <div key={r.id} className={`${s.card} ${s.request}`}>
             <h2 className={s.h2} style={{ color: "#9ec5f0" }}>
@@ -275,7 +303,7 @@ export default async function AdminSiparisDetay({ params }: Props) {
               {canShip && (
                 <>
                   <hr className={s.divider} />
-                  <ShipForm orderId={order.id} additional={false} />
+                  <ShipForm orderId={order.id} additional={false} addressSeenAt={addressSeenAt} />
                 </>
               )}
               {order.notes && (
@@ -610,7 +638,7 @@ export default async function AdminSiparisDetay({ params }: Props) {
               </p>
             </section>
 
-            <section className={s.card}>
+            <section className={s.card} data-testid="admin-delivery">
               <h2 className={s.h2}>Teslimat</h2>
               <p className={s.text}>
                 {addr?.firstName} {addr?.lastName}
@@ -621,6 +649,32 @@ export default async function AdminSiparisDetay({ params }: Props) {
                 {addr?.postalCode ? ` ${addr.postalCode}` : ""}
               </p>
               {addr?.phone && <p className={s.muted}>{formatPhoneTr(addr.phone)}</p>}
+              {deliveryChange && (
+                <p className={s.muted} style={{ marginTop: "0.4rem", color: "#e8c07a" }}>
+                  {deliveryChange.actorType === "CUSTOMER" ? "Müşteri değiştirdi" : "Panelden değiştirildi"} ·{" "}
+                  {dateTimeTr(deliveryChange.createdAt)} (önceki adres sipariş geçmişinde)
+                </p>
+              )}
+              {deliveryEditable && (
+                <details className={s.details} style={{ marginTop: "0.75rem" }}>
+                  <summary>Teslimat bilgisini düzenle</summary>
+                  <div style={{ marginTop: "0.75rem" }}>
+                    <DeliveryForm
+                      key={addressSeenAt}
+                      orderId={order.id}
+                      initial={{
+                        firstName: addr?.firstName ?? "",
+                        lastName: addr?.lastName ?? "",
+                        phone: addr?.phone ?? "",
+                        city: addr?.city ?? "",
+                        district: addr?.district ?? "",
+                        address: addr?.address ?? "",
+                        postalCode: addr?.postalCode ?? "",
+                      }}
+                    />
+                  </div>
+                </details>
+              )}
             </section>
 
             {order.customerNote && (

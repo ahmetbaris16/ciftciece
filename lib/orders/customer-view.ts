@@ -14,6 +14,8 @@ import type { OrderStatus } from "@/types";
 
 export interface CustomerOrderView {
   data: OrderEmailData;
+  /** Üye siparişinde hesabın kimliği (teslimat bilgisini değiştirme izni için) */
+  userId: string | null;
   needsAttention: boolean;
   invoiceNumber: string | null;
   invoiceIssuedAt: Date | null;
@@ -31,7 +33,7 @@ export async function loadCustomerOrderView(reference: string): Promise<Customer
   if (!USE_DB) return null;
   const row = await prisma.order.findUnique({
     where: { reference },
-    select: { id: true, needsAttention: true, invoiceNumber: true, invoiceIssuedAt: true },
+    select: { id: true, userId: true, needsAttention: true, invoiceNumber: true, invoiceIssuedAt: true },
   });
   if (!row) return null;
   const [data, events, requests, openCard, paidAttempt] = await Promise.all([
@@ -51,6 +53,7 @@ export async function loadCustomerOrderView(reference: string): Promise<Customer
   if (!data) return null;
   return {
     data,
+    userId: row.userId,
     needsAttention: row.needsAttention,
     invoiceNumber: row.invoiceNumber,
     invoiceIssuedAt: row.invoiceIssuedAt,

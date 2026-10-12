@@ -18,6 +18,7 @@ export type OutboxTopic =
   | "order.refunded" // iade kaydı girildi
   | "order.customer_request" // müşteri iptal/iade talebi
   | "order.payment_reminder" // havale son ödeme hatırlatması
+  | "order.address_changed" // teslimat bilgisi değişti (eski/yeni adres olayda değil, sipariş geçmişinde)
   | "payment.alert" // ödeme uyarısı (insan kararı)
   | "contact.received" // iletişim formu mesajı
   | "review.submitted"; // onay bekleyen ürün değerlendirmesi

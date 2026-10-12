@@ -206,6 +206,11 @@
   box-shadow: 0 0 0 3px rgba(184, 149, 42, 0.12);
 }
 
+/* Bağlantıyla (#teslimat) gelinince kart sabit başlığın altında kalmasın */
+.anchorCard {
+  scroll-margin-top: calc(var(--header-h, 120px) + 16px);
+}
+
 .cardTitle {
   margin: 0 0 var(--space-4);
   font-family: var(--font-display);

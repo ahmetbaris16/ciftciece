@@ -1,6 +1,6 @@
 /**
  * Sipariş sonrası işlemler: kargolama (takip numarasıyla), iade kaydı, müşteri talepleri (iptal/cayma),
- * müşterinin ödenmemiş siparişi iptali, admin notu, fatura numarası.
+ * müşterinin ödenmemiş siparişi iptali, teslimat bilgisi değişikliği, admin notu, fatura numarası.
  *
  * Her işlem tek veritabanı işlemidir: sipariş satırı kilitlenir (SELECT … FOR UPDATE), iş kaydı + sipariş
  * geçmişi + bildirim olayı birlikte yazılır. Para hareketi yapılmaz: iade bankadan/havaleyle yapılır, burada
@@ -11,7 +11,9 @@ import { Prisma, type CustomerRequestType, type OrderStatus, type RefundMethod }
 import { prisma } from "@/lib/db/prisma";
 import { writeOutbox } from "@/lib/outbox";
 import { formatPrice } from "@/types";
-import type { PaymentMethod } from "@/types";
+import type { BillingInfo, PaymentMethod, ShippingAddress } from "@/types";
+import { addressText } from "@/lib/notifications/order-data";
+import type { DeliveryChangeInput } from "@/lib/validation/checkout";
 import { recordOrderEvent } from "./events";
 import {
   changeStatusInTx,
@@ -33,6 +35,9 @@ import {
 } from "@/lib/shipping/carriers";
 
 type Tx = Prisma.TransactionClient;
+
+const dateTimeTr = (d: Date) =>
+  new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Istanbul" }).format(d);
 
 async function lockOrder(tx: Tx, orderId: string): Promise<OrderRow & { needsAttention: boolean }> {
   const rows = await tx.$queryRaw<
@@ -59,6 +64,11 @@ export interface ShipInput {
   trackingUrl?: string | null;
   /** Numara firmanın olağan biçimine uymuyor ama yönetici fişle karşılaştırıp doğruladı */
   confirmUnusual?: boolean;
+  /**
+   * Yöneticinin ekranda gördüğü son teslimat bilgisi değişikliğinin zamanı (ms; değişiklik yoksa 0). Verilirse ve
+   * o andan sonra adres değiştiyse kargolama reddedilir (eski adresle paket çıkmasın). Verilmezse denetlenmez.
+   */
+  addressSeenAt?: number | null;
 }
 
 /** Takip numarası firmanın olağan biçimine uymuyor ve yönetici onaylamadı (panel "yine de kaydet" sorar) */
@@ -111,6 +121,15 @@ export async function shipOrder(orderId: string, input: ShipInput, actorId: stri
       if (await isFullyRefunded(tx, orderId)) throw new OrderTransitionError(FULLY_REFUNDED_MESSAGE);
       if (order.status !== "SHIPPED" && (await hasOpenCancelRequest(tx, orderId))) {
         throw new OrderTransitionError(OPEN_CANCEL_REQUEST_MESSAGE);
+      }
+      if (input.addressSeenAt !== undefined && order.status !== "SHIPPED") {
+        const last = await lastDeliveryChange(orderId, tx);
+        if (last && last.createdAt.getTime() > (input.addressSeenAt ?? 0)) {
+          throw new OrderTransitionError(
+            `Teslimat bilgileri bu sayfa açıldıktan sonra değişti (${last.actorType === "CUSTOMER" ? "müşteri" : "yönetici"}, ${dateTimeTr(last.createdAt)}). Sayfa yenilendi: yeni adresi kontrol edin, paket fişini yazdırdıysanız yeniden yazdırıp tekrar kargoya verin.`,
+            409
+          );
+        }
       }
 
       const shipment = await tx.shipment.create({
@@ -360,6 +379,122 @@ export async function rejectCustomerRequest(requestId: string, note: string | nu
           : "İade (cayma) bildiriminiz kabul edilemedi. Ayrıntı için bize ulaşabilirsiniz.",
     });
     return { ...req, status: "REJECTED" as const };
+  });
+}
+
+// ── Teslimat bilgisi ─────────────────────────────────────────────────────
+
+/** Teslimat bilgisi (alıcı adı, telefon, adres) sipariş kargoya verilene kadar değiştirilebilir */
+export const DELIVERY_EDITABLE_STATUSES: readonly OrderStatus[] = ["PENDING", "PAID", "PROCESSING"];
+export const canChangeDelivery = (status: string) => (DELIVERY_EDITABLE_STATUSES as readonly string[]).includes(status);
+
+export type DeliveryActor = { type: "CUSTOMER" } | { type: "ADMIN"; id: string };
+
+const DELIVERY_FIELDS = ["firstName", "lastName", "phone", "city", "district", "address", "postalCode"] as const;
+
+/**
+ * Teslimat bilgisini değiştirir: müşteri sipariş sayfasından (izni lib/orders/access.ts denetler), yönetici panelden.
+ * Sipariş satırı kilitlenir; kargoya verilmiş ya da kapanmış siparişte reddedilir (aynı anda "kargoya ver" ile
+ * yarışta önce kilitleyen geçerli olur; kargolama da ekrandaki adresin güncel olduğunu denetler — shipOrder).
+ * Eski ve yeni adres yalnız yöneticiye görünen geçmiş kaydına, müşteriye "güncellendi" kaydı ve bildirim olayı
+ * (müşteriye bilgi e-postası; müşteri değiştirdiyse işletmeye de) aynı işlemde yazılır. Bildirim olayında kişisel
+ * veri yok: adresler geçmiş kaydından okunur.
+ * Fatura düzenlenmiş ve fatura adresi "teslimatla aynı" ise eski adres faturaya sabitlenir (kesilmiş fatura değişmez).
+ * Ad soyad / telefon alıcınındır; siparişi veren kişinin bilgisi (e-posta dahil) değişmez.
+ */
+export async function changeShippingAddress(
+  orderId: string,
+  input: DeliveryChangeInput,
+  actor: DeliveryActor
+): Promise<{ changed: boolean }> {
+  return prisma.$transaction(async (tx) => {
+    const locked = await lockOrder(tx, orderId);
+    if (!canChangeDelivery(locked.status)) {
+      throw new OrderTransitionError(
+        locked.status === "SHIPPED" || locked.status === "DELIVERED"
+          ? "Sipariş kargoya verildi; teslimat adresi artık buradan değiştirilemez. Kargo firmasıyla ya da bizimle iletişime geçin."
+          : "Bu sipariş kapandı (iptal ya da iade); teslimat bilgisi değiştirilemez."
+      );
+    }
+    const row = await tx.order.findUniqueOrThrow({
+      where: { id: orderId },
+      select: { shippingAddress: true, billingInfo: true, invoiceNumber: true, guestName: true },
+    });
+    const old = (row.shippingAddress ?? {}) as unknown as ShippingAddress;
+    const next: ShippingAddress = {
+      ...old,
+      firstName: input.firstName,
+      lastName: input.lastName,
+      phone: input.phone,
+      city: input.city,
+      district: input.district,
+      address: input.address,
+    };
+    if (input.postalCode) next.postalCode = input.postalCode;
+    else delete next.postalCode;
+    if (DELIVERY_FIELDS.every((f) => (old[f] ?? "") === (next[f] ?? ""))) return { changed: false };
+
+    // Kesilmiş faturanın adresi değişmesin: "teslimatla aynı" ise önceki adres faturaya yazılır
+    const billing = row.billingInfo as unknown as BillingInfo | null;
+    const freezeBilling = !!row.invoiceNumber && (billing === null || billing.sameAsShipping);
+    const frozenBilling: BillingInfo | null = freezeBilling
+      ? {
+          ...(billing ?? { type: "INDIVIDUAL" as const, name: row.guestName?.trim() || `${old.firstName ?? ""} ${old.lastName ?? ""}`.trim() }),
+          sameAsShipping: false,
+          address: old.address,
+          district: old.district,
+          city: old.city,
+        }
+      : null;
+
+    await tx.order.update({
+      where: { id: orderId },
+      data: {
+        shippingAddress: next as unknown as Prisma.InputJsonValue,
+        ...(frozenBilling ? { billingInfo: frozenBilling as unknown as Prisma.InputJsonValue } : {}),
+      },
+    });
+
+    const actorId = actor.type === "ADMIN" ? actor.id : null;
+    const by = actor.type === "CUSTOMER" ? "müşteri, sipariş sayfasından" : "yönetici, panelden";
+    const eventId = await recordOrderEvent(tx, {
+      orderId,
+      type: "ADDRESS",
+      actorType: actor.type,
+      actorId,
+      visibleToCustomer: false,
+      message: [
+        `Teslimat bilgileri değiştirildi (${by}).`,
+        `Önceki: ${addressText(old)}`,
+        `Yeni: ${addressText(next)}`,
+        ...(frozenBilling ? ["Fatura düzenlenmiş olduğu için fatura adresi önceki adreste bırakıldı."] : []),
+      ].join("\n"),
+    });
+    await recordOrderEvent(tx, {
+      orderId,
+      type: "ADDRESS",
+      actorType: actor.type,
+      actorId,
+      visibleToCustomer: true,
+      message: "Teslimat bilgileriniz güncellendi.",
+    });
+    await writeOutbox(tx, {
+      topic: "order.address_changed",
+      aggregateType: "order",
+      aggregateId: orderId,
+      dedupeKey: `order.address_changed:${eventId}`,
+      payload: { orderId, eventId, by: actor.type },
+    });
+    return { changed: true };
+  });
+}
+
+/** Siparişin son teslimat bilgisi değişikliği (yöneticinin gördüğü adres güncel mi denetimi için) */
+export async function lastDeliveryChange(orderId: string, db: Tx | typeof prisma = prisma) {
+  return db.orderEvent.findFirst({
+    where: { orderId, type: "ADDRESS", visibleToCustomer: false },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, createdAt: true, actorType: true, message: true },
   });
 }
 

@@ -3,9 +3,12 @@
  *
  * Müşterinin siparişle ilgili her şeyi gördüğü tek sayfa: durum ve adımlar, zaman çizelgesi (müşteriye görünen
  * geçmiş), havale bilgileri, ödemesi yarım kalan kartta "Ödemeyi tamamla", kargo takip numarası, ürünler ve
- * tutarlar, teslimat/fatura bilgisi, fatura numarası, iadeler, iptal/iade talebi, siparişe özel sözleşmeler ve teslim
- * edilince ürün değerlendirmesi (üye olmadan verilmiş siparişte de).
- * Sipariş numarası (tahmin edilemez referans) sayfanın anahtarıdır; arama motorlarına kapalıdır.
+ * tutarlar, teslimat/fatura bilgisi (kargoya verilene kadar teslimat bilgisi değiştirilebilir), fatura numarası,
+ * iadeler, iptal/iade talebi, siparişe özel sözleşmeler ve teslim edilince ürün değerlendirmesi (üye olmadan
+ * verilmiş siparişte de).
+ * Sipariş numarası (tahmin edilemez referans) sayfanın anahtarıdır; arama motorlarına kapalıdır. Teslimat bilgisini
+ * değiştirmek için numara yetmez: siparişi veren tarayıcı, sahibi olan hesap ya da e-postadaki bağlantı gerekir
+ * (lib/orders/access.ts).
  */
 
 import type { Metadata } from "next";
@@ -21,10 +24,14 @@ import { formatPhoneTr } from "@/lib/business/info";
 import { getCurrentCustomer } from "@/lib/auth/session";
 import { getOrderReviewContext } from "@/lib/repositories/product-review.repository";
 import { REVIEW_GRANT_COOKIE, hasReviewGrant, parseGrantCookie, reviewCodeUsed } from "@/lib/reviews/review-code";
+import { ORDER_ACCESS_COOKIE, hasOrderAccess } from "@/lib/orders/access";
+import { canChangeDelivery } from "@/lib/orders/lifecycle";
+import { maskEmail } from "@/lib/email/transport";
 import { cookies } from "next/headers";
 import LegalSections from "@/components/legal/LegalSections";
 import ClearCartOnPaid from "./ClearCartOnPaid";
 import CopyButton from "./CopyButton";
+import DeliveryEditor from "./DeliveryEditor";
 import PayNowButton from "./PayNowButton";
 import OrderRequests from "./OrderRequests";
 import OrderReviews from "./OrderReviews";
@@ -53,16 +60,22 @@ const REFUND_TR: Record<string, string> = {
 
 interface Props {
   params: Promise<{ ref: string }>;
-  searchParams: Promise<{ odeme?: string | string[] }>;
+  searchParams: Promise<{ odeme?: string | string[]; adres?: string | string[] }>;
 }
 
 export default async function SiparisPage({ params, searchParams }: Props) {
   const { ref } = await params;
-  const { odeme } = await searchParams;
+  const { odeme, adres } = await searchParams;
   const view = await loadCustomerOrderView(ref);
   if (!view) notFound();
 
   const d = view.data;
+  // Teslimat bilgisi kargoya verilene kadar değişir; izin: bu tarayıcının sipariş çerezi ya da sahibi olan hesap
+  const deliveryEditable = canChangeDelivery(d.status);
+  const deliveryAccess = deliveryEditable
+    ? hasOrderAccess((await cookies()).get(ORDER_ACCESS_COOKIE)?.value, d.reference) ||
+      (view.userId !== null && (await getCurrentCustomer().catch(() => null))?.id === view.userId)
+    : false;
   // Teslim edildiyse ürün değerlendirmesi (bölüm yüklenemezse sayfanın geri kalanı yine açılır)
   const reviewContext =
     d.status === "DELIVERED"
@@ -384,11 +397,29 @@ export default async function SiparisPage({ params, searchParams }: Props) {
           </div>
 
           <aside className={styles.side}>
-            <section className={styles.card} aria-labelledby="delivery-title">
+            <section id="teslimat" className={`${styles.card} ${styles.anchorCard}`} aria-labelledby="delivery-title">
               <h2 id="delivery-title" className={styles.cardTitle}>
                 Teslimat
               </h2>
-              <p className={styles.sideText}>{addressText(d.address)}</p>
+              <DeliveryEditor
+                reference={d.reference}
+                summary={addressText(d.address)}
+                initial={{
+                  firstName: d.address?.firstName ?? "",
+                  lastName: d.address?.lastName ?? "",
+                  phone: d.address?.phone ?? "",
+                  city: d.address?.city ?? "",
+                  district: d.address?.district ?? "",
+                  address: d.address?.address ?? "",
+                  postalCode: d.address?.postalCode ?? "",
+                }}
+                editable={deliveryEditable}
+                shipped={d.status === "SHIPPED"}
+                access={deliveryAccess}
+                maskedEmail={d.customerEmail ? maskEmail(d.customerEmail) : null}
+                openOnLoad={adres === "1"}
+                linkInvalid={adres === "gecersiz"}
+              />
               <h3 className={styles.sideTitle}>Fatura</h3>
               <p className={styles.sideText}>{billingText(d.billing, d.customerName)}</p>
               {view.invoiceNumber && (

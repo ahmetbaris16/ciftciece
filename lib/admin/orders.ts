@@ -66,9 +66,19 @@ export async function countOrdersByFilter(): Promise<Record<OrderFilter, number>
 }
 
 /** Listede satırın altında: siparişte sıradaki iş (kapanmış siparişte yok) */
-export function nextStepHint(o: { status: string; paymentMethod: string; needsAttention: boolean; openRequests: number }): string | null {
+export function nextStepHint(o: {
+  status: string;
+  paymentMethod: string;
+  needsAttention: boolean;
+  openRequests: number;
+  /** Müşteri teslimat bilgisini sipariş sayfasından değiştirdi */
+  deliveryChanged?: boolean;
+}): string | null {
   if (o.needsAttention) return "Ödeme uyarısına karar verin";
   if (o.openRequests > 0) return "Müşteri talebine karar verin";
+  if (o.deliveryChanged && (o.status === "PAID" || o.status === "PROCESSING")) {
+    return "Müşteri adresi değiştirdi — yeni adresle kargoya verin";
+  }
   switch (o.status) {
     case "PENDING":
       return o.paymentMethod === "BANK_TRANSFER" ? "Havale gelince onaylayın" : "Kart ödemesi bekleniyor";
@@ -94,6 +104,8 @@ export interface AdminOrderRow {
   needsAttention: boolean;
   recipientPays: boolean;
   openRequests: number;
+  /** Müşteri teslimat bilgisini değiştirdi (kargoya verilmeden önce görülsün) */
+  deliveryChanged: boolean;
   createdAt: Date;
 }
 
@@ -135,7 +147,12 @@ export async function searchOrdersForAdmin(opts: { q?: string; filter?: OrderFil
         needsAttention: true,
         shippingAddress: true,
         createdAt: true,
-        _count: { select: { requests: { where: { status: "OPEN" } } } },
+        _count: {
+          select: {
+            requests: { where: { status: "OPEN" } },
+            events: { where: { type: "ADDRESS", visibleToCustomer: false, actorType: "CUSTOMER" } },
+          },
+        },
       },
     }),
   ]);
@@ -151,6 +168,7 @@ export async function searchOrdersForAdmin(opts: { q?: string; filter?: OrderFil
       needsAttention: o.needsAttention,
       recipientPays: (o.shippingAddress as { shippingMode?: string } | null)?.shippingMode === "recipient",
       openRequests: o._count.requests,
+      deliveryChanged: o._count.events > 0,
       createdAt: o.createdAt,
     })),
     total,

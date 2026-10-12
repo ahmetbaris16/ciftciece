@@ -147,6 +147,32 @@ export function customerRequestStoreEmail(opts: {
   });
 }
 
+/** Müşteri teslimat bilgisini sipariş sayfasından değiştirdi (kargoya vermeden önce görülmeli) */
+export function deliveryChangedStoreEmail(opts: {
+  business: BusinessInfo;
+  orderId: string;
+  reference: string;
+  customerName: string;
+  /** Sipariş geçmişindeki kayıt: önceki ve yeni adres */
+  change: string;
+}): RenderedEmail {
+  return storeEmail({
+    business: opts.business,
+    subject: `Teslimat adresi değişti — #${opts.reference}`,
+    preheader: `${opts.customerName} teslimat bilgilerini değiştirdi. Kargoya vermeden önce yeni adresi kullanın.`,
+    eyebrow: "Adres değişikliği",
+    title: `${opts.customerName} teslimat bilgilerini değiştirdi`,
+    blocks: [
+      notice(
+        "Paket fişini yazdırdıysanız yeniden yazdırın; gönderiyi kargoda yeni adresle açın. Sipariş panelde de uyarıyla görünür.",
+        "warn"
+      ),
+      paragraph(opts.change),
+      button("Siparişi panelde aç", adminOrderUrl(opts.orderId)),
+    ],
+  });
+}
+
 /** Satın alan müşterinin değerlendirmesi yayınlandı (bilgi; onay gerekmez) */
 export function reviewPublishedStoreEmail(opts: {
   business: BusinessInfo;

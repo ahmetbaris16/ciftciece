@@ -14,6 +14,7 @@
  * | order.refunded            | İadeniz yapıldı                              | —                          |
  * | order.payment_reminder    | Havale hatırlatma (son ödeme sonrası gitmez) | —                          |
  * | order.customer_request    | Talebiniz alındı                             | Müşteri talebi             |
+ * | order.address_changed     | Teslimat bilgileriniz güncellendi            | Müşteri değiştirdiyse bilgi |
  * | contact.received          | —                                            | İletişim mesajı (yanıtla → müşteri) |
  * | review.submitted          | —                                            | Yeni değerlendirme yayınlandı |
  */
@@ -25,6 +26,7 @@ import { formatPrice } from "@/types";
 import { replyToFor } from "@/lib/email/brand";
 import {
   customMessageEmail,
+  deliveryChangedEmail,
   orderCancelledEmail,
   orderDeliveredEmail,
   orderReceivedEmail,
@@ -37,6 +39,7 @@ import {
 import {
   contactMessageStoreEmail,
   customerRequestStoreEmail,
+  deliveryChangedStoreEmail,
   newOrderStoreEmail,
   reviewPublishedStoreEmail,
 } from "@/lib/email/templates/store";
@@ -231,6 +234,39 @@ const customerRequest: Handler = async (event, ctx) => {
   ];
 };
 
+/**
+ * Teslimat bilgisi değişti: müşteriye her durumda bilgi (başkası değiştirdiyse fark etsin); müşteri değiştirdiyse
+ * işletmeye de (paket fişi yeniden yazdırılsın). Adresler olay yükünde değil, sipariş geçmişindeki kayıttan okunur.
+ */
+const deliveryChanged: Handler = async (event, ctx) => {
+  const p = payloadOf(event);
+  const d = await orderData(event);
+  if (!d) return [];
+  const by = str(p.by) === "ADMIN" ? "ADMIN" : "CUSTOMER";
+  const drafts = toCustomer(d, "ADDRESS_CHANGED", deliveryChangedEmail(d, by));
+  if (by === "CUSTOMER") {
+    const eventId = str(p.eventId);
+    const change = eventId
+      ? await prisma.orderEvent.findUnique({ where: { id: eventId }, select: { message: true } })
+      : null;
+    drafts.push(
+      ...toStore(
+        ctx,
+        "STORE_ADDRESS_CHANGED",
+        deliveryChangedStoreEmail({
+          business: ctx.business,
+          orderId: d.id,
+          reference: d.reference,
+          customerName: d.customerName,
+          change: change?.message ?? `Yeni teslimat: ${addressText(d.address)}`,
+        }),
+        { orderId: d.id, replyTo: d.customerEmail }
+      )
+    );
+  }
+  return drafts;
+};
+
 const contactReceived: Handler = async (event, ctx) => {
   const id = str(payloadOf(event).messageId) ?? event.aggregateId;
   const m = await prisma.contactMessage.findUnique({ where: { id } });
@@ -277,6 +313,7 @@ export const ORDER_HANDLERS: Record<string, Handler> = {
   "order.refunded": refunded,
   "order.payment_reminder": reminder,
   "order.customer_request": customerRequest,
+  "order.address_changed": deliveryChanged,
   "contact.received": contactReceived,
   "review.submitted": reviewSubmitted,
 };

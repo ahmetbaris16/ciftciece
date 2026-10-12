@@ -23,7 +23,16 @@ import f from "./forms.module.css";
 
 const OTHER = "__other";
 
-export default function ShipForm({ orderId, additional }: { orderId: string; additional: boolean }) {
+export default function ShipForm({
+  orderId,
+  additional,
+  addressSeenAt = null,
+}: {
+  orderId: string;
+  additional: boolean;
+  /** Ekrandaki teslimat bilgisinin son değişiklik zamanı (ms; yoksa 0): sonra değiştiyse sunucu reddeder */
+  addressSeenAt?: number | null;
+}) {
   const { busy, error, done, send, setError } = useAdminRequest();
   const [carrier, setCarrier] = useState(CARRIERS[0].name);
   const [otherName, setOtherName] = useState("");
@@ -73,6 +82,7 @@ export default function ShipForm({ orderId, additional }: { orderId: string; add
         trackingNumber: number,
         trackingUrl: carrier === OTHER && trackingUrl.trim() ? trackingUrl.trim() : null,
         ...(issue && confirmed ? { confirmUnusual: true } : {}),
+        ...(addressSeenAt !== null ? { addressSeenAt } : {}),
       },
       { success: additional ? "Ek koli eklendi; müşteriye e-posta gidiyor." : "Kargoya verildi; müşteriye takip e-postası gidiyor." }
     );

@@ -28,7 +28,7 @@ export default async function TeslimatPage() {
           </nav>
           <span className={styles.category}>Müşteri Hizmetleri</span>
           <h1 className={styles.title}>Teslimat Bilgileri</h1>
-          <p className={styles.meta}>Son güncelleme: 5 Ekim 2026</p>
+          <p className={styles.meta}>Son güncelleme: 7 Ekim 2026</p>
         </header>
 
         <div className={styles.content}>
@@ -106,6 +106,14 @@ export default async function TeslimatPage() {
             Siparişiniz kargoya verildiğinde kargo takip numarası e-postayla gönderilir ve sipariş sayfanızda
             görünür. Kargo firmasının sitesinden veya
             uygulamasından teslimatınızı anlık olarak takip edebilirsiniz.
+          </p>
+
+          <h2>Teslimat Adresini Değiştirme</h2>
+          <p>
+            Adresi, alıcıyı ya da telefonu yanlış yazdıysanız siparişiniz <strong>kargoya verilene kadar</strong> sipariş
+            sayfanızdaki “Teslimat bilgilerini değiştir” ile düzeltebilirsiniz. Güvenliğiniz için bu, siparişi verdiğiniz
+            cihazdan ya da e-postanıza gönderdiğimiz bağlantıyla yapılır; değişiklik size e-postayla bildirilir. Kargoya
+            verilmiş siparişte adres değişikliği için bize ulaşın.
           </p>
 
           <h2>Eksik veya Hasarlı Teslimat</h2>

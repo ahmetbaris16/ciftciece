@@ -10,9 +10,9 @@ export const metadata: Metadata = {
 };
 
 /**
- * Listede yalnız sitede GERÇEKTEN kullanılanlar var: next-auth oturum çerezleri, değerlendirme izni çerezi, sepet
- * (localStorage), ödeme adımı anahtarı ve bankaya geçerken ödeme formu taslağı (sessionStorage). Yeni çerez/izleme
- * eklenirse bu sayfa güncellenmeli.
+ * Listede yalnız sitede GERÇEKTEN kullanılanlar var: next-auth oturum çerezleri, değerlendirme izni çerezi, sipariş
+ * izni çerezi (teslimat bilgisini değiştirme), sepet (localStorage), ödeme adımı anahtarı ve bankaya geçerken ödeme
+ * formu taslağı (sessionStorage). Yeni çerez/izleme eklenirse bu sayfa güncellenmeli.
  */
 export default function CerezPolitikasiPage() {
   return (
@@ -53,6 +53,15 @@ export default function CerezPolitikasiPage() {
             <td>
               Üye olmadan verdiğiniz siparişte değerlendirme kodunu girdikten sonra ürünleri bu tarayıcıdan değerlendirip
               düzenleyebilmeniz (yalnız rastgele bir anahtar; kişisel bilgi içermez)
+            </td>
+            <td>30 gün</td>
+          </tr>
+          <tr>
+            <td>ce_order_access</td>
+            <td>
+              Siparişi verdiğiniz (ya da e-postanızdaki bağlantıyı açtığınız) tarayıcıdan, sipariş kargoya verilene kadar
+              teslimat bilgilerini değiştirebilmeniz; sipariş numarasını bilen başkası değiştiremesin diye (yalnız şifreli
+              bir anahtar; kişisel bilgi içermez)
             </td>
             <td>30 gün</td>
           </tr>

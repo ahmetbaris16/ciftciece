@@ -115,6 +115,18 @@ export default async function SssPage() {
           ),
         },
         {
+          q: "Teslimat adresimi yanlış yazdım, değiştirebilir miyim?",
+          text: "Evet. Siparişiniz kargoya verilene kadar sipariş sayfanızdaki “Teslimat bilgilerini değiştir” ile adresi, alıcıyı ve telefonu değiştirebilirsiniz. Güvenliğiniz için bu, siparişi verdiğiniz cihazdan ya da e-postanıza gönderdiğimiz bağlantıyla yapılır.",
+          a: (
+            <>
+              Evet. Siparişiniz <strong>kargoya verilene kadar</strong> sipariş sayfanızdaki “Teslimat bilgilerini değiştir”
+              ile adresi, alıcıyı ve telefonu değiştirebilirsiniz. Güvenliğiniz için bu, siparişi verdiğiniz cihazdan ya da
+              e-postanıza gönderdiğimiz bağlantıyla yapılır; değişiklik e-postayla da bildirilir. Siparişiniz kargoya
+              verildiyse bizi arayın.
+            </>
+          ),
+        },
+        {
           q: "Paketim hasarlı geldi, ne yapmalıyım?",
           text: "Kargo görevlisine tutanak tutturun, fotoğraf çekin ve bize bildirin; yeniden gönderir ya da iade ederiz.",
           a: (

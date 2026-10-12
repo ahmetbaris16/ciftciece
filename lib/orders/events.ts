@@ -8,7 +8,16 @@
 
 import type { OrderStatus, Prisma } from "@prisma/client";
 
-export type OrderEventType = "CREATED" | "PAYMENT" | "STATUS" | "SHIPMENT" | "REFUND" | "NOTE" | "REQUEST" | "INVOICE";
+export type OrderEventType =
+  | "CREATED"
+  | "PAYMENT"
+  | "STATUS"
+  | "SHIPMENT"
+  | "REFUND"
+  | "NOTE"
+  | "REQUEST"
+  | "INVOICE"
+  | "ADDRESS"; // teslimat bilgisi değişikliği (eski/yeni adres yalnız yöneticiye görünen kayıtta)
 export type OrderActorType = "SYSTEM" | "ADMIN" | "CUSTOMER" | "PROVIDER";
 
 export interface OrderEventInput {
@@ -22,8 +31,9 @@ export interface OrderEventInput {
   toStatus?: OrderStatus | null;
 }
 
-export async function recordOrderEvent(tx: Prisma.TransactionClient, e: OrderEventInput): Promise<void> {
-  await tx.orderEvent.create({
+/** Kaydın kimliğini döndürür (bildirim olayı kayda atıf yapabilsin) */
+export async function recordOrderEvent(tx: Prisma.TransactionClient, e: OrderEventInput): Promise<string> {
+  const row = await tx.orderEvent.create({
     data: {
       orderId: e.orderId,
       type: e.type,
@@ -34,7 +44,9 @@ export async function recordOrderEvent(tx: Prisma.TransactionClient, e: OrderEve
       fromStatus: e.fromStatus ?? null,
       toStatus: e.toStatus ?? null,
     },
+    select: { id: true },
   });
+  return row.id;
 }
 
 export const ORDER_STATUS_TR: Record<OrderStatus, string> = {

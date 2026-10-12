@@ -178,6 +178,13 @@ export const BillingSchema = z
 
 export type BillingInput = z.infer<typeof BillingSchema>;
 
+/**
+ * Sipariş verildikten sonra teslimat bilgisi değişikliği (sipariş sayfası ve panel): alıcının adı, telefonu ve
+ * adresi — ödeme adımındaki kurallarla aynı. E-posta değişmez (bildirimler siparişteki adrese gider).
+ */
+export const DeliveryChangeSchema = ContactSchema.omit({ email: true }).extend(ShippingSchema.shape);
+export type DeliveryChangeInput = z.infer<typeof DeliveryChangeSchema>;
+
 export const CheckoutItemSchema = z.object({
   variantId: z.string().min(1),
   quantity: z.number().int().min(1).max(99),
