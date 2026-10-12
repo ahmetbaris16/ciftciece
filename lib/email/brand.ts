@@ -2,7 +2,7 @@
  * E-postaların ortak parçaları: site adresi ve satıcı bilgili altbilgi.
  */
 
-import { formatPhoneTr, sellerDisplayName, type BusinessInfo } from "@/lib/business/info";
+import { formatPhoneTr, storeDisplayName, type BusinessInfo } from "@/lib/business/info";
 import type { EmailFooter } from "./layout";
 
 /** E-postalardaki bağlantıların kökü (canlıda NEXT_PUBLIC_APP_URL; Host başlığına güvenilmez) */
@@ -13,7 +13,7 @@ export function siteUrl(): string {
 
 export function emailFooter(business: BusinessInfo, reason: string): EmailFooter {
   return {
-    sellerName: sellerDisplayName(business),
+    sellerName: storeDisplayName(business),
     lines: [
       business.address,
       business.phone ? formatPhoneTr(business.phone) : "",

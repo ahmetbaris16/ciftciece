@@ -233,3 +233,11 @@ export function notificationAddress(info: BusinessInfo): string | null {
 export function sellerDisplayName(info: BusinessInfo): string {
   return info.legalName || info.tradeName;
 }
+
+/**
+ * Müşterinin gördüğü mağaza adı (altbilgi, e-posta altbilgisi, paket fişi): işletme adı. Şahıs işletmesinde
+ * unvan sahibin ad-soyadıdır; yasal metinler dışında gösterilmez.
+ */
+export function storeDisplayName(info: BusinessInfo): string {
+  return info.tradeName || info.legalName || STORE.name;
+}

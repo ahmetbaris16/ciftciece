@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { STORE } from "@/lib/config/store";
 import { getBusinessInfo } from "@/lib/business/business.repository";
-import { formatPhoneTr, sellerDisplayName } from "@/lib/business/info";
+import { formatPhoneTr, storeDisplayName } from "@/lib/business/info";
 import PaymentMarks from "@/components/payment/PaymentMarks";
 import styles from "./Footer.module.css";
 
@@ -134,7 +134,7 @@ export default async function Footer() {
       <div className={styles.bottomBar}>
         <div className={styles.bottomInner}>
           <p className={styles.copyright}>
-            © {currentYear} {sellerDisplayName(business)}. Tüm hakları saklıdır.
+            © {currentYear} {storeDisplayName(business)}. Tüm hakları saklıdır.
           </p>
           <div className={styles.securityBadges}>
             <span className={styles.badge} title="SSL ile şifreli bağlantı">

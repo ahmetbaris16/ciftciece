@@ -9,7 +9,7 @@ import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/session";
 import { loadAdminOrder } from "@/lib/admin/order-detail";
 import { getBusinessInfo } from "@/lib/business/business.repository";
-import { formatPhoneTr, sellerDisplayName } from "@/lib/business/info";
+import { formatPhoneTr, storeDisplayName } from "@/lib/business/info";
 import { formatPrice } from "@/types";
 import { siteUrl } from "@/lib/email/brand";
 import { ensureReviewCode } from "@/lib/reviews/review-code";
@@ -56,7 +56,7 @@ export default async function PackingSlip({ params }: { params: Promise<{ id: st
             Sipariş #{order.reference} · {dateTr(order.createdAt)}
           </p>
         </div>
-        <strong style={{ fontSize: 15 }}>{sellerDisplayName(business) || "Çiftçi Ece"}</strong>
+        <strong style={{ fontSize: 15 }}>{storeDisplayName(business)}</strong>
       </header>
 
       {(cod || recipientPays) && (
@@ -81,7 +81,7 @@ export default async function PackingSlip({ params }: { params: Promise<{ id: st
         </section>
         <section style={st.box}>
           <h2 style={st.h2}>Gönderen</h2>
-          <p style={st.big}>{sellerDisplayName(business) || "Çiftçi Ece"}</p>
+          <p style={st.big}>{storeDisplayName(business)}</p>
           {business.address && <p style={st.p}>{business.address}</p>}
           {business.phone && <p style={st.p}>Tel: {formatPhoneTr(business.phone)}</p>}
         </section>
