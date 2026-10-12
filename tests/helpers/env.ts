@@ -9,10 +9,13 @@
 import { resolveTestDatabaseUrl } from "./test-database-url";
 
 process.env.DATABASE_URL = resolveTestDatabaseUrl(process.env);
-// Test ortamı: e-posta ayarı yoksa gönderilmez (lib/email/config.ts); SMTP isteyen test sahte sunucu açar
+// Test ortamı: e-posta ayarı yoksa gönderilmez (lib/email/config.ts); SMTP isteyen test sahte sunucu açar.
+// Silinmez, BOŞ yapılır: Prisma istemcisi yüklenirken .env'i okur ve tanımsız değişkenleri doldurur — silinseydi
+// bilgisayardaki gerçek e-posta hesabı (E-posta Ayarla) teste geri gelirdi (12.10.2026'da oldu: testler Gmail'e
+// bağlandı). Boş değer "ayar yok" sayılır.
 Object.assign(process.env, { NODE_ENV: "test" });
 for (const k of ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "SMTP_SECURE", "SMTP_REQUIRE_TLS", "EMAIL_FROM"]) {
-  delete process.env[k];
+  process.env[k] = "";
 }
 
 process.env.PAYMENT_PROVIDER = "iyzico";

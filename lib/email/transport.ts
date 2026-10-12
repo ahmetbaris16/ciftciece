@@ -45,6 +45,10 @@ let cached: { key: string; transporter: Transporter } | null = null;
 function transporter(): Transporter {
   const cfg = smtpConfigFromEnv();
   if (!cfg) throw new EmailNotConfiguredError();
+  // Testler yalnız bu bilgisayardaki sahte SMTP sunucusuna bağlanır (gerçek hesaba giriş denemesi olmasın)
+  if (process.env.NODE_ENV === "test" && !/^(127\.0\.0\.1|localhost|::1)$/.test(cfg.host)) {
+    throw new Error(`Test ortamında gerçek e-posta sunucusuna (${cfg.host}) bağlanılmaz.`);
+  }
   const key = `${cfg.host}:${cfg.port}:${cfg.secure}:${cfg.user}`;
   if (cached?.key === key) return cached.transporter;
   const t = nodemailer.createTransport({
