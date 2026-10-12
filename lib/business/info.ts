@@ -3,7 +3,9 @@
  *
  * Mevzuat bu bilgilerin sitede "iletişim" başlığı altında, ön bilgilendirme formunda ve mesafeli satış
  * sözleşmesinde yer almasını ister (unvan ya da ad-soyad, MERSİS ya da vergi kimlik no, adres, telefon,
- * e-posta; varsa KEP ve meslek odası). Altbilgi, iletişim sayfası, yasal metinler ve e-postalar buradan okur.
+ * e-posta; varsa KEP ve meslek odası). Kimlik satırları (sellerLines) yalnız sözleşmelerde gösterilir: işletme
+ * sahibi iletişim sayfasındaki "Satıcı bilgileri" kutusunu kaldırttı (12.10.2026; FINDINGS F-42). Altbilgi,
+ * iletişim sayfası, yasal metinler ve e-postalar buradan okur.
  *
  * KURAL: Girilmemiş kimlik bilgisi uydurulmaz. Boş alan sayfada gösterilmez; admin panelinde "eksik" uyarısı
  * çıkar (missingBusinessFields). Adres, telefon, WhatsApp ve Instagram'ın başlangıç değerleri
@@ -202,7 +204,7 @@ export function missingBusinessFields(info: BusinessInfo): string[] {
   return missing;
 }
 
-/** Sözleşme ve iletişim sayfasında satıcıyı anlatan satırlar (boş alanlar atlanır) */
+/** Sözleşmelerde (ön bilgilendirme, mesafeli satış) satıcıyı anlatan satırlar (boş alanlar atlanır) */
 export function sellerLines(info: BusinessInfo): Array<{ label: string; value: string }> {
   const lines: Array<{ label: string; value: string }> = [];
   const add = (label: string, value: string) => {

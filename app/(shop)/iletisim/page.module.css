@@ -116,45 +116,6 @@ a.channel:hover {
   text-underline-offset: 3px;
 }
 
-.seller {
-  margin-top: var(--space-3);
-  padding: var(--space-5);
-  border-radius: var(--radius-xl);
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border-light);
-}
-
-.seller h2 {
-  margin: 0 0 var(--space-3);
-  font-family: var(--font-display);
-  font-size: var(--text-lg);
-  color: var(--color-text);
-}
-
-.seller dl {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.seller dl > div {
-  display: grid;
-  grid-template-columns: 9.5rem 1fr;
-  gap: var(--space-3);
-  font-size: var(--text-sm);
-}
-
-.seller dt {
-  color: var(--color-text-muted);
-}
-
-.seller dd {
-  margin: 0;
-  color: var(--color-text);
-  word-break: break-word;
-}
-
 .formCard {
   padding: var(--space-8);
   background: var(--color-surface);
@@ -319,10 +280,5 @@ a.channel:hover {
 
   .formCard {
     padding: var(--space-5);
-  }
-
-  .seller dl > div {
-    grid-template-columns: 1fr;
-    gap: 0;
   }
 }

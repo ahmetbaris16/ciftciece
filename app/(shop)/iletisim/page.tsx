@@ -1,15 +1,15 @@
 /**
  * İletişim — /iletisim
- * E-ticaret yönetmeliği: satıcının tanıtıcı bilgileri (unvan/ad-soyad, MERSİS ya da vergi no, adres, telefon,
- * e-posta, varsa KEP ve meslek odası) "iletişim" başlığı altında doğrudan erişilebilir olmalı. Bilgiler admin →
- * İşletme bilgileri'nden gelir.
+ * Telefon, WhatsApp, e-posta, mağaza ve iletişim formu (admin → İşletme bilgileri'nden). Satıcının kimlik bilgileri
+ * (ad-soyad/unvan, vergi no, MERSİS) bu sayfada gösterilmez — işletme sahibinin kararı (12.10.2026); ön
+ * bilgilendirme formunda ve mesafeli satış sözleşmesinde (altbilgideki bağlantılar) yer alır.
  */
 
 import type { Metadata } from "next";
 import Link from "next/link";
 import ContactForm from "@/components/contact/ContactForm";
 import { getBusinessInfo } from "@/lib/business/business.repository";
-import { formatPhoneTr, sellerLines } from "@/lib/business/info";
+import { formatPhoneTr } from "@/lib/business/info";
 import { STORE, getFormattedHours } from "@/lib/config/store";
 import styles from "./page.module.css";
 
@@ -87,18 +87,6 @@ export default async function IletisimPage({ searchParams }: Props) {
                 </span>
               </span>
             </div>
-
-            <section className={styles.seller} aria-labelledby="seller-title">
-              <h2 id="seller-title">Satıcı bilgileri</h2>
-              <dl>
-                {sellerLines(business).map((l) => (
-                  <div key={l.label}>
-                    <dt>{l.label}</dt>
-                    <dd>{l.value}</dd>
-                  </div>
-                ))}
-              </dl>
-            </section>
           </aside>
 
           <section className={styles.formCard} aria-labelledby="form-title">

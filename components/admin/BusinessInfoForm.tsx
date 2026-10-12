@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * Admin — İşletme (satıcı) bilgileri. Sitede altbilgi, İletişim sayfası, Ön Bilgilendirme Formu, Mesafeli
- * Satış Sözleşmesi ve müşteri e-postaları bu bilgileri kullanır. Bilgiler vergi levhası / ticaret sicili ve
+ * Admin — İşletme (satıcı) bilgileri. Sitede altbilgi, İletişim sayfası (telefon, e-posta, adres), Ön Bilgilendirme
+ * Formu, Mesafeli Satış Sözleşmesi ve müşteri e-postaları bu bilgileri kullanır. Bilgiler vergi levhası / ticaret sicili ve
  * ödeme kuruluşu (Akbank sanal POS) başvurusuyla birebir aynı yazılmalıdır.
  *
  * Bilgiler tamamsa kısa özet görünür, form "Düzenle" ile açılır; eksik varsa form açık gelir.
@@ -110,7 +110,7 @@ export default function BusinessInfoForm({ initial }: { initial: BusinessInfo })
     <div style={s.wrap}>
       {missing.length > 0 && (
         <p style={s.warn} role="status">
-          <strong>Eksik:</strong> {missing.join(", ")}. Bu bilgiler sözleşmelerde ve İletişim sayfasında yasal olarak gereklidir.
+          <strong>Eksik:</strong> {missing.join(", ")}. Bu bilgiler ön bilgilendirme formunda ve mesafeli satış sözleşmesinde yasal olarak gereklidir.
         </p>
       )}
 
