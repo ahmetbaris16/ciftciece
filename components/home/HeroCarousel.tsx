@@ -21,6 +21,8 @@
  * - Görseller: ilk slayt öncelikli; diğerleri gösterilmeden hemen önce yüklenir
  * - Masaüstünde çok hafif fare parallax'ı (±6px); rAF sadece hedefe yakınsayana
  *   kadar çalışır, sürekli döngü yok
+ * - Afiş (variant "banner"): metni ve düğmesi görselde olan geniş afiş; çizili düğmenin üstüne aynı yere
+ *   gerçek bağlantı konur (yeri hero'nun boyutundan CSS kapsayıcı birimleriyle hesaplanır)
  */
 
 import Image from "next/image";
@@ -42,10 +44,20 @@ export interface HeroSlide {
    * gösterilir, üstüne başlık basılmaz (başlık sadece ekran okuyucuya), yalnızca CTA alt kısımda
    * görünür. Mobilde afiş üstte, canlı metin ve düğme altında dizilir. `background` boş kalan
    * kenarları doldurur.
+   * "banner": metni VE düğmesi görselin içinde olan geniş afiş. Masaüstünde kırpılmadan gösterilir; çizili
+   * düğmenin üstüne aynı yere gerçek bağlantı (primary) konur (ctaBox) — ayrıca düğme basılmaz, afişteki
+   * düğme tıklanır. Mobilde görsel üstte ürün kısmına kırpılır (objectPositionMobile), canlı metin ve düğme
+   * altta açık zeminde (backgroundMobile) durur.
    */
-  variant?: "photo" | "artwork";
+  variant?: "photo" | "artwork" | "banner";
   /** artwork: görselin en/boy oranı (genişlik/yükseklik). Mobil yerleşim için gerekli. */
   artRatio?: number;
+  /** banner: görselin piksel boyutu (genişlik, yükseklik) */
+  artSize?: [number, number];
+  /** banner: afişte çizili düğmenin kutusu (artSize pikselleriyle) */
+  ctaBox?: { x: number; y: number; w: number; h: number };
+  /** banner: mobilde görselin altındaki (metnin durduğu) zemin */
+  backgroundMobile?: string;
   /**
    * "light": açık zeminli afiş — düğme ve metin koyu çizilir
    * (varsayılan krem renkli düğmeler açık zeminde kaybolur).
@@ -146,6 +158,8 @@ export default function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
   const [mounted, setMounted] = useState<Set<number>>(() => new Set([0]));
   // Görseli yüklenmiş slaytlar (ilk slayt sunucudan geldiği için hazır sayılır)
   const [loaded, setLoaded] = useState<Set<number>>(() => new Set([0]));
+  // Afiş slaytlarının metin bloğu yüksekliği (px): mobilde görsel, metnin hemen üstüne kadar uzar (boşluk kalmaz)
+  const [bannerTextH, setBannerTextH] = useState<Record<number, number>>({});
 
   const rootRef = useRef<HTMLElement>(null);
   const parallaxRef = useRef<HTMLDivElement>(null);
@@ -191,6 +205,20 @@ export default function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
     const timer = window.setTimeout(() => mountAround(active), active === 0 ? 1200 : 0); // ilk açılışta LCP görselini beklet
     return () => window.clearTimeout(timer);
   }, [active, isCarousel, mountAround]);
+
+  // Afiş metin bloklarının yüksekliği (gizli slaytlar da yerleşimde): ekran ya da yazı boyu değişince yeniden ölçülür
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el || !slides.some((s) => s.variant === "banner")) return;
+    const blocks = [...el.querySelectorAll<HTMLElement>("[data-banner-text]")];
+    const ro = new ResizeObserver(() => {
+      const next: Record<number, number> = {};
+      for (const b of blocks) next[Number(b.dataset.bannerText)] = Math.ceil(b.getBoundingClientRect().height);
+      setBannerTextH((prev) => (Object.keys(next).every((k) => prev[Number(k)] === next[Number(k)]) ? prev : next));
+    });
+    blocks.forEach((b) => ro.observe(b));
+    return () => ro.disconnect();
+  }, [slides]);
 
   // Hareket azaltma tercihi
   useEffect(() => {
@@ -447,7 +475,7 @@ export default function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
       className={[
         styles.hero,
         isCarousel ? styles.isCarousel : "",
-        current?.variant === "artwork" ? styles.artworkActive : "",
+        current?.variant === "artwork" || current?.variant === "banner" ? styles.artworkActive : "",
         current?.align === "right" ? styles.textRight : "",
         manual ? styles.manual : "",
         dragging ? styles.dragging : "",
@@ -463,31 +491,43 @@ export default function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
     >
       <div ref={parallaxRef} className={styles.parallax} aria-hidden="true">
         {slides.map((slide, i) => {
+          const banner = slide.variant === "banner";
           const mediaStyle: CSSVars = {
             "--pos": slide.objectPosition ?? "center",
             "--pos-m": slide.objectPositionMobile ?? slide.objectPosition ?? "center",
             "--art-ratio": slide.artRatio,
           };
-          if (slide.background) mediaStyle.background = slide.background;
+          // Afişin zemini masaüstünde ve mobilde farklı: değişkenle verilir (satır içi stil CSS'i ezerdi)
+          if (banner) {
+            mediaStyle["--banner-bg"] = slide.background;
+            mediaStyle["--banner-bg-m"] = slide.backgroundMobile;
+            if (bannerTextH[i]) mediaStyle["--banner-text-h"] = `${bannerTextH[i]}px`;
+          } else if (slide.background) {
+            mediaStyle.background = slide.background;
+          }
+          const image = (
+            <Image
+              src={slide.image}
+              alt={slide.imageAlt}
+              fill
+              loading="eager" // slayt zaten yalnızca sırası yaklaşınca DOM'a eklenir (mounted); lazy'ye gerek yok
+              fetchPriority={i === 0 ? "high" : "low"}
+              quality={80}
+              sizes="100vw"
+              className={banner ? `${styles.image} ${styles.bannerImage}` : styles.image}
+              // Afişte sığdırma CSS'ten (masaüstü contain, mobil cover)
+              style={banner ? undefined : { objectFit: slide.variant === "artwork" ? "contain" : "cover" }}
+              onLoad={() => markLoaded(i)}
+              onError={() => markLoaded(i)} // bozuk görsel geçişi kilitlemesin
+            />
+          );
           return mounted.has(i) || i === active ? (
             <div
               key={slide.id}
-              className={`${styles.media} ${i === active ? styles.mediaActive : ""} ${i === peek && i !== active ? styles.mediaPeek : ""} ${slide.variant === "artwork" ? styles.mediaArtwork : ""}`}
+              className={`${styles.media} ${i === active ? styles.mediaActive : ""} ${i === peek && i !== active ? styles.mediaPeek : ""} ${slide.variant === "artwork" ? styles.mediaArtwork : ""} ${banner ? styles.mediaBanner : ""}`}
               style={mediaStyle}
             >
-              <Image
-                src={slide.image}
-                alt={slide.imageAlt}
-                fill
-                loading="eager" // slayt zaten yalnızca sırası yaklaşınca DOM'a eklenir (mounted); lazy'ye gerek yok
-                fetchPriority={i === 0 ? "high" : "low"}
-                quality={80}
-                sizes="100vw"
-                className={styles.image}
-                style={{ objectFit: slide.variant === "artwork" ? "contain" : "cover" }}
-                onLoad={() => markLoaded(i)}
-                onError={() => markLoaded(i)} // bozuk görsel geçişi kilitlemesin
-              />
+              {banner ? <div className={styles.bannerFrame}>{image}</div> : image}
             </div>
           ) : null;
         })}
@@ -499,6 +539,15 @@ export default function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
           const isActive = i === active;
           const Heading = i === 0 ? "h1" : "h2";
           const slideStyle: CSSVars = { "--art-ratio": slide.artRatio };
+          // Afiş: çizili düğmenin görseldeki yeri (oran) — gerçek bağlantı masaüstünde tam oraya konur
+          if (slide.variant === "banner" && slide.artSize && slide.ctaBox) {
+            const [w, h] = slide.artSize;
+            slideStyle["--art-ratio"] = w / h;
+            slideStyle["--cta-x"] = slide.ctaBox.x / w;
+            slideStyle["--cta-y"] = slide.ctaBox.y / h;
+            slideStyle["--cta-w"] = slide.ctaBox.w / w;
+            slideStyle["--cta-h"] = slide.ctaBox.h / h;
+          }
           return (
             <div
               key={slide.id}
@@ -506,6 +555,7 @@ export default function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
                 styles.slide,
                 isActive ? styles.slideActive : "",
                 slide.variant === "artwork" ? styles.slideArtwork : "",
+                slide.variant === "banner" ? styles.slideBanner : "",
                 slide.tone === "light" ? styles.slideToneLight : "",
                 slide.align === "right" ? styles.slideRight : "",
               ].join(" ")}
@@ -518,6 +568,7 @@ export default function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
             >
               <div
                 className={styles.contentInner}
+                data-banner-text={slide.variant === "banner" ? i : undefined}
                 onPointerEnter={(e) => e.pointerType === "mouse" && setHoverPaused(true)}
                 onPointerLeave={(e) => e.pointerType === "mouse" && setHoverPaused(false)}
               >

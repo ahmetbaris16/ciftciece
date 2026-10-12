@@ -15,6 +15,8 @@
   overflow: hidden;
   background-color: #1b1813; /* görsel gelmeden önceki zemin */
   isolation: isolate;
+  /* Afiş slaytı çizili düğmenin yerini hero boyutundan hesaplar (cqw/cqh); yükseklik zaten sabit */
+  container-type: size;
 }
 
 @supports (height: 100svh) {
@@ -474,6 +476,101 @@
   box-shadow: 0 6px 18px rgba(20, 16, 10, 0.28);
 }
 
+/* ---- Geniş afiş (variant "banner"): metni ve düğmesi görselde ----
+   Görsel kırpılmaz, yakınlaşmaz (çizili düğmenin yeri sabit kalsın). Kenarları şeffafa yumuşatılmış;
+   boşluklar aynı afişten üretilmiş bulanık zeminle (--banner-bg) dolar. */
+.mediaBanner {
+  transform: none;
+  background: var(--banner-bg, transparent);
+}
+
+.bannerFrame {
+  position: absolute;
+  inset: 0;
+}
+
+.bannerImage {
+  object-fit: contain;
+  object-position: center;
+}
+
+@media (min-width: 768px) {
+  /* Slayt hero'yu kaplar: çizili düğmenin üstündeki bağlantı ona göre konumlanır */
+  .slide.slideBanner {
+    align-self: stretch;
+    position: relative;
+  }
+
+  /* Afişte yazılı: başlık ve metin yalnız ekran okuyucuya */
+  .slideBanner .eyebrow,
+  .slideBanner .headline,
+  .slideBanner .subtext,
+  .slideBanner .highlights {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .slide.slideBanner .contentInner > * {
+    transform: none; /* dönüşüm, içteki bağlantının konumlanma kutusunu değiştirirdi */
+    transition: none;
+  }
+
+  .slideBanner .ctas {
+    margin: 0;
+  }
+
+  /* Afişin hero içindeki yeri: kutu (parallax katmanı) hero'dan 8 px taşar, görsel contain ile ortalanır */
+  .slideBanner .ctaPrimary,
+  .slideBanner .note {
+    --box-w: calc(100cqw + 16px);
+    --box-h: calc(100cqh + 16px);
+    --art-w: min(var(--box-w), calc(var(--box-h) * var(--art-ratio)));
+    --art-h: min(var(--box-h), calc(var(--box-w) / var(--art-ratio)));
+    --art-x: calc((var(--box-w) - var(--art-w)) / 2 - 8px);
+    --art-y: calc((var(--box-h) - var(--art-h)) / 2 - 8px);
+    position: absolute;
+    left: calc(var(--art-x) + var(--art-w) * var(--cta-x));
+  }
+
+  /* Gerçek bağlantı, afişteki "Ürünleri İncele" düğmesinin tam üstünde: görünmez, üstüne gelince ve
+     klavyeyle odaklanınca çerçeve çıkar */
+  .slideBanner .ctaPrimary {
+    top: calc(var(--art-y) + var(--art-h) * var(--cta-y));
+    width: calc(var(--art-w) * var(--cta-w));
+    height: calc(var(--art-h) * var(--cta-h));
+    min-height: 0;
+    padding: 0;
+    border-radius: 999px;
+    background-color: transparent;
+    color: transparent;
+    box-shadow: none;
+    overflow: hidden;
+    white-space: nowrap;
+    transition: box-shadow var(--transition-fast);
+  }
+
+  .slideBanner .ctaPrimary:hover {
+    background-color: transparent;
+    box-shadow:
+      0 0 0 3px rgba(201, 168, 76, 0.7),
+      0 10px 24px rgba(23, 19, 13, 0.22);
+  }
+
+  .slideBanner .ctaPrimary:focus-visible {
+    outline: 3px solid #17130d;
+    outline-offset: 4px;
+  }
+
+  /* Kapsam notu çizili düğmenin hemen altında */
+  .slideBanner .note {
+    top: calc(var(--art-y) + var(--art-h) * (var(--cta-y) + var(--cta-h)) + 12px);
+  }
+}
+
 /* ---- Mobil: görsel üstte, metin altta ---- */
 @media (max-width: 767px) {
   .hero {
@@ -487,9 +584,28 @@
   }
 
   /* Fotoğraf slaytı: görsel hero'nun üst %56'sı; altı koyu zemine erir, metin orada durur */
-  .media:not(.mediaArtwork) {
+  .media:not(.mediaArtwork):not(.mediaBanner) {
     bottom: auto;
     height: 56%;
+  }
+
+  /* Geniş afiş: afişteki yazı telefonda okunmayacak kadar küçülürdü — görsel üstte ürün kısmına kırpılır,
+     açık zemine erir; canlı başlık, metin ve düğme altta (açık tonda) durur */
+  .mediaBanner {
+    background: var(--banner-bg-m, var(--banner-bg, #f5f1e8));
+  }
+
+  /* Görsel metnin hemen üstüne kadar (son 32 px'i soluk kısmın altına girer); metin ölçülmeden %54 */
+  .mediaBanner .bannerFrame {
+    bottom: auto;
+    height: clamp(40%, calc(100% - var(--banner-text-h, 46%) + 32px), 68%);
+    -webkit-mask-image: linear-gradient(180deg, #000 72%, transparent 100%);
+    mask-image: linear-gradient(180deg, #000 72%, transparent 100%);
+  }
+
+  .mediaBanner .bannerImage {
+    object-fit: cover;
+    object-position: var(--pos-m, center);
   }
 
   .image {

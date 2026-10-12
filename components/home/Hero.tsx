@@ -11,6 +11,8 @@ import HeroCarousel, { type HeroSlide } from "./HeroCarousel";
  * Fotoğraf slaytları: objectPosition görsel kırpılırken neyin kalacağını belirler (masaüstü) —
  * mobilde görsel ekranın üst kısmında, metin altında durur (objectPositionMobile).
  * Afiş slaytları (metin görselin içinde): artRatio görselin genişlik/yükseklik oranıdır.
+ * Geniş afiş (variant "banner", metin ve düğme görselde): artSize görselin pikselleri, ctaBox afişteki çizili
+ * düğmenin kutusu — masaüstünde gerçek bağlantı tam oraya konur. Yeni afiş eklenince kutu görselden ölçülür.
  */
 
 const HERO_SLIDES: HeroSlide[] = [
@@ -47,37 +49,45 @@ const HERO_SLIDES: HeroSlide[] = [
     secondary: { label: "Zeytinyağları", href: "/kategori/zeytinyagi" },
   },
   {
-    // Hizmet afişi (metin görselin içinde). Sepete eklenen bir ürün değil: "Hizmeti İncele" ana sayfadaki
-    // vakumlu paketleme bölümüne (iletişim düğmeleri orada) götürür. Afişin kendi "Ürünleri İncele" düğmesi
-    // tıklanmadığı için sitedeki kopyadan silindi; orijinal dosya dükkan fotoğrafları/hero'da duruyor.
-    // Görselin sağ/sol kenarı şeffafa yumuşatılmış (webp): geniş ekranlarda kenar boşluğuna dikişsiz karışır.
+    // Kaynak: dükkan fotoğrafları/hero/vakum.png (1916×821, 2026-10-07; eski afişin yerine). Metin ve
+    // "Ürünleri İncele" düğmesi afişte: masaüstünde çizili düğmenin tam üstüne gerçek bağlantı konur (ctaBox).
+    // Hizmet sepete eklenen bir ürün değil: bağlantı ana sayfadaki vakumlu paketleme bölümüne (zeytinler ve
+    // iletişim düğmeleri orada) götürür. Kapsam notu (yalnız siyah zeytin) düğmenin altında görünür.
+    // webp: kenarları şeffafa yumuşatılmış; boşluklar aynı afişten üretilmiş bulanık zeminle dolar.
+    // Mobilde paket görünür, metin altta.
     id: "vakumlu-paketleme",
-    variant: "artwork",
+    variant: "banner",
     tone: "light",
-    artRatio: 1672 / 941,
-    background: "#fefcf8",
-    image: "/images/hero/vakumlu-paketleme.webp",
-    imageAlt: "Vakumlu paketleme hizmeti: vakumlu ambalajda Çiftçi Ece sofralık siyah zeytin",
+    artSize: [1916, 821],
+    ctaBox: { x: 311, y: 650, w: 384, h: 75 },
+    background: "url(/images/hero/vakumlu-paketleme-afis-zemin.jpg) center / cover no-repeat, #d9cdbb",
+    backgroundMobile: "#f4eee4",
+    image: "/images/hero/vakumlu-paketleme-afis.webp",
+    imageAlt: "Vakumlu paketleme hizmeti afişi: vakumlu ambalajda Çiftçi Ece sofralık siyah zeytin",
+    objectPositionMobile: "78% center",
     eyebrow: "Hizmetlerimiz",
     title: "Vakumlu Paketleme Hizmeti",
-    text: "Siyah zeytinlerimiz tazeliğini, lezzetini ve doğal yapısını koruyan vakumlu ambalajla hazırlanır.",
+    text: "Siyah zeytinlerimiz tazeliğini, lezzetini ve doğal yapısını koruyan vakumlu ambalajla hazırlanır. Daha hijyenik, daha güvenli ve daha uzun ömürlü saklama sunar.",
     note: "Yalnızca siyah zeytin için geçerlidir",
-    primary: { label: "Hizmeti İncele", href: "/#vakumlu-paketleme" },
+    primary: { label: "Ürünleri İncele", href: "/#vakumlu-paketleme" },
   },
   {
-    // Kampanya afişi: metin görselin içinde — üstüne başlık basılmaz.
-    // webp: özgün dosyanın çerçeve çizgisi kırpılmış, yan kenarları şeffafa yumuşatılmış hali;
-    // arka plan aynı afişten üretilmiş, bulanıklaştırılıp koyulaştırılmış küçük görsel.
-    id: "dagli-kestane-sekeri",
-    variant: "artwork",
-    artRatio: 1499 / 988,
-    background: "url(/images/hero/dagli-kestane-sekeri-bg.jpg) center / 100% 100% no-repeat, #2b200d",
-    image: "/images/hero/dagli-kestane-sekeri.webp",
-    imageAlt: "Dağlı kestane şekerleri kampanya afişi",
-    eyebrow: "Yeni gelenler",
-    title: "Dağlı Kestane Şekerleri şimdi dükkânımızda",
-    text: "Kutu, kase ve kavanoz seçenekleriyle Dağlı kestane şekerleri.",
-    primary: { label: "Kestane Şekerlerini İncele", href: "/kategori/kestane-sekeri" },
+    // Kaynak: dükkan fotoğrafları/hero/kestane_sekeri.png (1916×821, 2026-10-07; eski Dağlı afişinin yerine):
+    // Dağlı ve YeşilKent kestane şekerleri. Metin ve düğme afişte (bkz. vakumlu paketleme).
+    id: "bursa-kestane-sekeri",
+    variant: "banner",
+    tone: "light",
+    artSize: [1916, 821],
+    ctaBox: { x: 116, y: 522, w: 360, h: 77 },
+    background: "url(/images/hero/bursa-kestane-sekeri-afis-zemin.jpg) center / cover no-repeat, #e2cdb4",
+    backgroundMobile: "#f6efe5",
+    image: "/images/hero/bursa-kestane-sekeri-afis.webp",
+    imageAlt: "Bursa kestane şekeri afişi: Dağlı ve YeşilKent kestane şekerleri",
+    objectPositionMobile: "74% center",
+    eyebrow: "Doğal lezzetin en tatlı hâli",
+    title: "Bursa Kestane Şekeri Dükkânımızda!",
+    text: "Gelenekten gelen eşsiz lezzet, taze hâliyle şimdi mağazamızda ve web sitemizde.",
+    primary: { label: "Ürünleri İncele", href: "/kategori/kestane-sekeri" },
   },
   {
     id: "zeytin",
