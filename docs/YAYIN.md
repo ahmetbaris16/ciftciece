@@ -62,6 +62,9 @@ gider. Sipariş teyit e-postası (sözleşmelerle birlikte) yasal zorunluluktur.
    (Hostinger panelindeki tam menü adı doğrulanmadı.)
 3. Sitede ayrıca Admin → Ayarlar → İşletme: **e-posta** (müşteriye görünen, yanıtların geleceği adres) ve
    **bildirim e-postası** (yeni sipariş, ödeme uyarısı, iletişim mesajı size buraya gelir).
+4. Yayından önce bu bilgisayarda denemek için: `harbi/E-posta Ayarla.bat` aynı bilgileri (ya da deneme için bir
+   Gmail hesabı + Google "Uygulama şifresi") yerel `.env`'e yazar ve deneme e-postası gönderir
+   (`npm run email:test -- adres@ornek.com`). Ayar yokken yerelde e-postalar yalnız `.mock-data/outbox.json`'a yazılır.
 
 ## 4. Node.js uygulaması (hPanel)
 

@@ -21,6 +21,8 @@ import { customMessageDraft } from "@/lib/notifications/order-rules";
 import { enqueueEmail } from "@/lib/notifications/queue";
 import { contactReplyKeyPrefix, replyToContactMessage } from "@/lib/contact/replies";
 import { resetTransportCache } from "@/lib/email/transport";
+import { loadOrderEmailData } from "@/lib/notifications/order-data";
+import { orderDeliveredEmail, orderReceivedEmail } from "@/lib/email/templates/order";
 import { enableBankTransfer, setupTestDb } from "./helpers/db";
 import { createTestOrder, makeOverdue } from "./helpers/orders";
 import { FakeSmtpServer, partOf, subjectOf } from "./helpers/fake-smtp";
@@ -103,6 +105,23 @@ test("havale onayı → ödeme alındı; kargo → takip numaralı e-posta; tesl
   await prisma.outboxEvent.updateMany({ data: { publishedAt: null } });
   await processOutbox();
   assert.equal((await emails(order.id)).length, 5);
+});
+
+test("kart: ilk e-posta 'Siparişiniz alındı' (ödeme onaylandı); teslim e-postası ürünleri değerlendirmeye çağırır", async () => {
+  const { order } = await createTestOrder({ method: "CARD", dueInMinutes: 30 });
+  await prisma.order.update({ where: { id: order.id }, data: { status: "PAID" } });
+  const d = (await loadOrderEmailData(order.id))!;
+  const received = orderReceivedEmail(d);
+  assert.equal(received.subject, `Siparişiniz alındı — #${order.reference}`);
+  assert.ok(received.text.includes("Ödemeniz onaylandı"));
+  const delivered = orderDeliveredEmail(d, "ABCD-EFGH");
+  assert.ok(delivered.html.includes("Ürünlerimizi nasıl buldunuz?"));
+  assert.ok(delivered.text.includes("ÜRÜNLERİMİZİ NASIL BULDUNUZ?"), "düz metinde Türkçe büyük harf");
+  assert.ok(delivered.text.includes("• Zeytin"), "değerlendirilecek ürün listesi");
+  assert.ok(delivered.html.includes(`/siparis/${order.reference}#degerlendir`));
+  assert.ok(delivered.html.includes("Ürünleri değerlendir"));
+  // Üyelik siparişi (kod yok): hesapla giriş
+  assert.ok(orderDeliveredEmail(d, null).text.includes("üyelik hesabınızla giriş yaparak"));
 });
 
 test("kartla ödenmemiş sipariş e-posta üretmez; süre dolunca iptal e-postası 'ödeme tamamlanmadı' der", async () => {

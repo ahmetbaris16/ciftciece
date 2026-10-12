@@ -12,6 +12,7 @@
     "lint": "eslint",
     "db:sync-catalog": "tsx prisma/sync-catalog.ts",
     "admin:hesap": "tsx scripts/admin-account.ts",
+    "email:test": "tsx scripts/email-test.ts",
     "test:db": "tsx scripts/test-db.ts",
     "test": "node --env-file-if-exists=.env --import tsx --import ./tests/helpers/env.ts --test --test-concurrency=1 \"tests/**/*.test.ts\""
   },

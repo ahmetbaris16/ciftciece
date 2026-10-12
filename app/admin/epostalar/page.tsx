@@ -94,7 +94,9 @@ export default async function AdminEpostalarPage({ searchParams }: { searchParam
             </p>
           ) : mode === "dev-outbox" ? (
             <p style={{ ...st.status, color: "#9ec5f0" }}>
-              Geliştirme kipi: e-postalar gönderilmez, .mock-data/outbox.json dosyasına yazılır.
+              Bu bilgisayarda e-posta hesabı ayarlı değil: e-postalar kimseye gitmez, yalnız deneme dosyasına
+              (.mock-data/outbox.json) yazılır. Gerçek adreslere gitmesi için harbi klasöründeki “E-posta Ayarla”yı çalıştırın
+              (Gmail uygulama şifresi ya da Hostinger e-posta hesabı), sonra siteyi yeniden açın.
             </p>
           ) : (
             <p style={{ ...st.status, color: "#f3a0a0" }}>

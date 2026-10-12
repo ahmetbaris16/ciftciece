@@ -25,7 +25,10 @@ export const dynamic = "force-dynamic";
 
 const EMAIL_STATE = {
   smtp: { ok: true, text: "E-posta gönderimi çalışıyor: sipariş e-postaları müşterilere ve size gidiyor." },
-  "dev-outbox": { ok: false, text: "Yerel geliştirme kipi: e-postalar gönderilmez, .mock-data/outbox.json dosyasına yazılır." },
+  "dev-outbox": {
+    ok: false,
+    text: "Bu bilgisayarda e-posta hesabı ayarlı değil: sipariş e-postaları kimseye gitmez, yalnız deneme dosyasına (.mock-data/outbox.json) yazılır. Gerçek adreslere gitmesi için harbi klasöründeki “E-posta Ayarla”yı çalıştırın.",
+  },
   none: {
     ok: false,
     text: "E-posta gönderimi ayarlı değil: sipariş e-postaları bekliyor, müşterilere gitmiyor. Hosting'de e-posta (SMTP) bilgileri girilince kendiliğinden gönderilir (docs/YAYIN.md).",

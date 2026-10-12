@@ -58,7 +58,8 @@ export function paragraph(text: string, opts: { muted?: boolean; small?: boolean
 export function heading(text: string): Block {
   return {
     html: `<h2 style="margin:26px 0 10px;font-family:${SERIF};font-size:18px;line-height:1.35;font-weight:600;color:${COLORS.ink}">${esc(text)}</h2>`,
-    text: `\n${text.toUpperCase()}\n${"-".repeat(Math.min(text.length, 60))}`,
+    // Türkçe büyük harf (i → İ): düz metin sürümünde "SİPARİŞ ÖZETİ", "SIPARIŞ" değil
+    text: `\n${text.toLocaleUpperCase("tr-TR")}\n${"-".repeat(Math.min(text.length, 60))}`,
   };
 }
 
@@ -199,7 +200,7 @@ export function legalText(title: string, sections: Array<{ heading?: string; par
     html: `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:10px 0 18px"><tr><td style="border:1px solid ${COLORS.line};border-radius:12px;padding:16px 18px;background:#fcfbf8">
 <p style="margin:0 0 4px;font-family:${SERIF};font-size:16px;font-weight:600;color:${COLORS.ink}">${esc(title)}</p>${body}</td></tr></table>`,
     text: [
-      `\n=== ${title.toUpperCase()} ===`,
+      `\n=== ${title.toLocaleUpperCase("tr-TR")} ===`,
       ...sections.map((s) => [s.heading ? `\n${s.heading}` : "", ...s.paragraphs].filter(Boolean).join("\n")),
     ].join("\n"),
   };

@@ -179,7 +179,8 @@ export function orderReceivedEmail(d: OrderEmailData): RenderedEmail {
     );
     step = 2;
   } else {
-    title = "Ödemeniz alındı, siparişiniz hazırlanıyor";
+    // Kart: e-posta ödeme onaylanınca gider; başlık müşterinin beklediği ilk adım ("Siparişiniz alındı")
+    preheader = `Ödemeniz onaylandı — ${formatPrice(d.totalKurus)}. Siparişiniz hazırlanıyor.`;
     blocks.push(
       paragraph(
         "Ödemeniz onaylandı, teşekkür ederiz. Siparişinizi hazırlamaya başlıyoruz; kargoya verdiğimizde takip numaranızı e-postayla göndereceğiz."
@@ -283,16 +284,20 @@ export function orderShippedEmail(d: OrderEmailData, shipmentId: string, additio
  * Bağlantıya konmaz (e-posta tarayıcıları/önizlemeleri adresleri açabilir; kod yalnız müşterinin elinde kalsın).
  */
 export function orderDeliveredEmail(d: OrderEmailData, reviewCode: string | null = null): RenderedEmail {
+  // Değerlendirilecek ürünler (aynı ürünün seçenekleri tek satır)
+  const products = [...new Set(d.items.map((i) => i.name))];
   return customerEmail(d, {
     subject: `Siparişiniz teslim edildi — #${d.reference}`,
-    preheader: "Afiyet olsun! Görüşleriniz bizim için değerli.",
+    preheader: "Afiyet olsun! Ürünlerimizi nasıl buldunuz?",
     title: "Siparişiniz teslim edildi",
     blocks: [
       hello(d),
-      paragraph(
-        "Siparişiniz teslim edildi; afiyet olsun! Ürünlerimizi beğendiyseniz değerlendirmeniz diğer müşterilerimize yol gösterir."
-      ),
+      paragraph("Siparişiniz teslim edildi; afiyet olsun!"),
       progressSteps(STEPS, 5),
+      heading("Ürünlerimizi nasıl buldunuz?"),
+      paragraph(
+        `Puanınız ve birkaç cümlelik yorumunuz, ürünü merak eden diğer müşterilerimize yol gösterir; değerlendirmeniz ürün sayfasında yayınlanır.\n${products.map((p) => `• ${p}`).join("\n")}`
+      ),
       ...(reviewCode
         ? [
             keyValues([{ label: "Değerlendirme kodunuz", value: reviewCode, mono: true, strong: true }], { boxed: true }),
@@ -301,8 +306,10 @@ export function orderDeliveredEmail(d: OrderEmailData, reviewCode: string | null
               { small: true, muted: true }
             ),
           ]
-        : []),
-      button("Siparişi görüntüle ve değerlendir", `${orderUrl(d)}#degerlendir`),
+        : [
+            paragraph("Değerlendirmeyi siparişi verdiğiniz üyelik hesabınızla giriş yaparak yazabilirsiniz.", { small: true, muted: true }),
+          ]),
+      button("Ürünleri değerlendir", `${orderUrl(d)}#degerlendir`),
       notice(
         "Bir sorun varsa (eksik, hasarlı ya da yanlış ürün) sipariş sayfanızdaki “İade / iptal” bölümünden ya da bu e-postayı yanıtlayarak bize bildirin. Teslimattan itibaren 14 gün içinde cayma hakkınızı kullanabilirsiniz (ambalajı açılmış gıda ürünleri hariç).",
         "info"
