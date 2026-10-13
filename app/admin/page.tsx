@@ -22,10 +22,12 @@ export default async function AdminDashboardPage() {
     countOrdersByFilter(),
   ]);
   const setup = checklist.filter((c) => c.state === "todo" && !c.technical);
+  // Havale bekleyen aşaması yalnız öyle sipariş varken (kartla ödenen sipariş doğrudan "Yeni siparişler"e düşer)
+  const pipeline = PIPELINE.filter((f) => f !== "odeme" || stages.odeme > 0);
 
   const tasks = [
     { n: badges.attention, text: "ödeme uyarısı: karar bekliyor", href: "/admin/siparisler?durum=dikkat", urgent: true },
-    { n: badges.toShip, text: "sipariş hazırlanıp kargolanacak", href: "/admin/siparisler?durum=kargolanacak" },
+    { n: badges.toShip, text: "yeni sipariş: hazırlayıp kargoya verin", href: "/admin/siparisler" },
     { n: badges.pendingTransfers, text: "sipariş havale bekliyor: hesabınızı kontrol edin", href: "/admin/siparisler?durum=odeme" },
     { n: badges.openRequests, text: "müşteri iptal/iade talebi", href: "/admin/siparisler?durum=talep" },
     { n: badges.newMessages, text: "yeni mesaj", href: "/admin/mesajlar" },
@@ -64,13 +66,13 @@ export default async function AdminDashboardPage() {
             Sipariş süreci
           </h2>
           <ol style={s.flow}>
-            {PIPELINE.map((f, i) => (
+            {pipeline.map((f, i) => (
               <li key={f} style={s.flowItem}>
                 <Link href={`/admin/siparisler?durum=${f}`} style={{ ...s.stage, ...(stages[f] > 0 && f !== "teslim" ? s.stageOn : {}) }}>
                   <strong style={s.stageN}>{stages[f]}</strong>
                   <span>{ORDER_FILTERS[f]}</span>
                 </Link>
-                {i < PIPELINE.length - 1 && (
+                {i < pipeline.length - 1 && (
                   <span aria-hidden="true" style={s.flowArrow}>
                     ›
                   </span>

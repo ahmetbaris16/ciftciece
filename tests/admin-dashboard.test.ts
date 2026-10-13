@@ -16,38 +16,46 @@ setupTestDb();
 
 const refs = (rows: Array<{ reference: string }>) => rows.map((r) => r.reference).sort();
 
-test("aşamalar: ödeme bekleniyor, kargolanacak, dikkat, müşteri talebi; sayılar; her sipariş bir aşamada", async () => {
+test("sekmeler: havale bekleyen, yeni siparişler (varsayılan), dikkat, müşteri talebi; sayılar; yarım kart ödemesi yalnız Tümü'nde", async () => {
   const transfer = (await createTestOrder({ method: "BANK_TRANSFER", dueInMinutes: 48 * 60 })).order;
   const paid = (await createTestOrder({ method: "BANK_TRANSFER", dueInMinutes: 48 * 60 })).order;
   await confirmBankTransferPayment(paid.id, "admin-1");
   const cod = (await createTestOrder({ method: "CASH_ON_DELIVERY", dueInMinutes: null })).order;
   const flagged = (await createTestOrder({ method: "CARD" })).order;
   await prisma.order.update({ where: { id: flagged.id }, data: { needsAttention: true } });
+  // Müşteri banka sayfasında vazgeçti: işletmenin işi yok, kendiliğinden iptal olur
+  const unfinishedCard = (await createTestOrder({ method: "CARD" })).order;
   await createCustomerRequest(paid.reference, { type: "CANCEL", message: "Yanlışlıkla iki kez sipariş verdim." });
 
-  // Ödeme bekleniyor: havale + ödemesi tamamlanmamış kart siparişi (kart siparişi önceden hiçbir aşamada görünmüyordu)
-  assert.deepEqual(refs((await searchOrdersForAdmin({ filter: "odeme" })).rows), [flagged.reference, transfer.reference].sort());
+  // Havale bekleyen: yalnız havale (kullanıcı isteği 2026-10-14: "ödeme bekleniyor" anlaşılmıyordu)
+  assert.deepEqual(refs((await searchOrdersForAdmin({ filter: "odeme" })).rows), [transfer.reference]);
   assert.equal(parseFilter("havale"), "odeme"); // eski bağlantı
+  // "Siparişler" açılınca yeni siparişler (kargolanacak); Tümü açıkça seçilir
+  assert.equal(parseFilter(undefined), "kargolanacak");
+  assert.equal(parseFilter("olmayan"), "kargolanacak");
+  assert.equal(parseFilter("tum"), "tum");
   // İptal isteği karar bekleyen ödenmiş sipariş kargolanacaklarda değil, "Müşteri talebi"nde
   assert.deepEqual(refs((await searchOrdersForAdmin({ filter: "kargolanacak" })).rows), [cod.reference]);
   assert.deepEqual(refs((await searchOrdersForAdmin({ filter: "dikkat" })).rows), [flagged.reference]);
   const talep = await searchOrdersForAdmin({ filter: "talep" });
   assert.deepEqual(refs(talep.rows), [paid.reference]);
   assert.equal(talep.rows[0].openRequests, 1);
-  assert.equal((await searchOrdersForAdmin({})).total, 4);
+  assert.equal((await searchOrdersForAdmin({ filter: "tum" })).total, 5);
 
   const counts = await countOrdersByFilter();
   assert.deepEqual(
     { tum: counts.tum, odeme: counts.odeme, kargolanacak: counts.kargolanacak, talep: counts.talep, dikkat: counts.dikkat, kargoda: counts.kargoda },
-    { tum: 4, odeme: 2, kargolanacak: 1, talep: 1, dikkat: 1, kargoda: 0 }
+    { tum: 5, odeme: 1, kargolanacak: 1, talep: 1, dikkat: 1, kargoda: 0 }
   );
-  // Tümü dışında her sipariş en az bir aşamada
+  // Tümü dışında her sipariş en az bir sekmede; yalnız yarım kalmış kart ödemesi sadece Tümü'nde
   const stages = (Object.keys(ORDER_FILTERS) as OrderFilter[]).filter((f) => f !== "tum");
   const seen = new Set<string>();
   for (const f of stages) for (const r of (await searchOrdersForAdmin({ filter: f })).rows) seen.add(r.reference);
-  assert.equal(seen.size, 4);
+  assert.deepEqual([...seen].sort(), [transfer, paid, cod, flagged].map((o) => o.reference).sort());
+  assert.ok(!seen.has(unfinishedCard.reference));
 
   assert.equal(nextStepHint({ status: "PENDING", paymentMethod: "BANK_TRANSFER", needsAttention: false, openRequests: 0 }), "Havale gelince onaylayın");
+  assert.match(nextStepHint({ status: "PENDING", paymentMethod: "CARD", needsAttention: false, openRequests: 0 }) ?? "", /kendiliğinden iptal/);
   assert.equal(nextStepHint({ status: "PROCESSING", paymentMethod: "CASH_ON_DELIVERY", needsAttention: false, openRequests: 0 }), "Kargoya verin (kapıda ödeme)");
   assert.equal(nextStepHint({ status: "PAID", paymentMethod: "CARD", needsAttention: false, openRequests: 1 }), "Müşteri talebine karar verin");
   assert.equal(nextStepHint({ status: "DELIVERED", paymentMethod: "CARD", needsAttention: false, openRequests: 0 }), null);
@@ -59,6 +67,7 @@ test("aşamalar: ödeme bekleniyor, kargolanacak, dikkat, müşteri talebi; say�
   assert.equal(b.openRequests, 1);
 
   const stats = await getDashboardStats();
+  // Yarım kalmış kart ödemesi bugünkü siparişlere sayılmaz; ödeme uyarılı kart siparişi sayılır
   assert.equal(stats.todayOrders, 4);
   // Yalnız onaylanan havale: kapıda ödemeli sipariş teslimde tahsil edilene kadar ciroya girmez
   assert.equal(stats.monthPaidOrders, 1);

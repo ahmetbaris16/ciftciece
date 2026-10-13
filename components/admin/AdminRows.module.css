@@ -85,13 +85,27 @@
   white-space: nowrap;
 }
 
+/* Telefon: ad/no solda, tutar sağda (en çok %45); durum etiketleri ve ipucu altta tam genişlikte. Sağ sütun
+   içerik kadar genişlerse uzun ipucu sol sütunu sıfıra sıkıştırıyordu (sipariş no harf harf alt alta). */
 @media (max-width: 560px) {
   .row {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 45%);
     grid-template-areas:
-      "main side"
-      "amount side";
-    row-gap: 0.4rem;
+      "main amount"
+      "side side";
+    row-gap: 0.5rem;
     align-items: start;
+  }
+
+  .amount {
+    align-items: flex-end;
+    text-align: right;
+  }
+
+  .side {
+    flex-direction: row;
+    justify-content: flex-start;
+    align-items: center;
+    text-align: left;
   }
 }

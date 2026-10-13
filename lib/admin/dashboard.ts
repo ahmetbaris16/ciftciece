@@ -84,7 +84,14 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   // Ciro sipariş durumundan değil, alınmış ödemeden sayılır: kapıda ödemeli sipariş teslimde tahsil edilene kadar
   // ödenmiş sayılmaz; bankanın test ortamındaki ödemeler gerçek para değildir.
   const [todayOrders, paidAttempts, refunds, shipped, low] = await Promise.all([
-    prisma.order.count({ where: { createdAt: { gte: today }, status: { not: "CANCELLED" } } }),
+    // Kart ödemesi yarım kalan (müşteri banka sayfasında vazgeçti) sipariş sayılmaz; ödeme uyarılı olan sayılır
+    prisma.order.count({
+      where: {
+        createdAt: { gte: today },
+        status: { not: "CANCELLED" },
+        NOT: { status: "PENDING", paymentMethod: "CARD", needsAttention: false },
+      },
+    }),
     prisma.paymentAttempt.findMany({
       where: { status: "SUCCEEDED", verifiedAt: { gte: month } },
       select: { provider: true, amountKurus: true, paidAmountKurus: true, chargedAmountKurus: true },

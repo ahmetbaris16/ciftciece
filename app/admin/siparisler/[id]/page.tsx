@@ -136,7 +136,12 @@ export default async function AdminSiparisDetay({ params }: Props) {
 
   const addr = order.shippingAddress;
   const recipientPays = addr?.shippingMode === "recipient";
-  const status = STATUS[order.status] ?? { label: order.status, color: "#999" };
+  const status =
+    order.status === "PENDING"
+      ? order.paymentMethod === "BANK_TRANSFER"
+        ? { label: "Havale bekleniyor", color: "#facc15" }
+        : { label: "Kart ödemesi tamamlanmadı", color: "#a8a29e" }
+      : STATUS[order.status] ?? { label: order.status, color: "#999" };
   const shipped = order.status === "SHIPPED" || order.status === "DELIVERED";
   const closed = order.status === "CANCELLED" || order.status === "REFUNDED";
   const remaining = Math.max(0, d.paidKurus - d.refundedKurus);

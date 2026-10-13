@@ -29,7 +29,8 @@ const NAV_ITEMS: Array<{ key: string; label: string; href: string; icon: string;
     label: "Siparişler",
     href: "/admin/siparisler",
     icon: "🛒",
-    badge: (b) => b.toShip + b.pendingTransfers + b.openRequests,
+    // Şimdi iş bekleyenler: kargolanacak yeni sipariş + müşteri talebi (havale bekleyen para gelince işe döner)
+    badge: (b) => b.toShip + b.openRequests,
     urgent: (b) => b.attention,
   },
   { key: "urunler", label: "Ürünler", href: "/admin/urunler", icon: "📦" },
