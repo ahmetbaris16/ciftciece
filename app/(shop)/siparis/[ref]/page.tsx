@@ -105,6 +105,8 @@ export default async function SiparisPage({ params, searchParams }: Props) {
   const reviewing = cardPending && view.needsAttention;
   const verifying = cardPending && !reviewing && odeme === "dogrulaniyor";
   const closed = d.status === "CANCELLED" || d.status === "REFUNDED";
+  // Kargo takibi yalnız paket yoldayken: teslim edildikten (ya da sipariş kapandıktan) sonra takip bağlantısı gösterilmez
+  const inTransit = d.status === "SHIPPED";
   // Sipariş kesinleşti (ödendi / havale bekliyor / kapıda ödeme) → sepet temizlenir
   const placed = isPaid || awaitingTransfer;
   const step = progressIndex(d.status);
@@ -283,14 +285,16 @@ export default async function SiparisPage({ params, searchParams }: Props) {
                       </p>
                       <p className={styles.muted}>{dateTimeTr(s.shippedAt)} kargoya verildi</p>
                     </div>
-                    {s.link && (
+                    {inTransit && s.link && (
                       <a className={styles.secondaryBtn} href={s.link} target="_blank" rel="noopener noreferrer">
                         Kargoyu takip et
                       </a>
                     )}
                   </div>
                 ))}
-                <p className={styles.muted}>Takip sayfası numarayı kendiliğinden göstermezse takip numarasını sayfadaki kutuya yazın.</p>
+                {inTransit && (
+                  <p className={styles.muted}>Takip sayfası numarayı kendiliğinden göstermezse takip numarasını sayfadaki kutuya yazın.</p>
+                )}
               </section>
             )}
 

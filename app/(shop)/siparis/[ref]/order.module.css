@@ -295,6 +295,12 @@
   border-bottom: 1px solid var(--color-border-light);
 }
 
+/* Teslimden sonra takip notu yok: son gönderinin altında boşta çizgi kalmasın */
+.shipment:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
 .shipment p {
   margin: 0 0 var(--space-1);
 }
