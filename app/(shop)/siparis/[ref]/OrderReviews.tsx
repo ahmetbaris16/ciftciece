@@ -1,9 +1,8 @@
 /**
  * Sipariş sayfası → "Ürünleri değerlendirin" (yalnız sipariş teslim edildikten sonra; teslim e-postasındaki
- * "Siparişi görüntüle ve değerlendir" bağlantısı #degerlendir ile buraya gelir).
- * - Üye olmadan verilmiş sipariş: sipariş numarası yetmez (F-33). Önce paket fişindeki / teslim e-postasındaki tek
- *   kullanımlık değerlendirme kodu girilir; kodu kullanan tarayıcıda her ürün için form açılır (giriş gerekmez).
- *   Kod başka cihazda kullanıldıysa bu söylenir (yeni kodu mağaza panelden üretir).
+ * "Ürünleri değerlendir" bağlantısı #degerlendir ile buraya gelir).
+ * - Üye olmadan verilmiş sipariş: her ürün için form hemen açılır; giriş ve kod gerekmez (kullanıcı kararı
+ *   2026-10-14: değerlendirme kodu kaldırıldı).
  * - Üyelikle verilmiş sipariş: siparişi veren üye giriş yaptıysa form (hesabına yazılır); değilse giriş bağlantısı.
  * - Yönetici hesabı: değerlendirme yazamaz.
  */
@@ -12,7 +11,6 @@ import Link from "next/link";
 import { isStaffRole } from "@/lib/auth/roles";
 import type { OrderReviewContext } from "@/lib/repositories/product-review.repository";
 import ReviewForm from "@/components/product/ReviewForm";
-import ReviewCodeForm from "@/components/reviews/ReviewCodeForm";
 import styles from "./order.module.css";
 
 interface Props {
@@ -20,11 +18,9 @@ interface Props {
   context: OrderReviewContext;
   /** Sayfayı açan mağaza oturumu (yoksa null) */
   viewer: { id: string; role: string } | null;
-  /** Misafir siparişi: bu tarayıcının değerlendirme izni var mı, kod kullanılmış mı (üye siparişinde null) */
-  guestAccess: { granted: boolean; codeUsed: boolean } | null;
 }
 
-export default function OrderReviews({ reference, context, viewer, guestAccess }: Props) {
+export default function OrderReviews({ reference, context, viewer }: Props) {
   if (!context.delivered || context.items.length === 0) return null;
   const memberOrder = context.userId !== null;
   const staff = viewer !== null && isStaffRole(viewer.role);
@@ -35,12 +31,9 @@ export default function OrderReviews({ reference, context, viewer, guestAccess }
   if (staff) blocked = "Yönetici hesabıyla açtınız. Değerlendirmeleri siparişi veren müşteri yazar.";
   else if (!owner && viewer) blocked = "Bu sipariş başka bir üyelikle verildi. Değerlendirmek için siparişi veren hesapla giriş yapın.";
   else if (!owner) blocked = "Bu siparişi üyeliğinizle verdiniz. Değerlendirmek için giriş yapın.";
-  // Misafir siparişi, bu tarayıcıda izin yok: önce değerlendirme kodu
-  const needsCode = !blocked && !memberOrder && !guestAccess?.granted;
-  const written = context.items.filter((i) => i.review).length;
 
   return (
-    <section id="degerlendir" className={styles.card} aria-labelledby="review-title">
+    <section id="degerlendir" className={`${styles.card} ${styles.anchorCard}`} aria-labelledby="review-title">
       <h2 id="review-title" className={styles.cardTitle}>
         Ürünleri değerlendirin
       </h2>
@@ -54,15 +47,6 @@ export default function OrderReviews({ reference, context, viewer, guestAccess }
               </Link>
             </p>
           )}
-        </>
-      ) : needsCode ? (
-        <>
-          <p className={styles.muted}>
-            {guestAccess?.codeUsed
-              ? `Bu siparişin değerlendirme kodu kullanıldı${written > 0 ? ` (${written} ürün değerlendirildi)` : ""}. Değerlendirmeyi kodu kullandığınız cihazdan yazıp düzenleyebilirsiniz. Başka bir cihazdan yazmak isterseniz bize ulaşın; yeni kod gönderelim.`
-              : "Ürünleri değerlendirmek için paketinizdeki sipariş fişinde ve “Siparişiniz teslim edildi” e-postasında yazan değerlendirme kodunu girin. Kod tek kullanımlıktır; sipariş numarası tek başına yetmez (başkası sizin adınıza yazamasın)."}
-          </p>
-          <ReviewCodeForm orderRef={reference} compact />
         </>
       ) : (
         <>

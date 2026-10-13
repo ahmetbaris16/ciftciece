@@ -22,11 +22,11 @@ export const LEGAL_DOCUMENTS = {
     version: "2026-10-14",
   },
   // Üye olurken onaylanır (siparişte değil). 2026-10-07: değerlendirme cümleleri (06.10 anında yayın, 07.10
-  // değerlendirme kodu)
+  // değerlendirme kodu). 2026-10-14: değerlendirme kodu kaldırıldı (misafir siparişi sipariş sayfasından kodsuz)
   MEMBERSHIP_AGREEMENT: {
     title: "Üyelik Sözleşmesi",
     path: "/uyelik-sozlesmesi",
-    version: "2026-10-07",
+    version: "2026-10-14",
   },
 } as const;
 

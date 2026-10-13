@@ -267,10 +267,10 @@ export function orderShippedEmail(d: OrderEmailData, shipmentId: string, additio
 // ── Teslim edildi ───────────────────────────────────────────────────────
 
 /**
- * reviewCode: üye olmadan verilmiş siparişin tek kullanımlık değerlendirme kodu (paket fişindekiyle aynı; F-33).
- * Bağlantıya konmaz (e-posta tarayıcıları/önizlemeleri adresleri açabilir; kod yalnız müşterinin elinde kalsın).
+ * "Ürünleri değerlendir" sipariş sayfasının değerlendirme bölümüne gider: üye olmadan verilmiş siparişte kod
+ * gerekmez (kullanıcı kararı 2026-10-14), üyelik siparişinde müşteri hesabıyla giriş yapar.
  */
-export function orderDeliveredEmail(d: OrderEmailData, reviewCode: string | null = null): RenderedEmail {
+export function orderDeliveredEmail(d: OrderEmailData): RenderedEmail {
   return customerEmail(d, {
     subject: `Siparişiniz teslim edildi — #${d.reference}`,
     preheader: "Afiyet olsun! Ürünlerimizi nasıl buldunuz?",
@@ -281,17 +281,9 @@ export function orderDeliveredEmail(d: OrderEmailData, reviewCode: string | null
       heading("Ürünlerimizi nasıl buldunuz?"),
       paragraph("Değerlendirmeniz ürün sayfasında yayınlanır ve ürünü merak eden diğer müşterilerimize yol gösterir."),
       products(d, false),
-      ...(reviewCode
-        ? [
-            keyValues([{ label: "Değerlendirme kodunuz", value: reviewCode, mono: true, strong: true }], { boxed: true }),
-            paragraph(
-              "Sipariş sayfanızdaki “Ürünleri değerlendirin” bölümüne bu kodu yazın. Kod tek kullanımlıktır ve paketinizdeki fişte de yazar; kimseyle paylaşmayın.",
-              { small: true, muted: true }
-            ),
-          ]
-        : [
-            paragraph("Değerlendirmeyi siparişi verdiğiniz üyelik hesabınızla giriş yaparak yazabilirsiniz.", { small: true, muted: true }),
-          ]),
+      ...(d.memberOrder
+        ? [paragraph("Değerlendirmeyi siparişi verdiğiniz üyelik hesabınızla giriş yaparak yazabilirsiniz.", { small: true, muted: true })]
+        : []),
       button("Ürünleri değerlendir", `${orderUrl(d)}#degerlendir`),
       paragraph("Eksik, hasarlı ya da yanlış ürün varsa bu e-postayı yanıtlayarak ya da sipariş sayfanızdan bize bildirin.", {
         muted: true,

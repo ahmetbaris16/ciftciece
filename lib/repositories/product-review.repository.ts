@@ -5,11 +5,11 @@
  *   siparişte "teslim edilince" denir.
  * - Üye: hesabına bağlı (üye girişiyle verilmiş) siparişten; ürün sayfasından ya da kendi sipariş sayfasından yazar.
  *   Üye başına ürün başına tek değerlendirme.
- * - Üye olmadan verilmiş (misafir) sipariş: o siparişin sayfasından yazılır; sipariş numarası YETMEZ (F-33): paket
- *   fişindeki / teslim e-postasındaki tek kullanımlık değerlendirme kodu girilir, kodu kullanan tarayıcıya süreli izin
- *   verilir (lib/reviews/review-code.ts). Sipariş başına ürün başına tek değerlendirme; adı siparişteki addan
- *   ("Ayşe K."). Misafir siparişi e-postayla üyeliğe bağlanmaz (e-posta doğrulanmadığı için), üyelikle verilmiş
- *   siparişin sayfasından ise giriş yapmadan yazılamaz.
+ * - Üye olmadan verilmiş (misafir) sipariş: teslim edildikten sonra o siparişin sayfasından kodsuz yazılır (kullanıcı
+ *   kararı 2026-10-14; önceki tek kullanımlık değerlendirme kodu kaldırıldı — riski kabul edildi: sipariş sayfasının
+ *   bağlantısını bilen herkes o siparişin ürünlerini değerlendirebilir, yazılanı düzenleyebilir). Sipariş başına
+ *   ürün başına tek değerlendirme; adı siparişteki addan ("Ayşe K."). Misafir siparişi e-postayla üyeliğe bağlanmaz
+ *   (e-posta doğrulanmadığı için), üyelikle verilmiş siparişin sayfasından ise giriş yapmadan yazılamaz.
  * - Düzenlenirse yeni hâli hemen yayınlanır.
  * - Mağaza yönetici hesabı değerlendirme yazamaz (API'de denetlenir).
  * - Mağaza yalnız uygunsuz yorumu (hakaret, kişisel veri, ürünle ilgisiz içerik) yayından kaldırabilir (ürün
@@ -26,7 +26,6 @@ import { prisma } from "@/lib/db/prisma";
 import { USE_DB, loadMock } from "@/lib/data/source";
 import { readMock } from "@/lib/data/mock-store";
 import { publicDisplayName } from "@/lib/validation/account";
-import { hasReviewGrant } from "@/lib/reviews/review-code";
 
 export type ReviewStatus = "PENDING" | "APPROVED" | "REJECTED";
 
@@ -96,14 +95,6 @@ export class ReviewNeedsLoginError extends Error {
   constructor() {
     super("REVIEW_NEEDS_LOGIN");
     this.name = "ReviewNeedsLoginError";
-  }
-}
-
-/** Misafir siparişinde bu tarayıcının değerlendirme izni yok: önce tek kullanımlık değerlendirme kodu girilmeli */
-export class ReviewNeedsCodeError extends Error {
-  constructor() {
-    super("REVIEW_NEEDS_CODE");
-    this.name = "ReviewNeedsCodeError";
   }
 }
 
@@ -394,9 +385,8 @@ export async function getOrderReviewContext(reference: string): Promise<OrderRev
 }
 
 /**
- * Üye olmadan verilmiş siparişten değerlendirme gönder/güncelle → hemen yayında. Sipariş numarası siparişi bulur; yazma
- * izni değerlendirme kodunu kullanmış tarayıcının çerezindeki anahtardır (grantTokens), yoksa ReviewNeedsCodeError.
- * Sipariş üyelikle verildiyse ReviewNeedsLoginError; ürün siparişte yoksa ya da sipariş teslim edilmediyse
+ * Üye olmadan verilmiş siparişten değerlendirme gönder/güncelle → hemen yayında. Sipariş numarası siparişi bulur ve
+ * yetkidir (kod yok). Sipariş üyelikle verildiyse ReviewNeedsLoginError; ürün siparişte yoksa ya da sipariş teslim edilmediyse
  * ReviewNotAllowedError; ürün yayında değilse ReviewProductNotFoundError.
  */
 export async function submitOrderReview(input: {
@@ -405,8 +395,6 @@ export async function submitOrderReview(input: {
   rating: number;
   title: string | null;
   text: string;
-  /** Değerlendirme kodu kullanılınca tarayıcıya verilen izin anahtarları (çerez) */
-  grantTokens: string[];
 }): Promise<{ review: MyProductReview; productSlug: string }> {
   if (!USE_DB) throw new ReviewNotAllowedError("not_purchased");
 
@@ -431,7 +419,6 @@ export async function submitOrderReview(input: {
   if (!isReviewable(order.status)) {
     throw new ReviewNotAllowedError(isAwaitingDelivery(order.status) ? "awaiting_delivery" : "not_purchased");
   }
-  if (!(await hasReviewGrant(order.id, input.grantTokens))) throw new ReviewNeedsCodeError();
 
   const data = publishedData(input, new Date());
   const r = await publishReview(

@@ -601,10 +601,10 @@ model ProductReview {
   @@map("product_reviews")
 }
 
-// Üye olmadan verilmiş siparişin tek kullanımlık değerlendirme kodu (F-33): sipariş numarası tek başına değerlendirme
-// yazdırmaz. Kod paket fişinde ve teslim e-postasında yazar; kodun kendisi saklanmaz (SHA-256 özeti), sunucu sırrıyla
-// yeniden hesaplanır (lib/reviews/review-code.ts). Bir kez kullanılır: kullanan tarayıcıya süreli değerlendirme izni
-// verilir (çerez; burada özeti). Yönetici yeni kod üretirse sürüm artar, eski kod ve verilmiş izin geçersiz olur.
+// KULLANILMIYOR (2026-10-14, kullanıcı kararı): üye olmadan verilmiş siparişin tek kullanımlık değerlendirme kodu
+// kaldırıldı; misafir, teslimden sonra sipariş sayfasından kodsuz değerlendirir. Tablo silinmedi (yıkıcı migration
+// onay ister); eski kayıtlar yalnız geçmiş içindir. Eski açıklama: kod paket fişinde ve teslim e-postasında yazardı,
+// kodun özeti saklanırdı, bir kez kullanılınca tarayıcıya süreli izin verilirdi.
 model OrderReviewCode {
   id             String    @id @default(cuid())
   orderId        String    @unique

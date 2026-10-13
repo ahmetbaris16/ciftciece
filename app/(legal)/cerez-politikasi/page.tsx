@@ -16,7 +16,7 @@ export const metadata: Metadata = {
  */
 export default function CerezPolitikasiPage() {
   return (
-    <LegalPage title="Çerez Politikası" updated="2026-10-07">
+    <LegalPage title="Çerez Politikası" updated="2026-10-14">
       <p>
         Çerezler, sitelerin tarayıcınıza kaydettiği küçük metin dosyalarıdır. Sitemizde <strong>yalnız sitenin çalışması için
         zorunlu</strong> çerezler ve tarayıcı depolaması kullanılır. Analiz, reklam ya da takip çerezi kullanılmaz; bu yüzden
@@ -47,14 +47,6 @@ export default function CerezPolitikasiPage() {
             <td>next-auth.callback-url (güvenli bağlantıda __Secure- önekiyle)</td>
             <td>Girişten sonra kaldığınız sayfaya dönme</td>
             <td>Tarayıcı kapanana kadar</td>
-          </tr>
-          <tr>
-            <td>ce_review_grants</td>
-            <td>
-              Üye olmadan verdiğiniz siparişte değerlendirme kodunu girdikten sonra ürünleri bu tarayıcıdan değerlendirip
-              düzenleyebilmeniz (yalnız rastgele bir anahtar; kişisel bilgi içermez)
-            </td>
-            <td>30 gün</td>
           </tr>
           <tr>
             <td>ce_order_access</td>

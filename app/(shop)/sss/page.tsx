@@ -172,8 +172,8 @@ export default async function SssPage() {
           text: "Hayır. Üye olmadan sipariş verebilirsiniz; üyelik siparişlerinizi tek yerden takip etmenizi sağlar.",
           a: (
             <>
-              Hayır, üye olmadan sipariş verebilirsiniz. Teslim edilen ürünleri, paketinizdeki fişte ve teslim e-postanızda
-              yazan tek kullanımlık kodla <Link href="/degerlendir">değerlendirebilirsiniz</Link>.{" "}
+              Hayır, üye olmadan sipariş verebilirsiniz. Teslim edilen ürünleri sipariş sayfanızdan (teslim e-postanızdaki
+              bağlantı ya da <Link href="/siparis-takip">Sipariş Takibi</Link>) değerlendirebilirsiniz.{" "}
               <Link href="/uye-ol">Üyelik</Link> ücretsizdir ve siparişlerinizi tek yerden takip etmenizi sağlar.
             </>
           ),

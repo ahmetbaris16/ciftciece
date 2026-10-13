@@ -23,7 +23,6 @@ import { distanceSalesSections, preInformationSections } from "@/lib/legal/conte
 import { formatPhoneTr } from "@/lib/business/info";
 import { getCurrentCustomer } from "@/lib/auth/session";
 import { getOrderReviewContext } from "@/lib/repositories/product-review.repository";
-import { REVIEW_GRANT_COOKIE, hasReviewGrant, parseGrantCookie, reviewCodeUsed } from "@/lib/reviews/review-code";
 import { ORDER_ACCESS_COOKIE, hasOrderAccess } from "@/lib/orders/access";
 import { canChangeDelivery } from "@/lib/orders/lifecycle";
 import { maskEmail } from "@/lib/email/transport";
@@ -85,18 +84,6 @@ export default async function SiparisPage({ params, searchParams }: Props) {
         })
       : null;
   const viewer = reviewContext ? await getCurrentCustomer().catch(() => null) : null;
-  // Üye olmadan verilmiş sipariş: bu tarayıcı değerlendirme kodunu kullandı mı (izin çerezi), kod harcandı mı
-  const guestAccess =
-    reviewContext && reviewContext.userId === null
-      ? await (async () => {
-          const tokens = parseGrantCookie((await cookies()).get(REVIEW_GRANT_COOKIE)?.value);
-          const granted = await hasReviewGrant(reviewContext.orderId, tokens);
-          return { granted, codeUsed: granted ? true : await reviewCodeUsed(reviewContext.orderId) };
-        })().catch((err) => {
-          console.error("[siparis] Değerlendirme izni okunamadı:", err);
-          return { granted: false, codeUsed: false };
-        })
-      : null;
   const isPaid = PAID.includes(d.status);
   const isCod = d.paymentMethod === "CASH_ON_DELIVERY";
   const itemDiscount = itemDiscountKurus(d);
@@ -199,7 +186,6 @@ export default async function SiparisPage({ params, searchParams }: Props) {
                 reference={d.reference}
                 context={reviewContext}
                 viewer={viewer ? { id: viewer.id, role: viewer.role } : null}
-                guestAccess={guestAccess}
               />
             )}
 

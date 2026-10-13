@@ -8,7 +8,6 @@
 import { after, before, beforeEach, test } from "node:test";
 import assert from "node:assert/strict";
 import { prisma } from "@/lib/db/prisma";
-import { ensureReviewCode } from "@/lib/reviews/review-code";
 import { processOutbox } from "@/lib/notifications/dispatcher";
 import { sendDueEmails } from "@/lib/notifications/sender";
 import { saveBusinessInfo } from "@/lib/business/business.repository";
@@ -111,7 +110,7 @@ test("ürün görseli yalnız site internetten erişilebilirken (https, yerel de
     process.env.NEXT_PUBLIC_APP_URL = "https://ornek-magaza.test";
     const thumb = `https://ornek-magaza.test/_next/image?url=${encodeURIComponent("/images/products/zeytin/ornek.jpg")}&amp;w=128&amp;q=75`;
     assert.ok(orderReceivedEmail(d).html.includes(`<img src="${thumb}"`), "yayındaki sitede küçültülmüş ürün görseli");
-    assert.ok(orderDeliveredEmail(d, null).html.includes(thumb), "teslim e-postasında da");
+    assert.ok(orderDeliveredEmail(d).html.includes(thumb), "teslim e-postasında da");
   } finally {
     if (before === undefined) delete process.env.NEXT_PUBLIC_APP_URL;
     else process.env.NEXT_PUBLIC_APP_URL = before;
@@ -129,13 +128,13 @@ test("havale onayı → ödeme alındı; kargo → takip numaralı e-posta; tesl
   const shipped = (await emails(order.id)).find((e) => e.kind === "ORDER_SHIPPED")!;
   assert.ok(shipped.html.includes("112233445566"));
   assert.ok(shipped.html.includes("yurticikargo.com"));
-  // Üye olmadan verilmiş sipariş: teslim e-postasında tek kullanımlık değerlendirme kodu (paket fişindekiyle aynı);
-  // kod bağlantıya konmaz
+  // Üye olmadan verilmiş sipariş: teslim e-postasında değerlendirme kodu YOK (kullanıcı kararı 2026-10-14); bağlantı
+  // sipariş sayfasının değerlendirme bölümüne gider
   const delivered = (await emails(order.id)).find((e) => e.kind === "ORDER_DELIVERED")!;
-  const code = (await ensureReviewCode(order.id))!.code;
-  assert.ok(delivered.html.includes(code), "teslim e-postasında değerlendirme kodu");
-  assert.ok(delivered.text.includes(code), "düz metinde değerlendirme kodu");
-  assert.ok(!delivered.html.includes(`=${code}`) && !delivered.html.includes(code.replace("-", "")), "kod bağlantıda değil");
+  assert.ok(!/kodunuz|kodu yazın|tek kullanımlık/i.test(delivered.text), "kod yok");
+  assert.ok(delivered.html.includes(`/siparis/${order.reference}#degerlendir`), "değerlendirme bağlantısı");
+  assert.ok(!delivered.text.includes("üyelik hesabınızla"), "misafire giriş cümlesi yok");
+  assert.equal(await prisma.orderReviewCode.count(), 0, "kod üretilmez");
   // Aynı olaylar yeniden işlense de e-posta çoğalmaz
   await prisma.outboxEvent.updateMany({ data: { publishedAt: null } });
   await processOutbox();
@@ -149,14 +148,14 @@ test("kart: ilk e-posta 'Siparişiniz alındı' (ödeme onaylandı); teslim e-po
   const received = orderReceivedEmail(d);
   assert.equal(received.subject, `Siparişiniz alındı — #${order.reference}`);
   assert.ok(received.text.includes("Ödemeniz onaylandı"));
-  const delivered = orderDeliveredEmail(d, "ABCD-EFGH");
+  const delivered = orderDeliveredEmail(d);
   assert.ok(delivered.html.includes("Ürünlerimizi nasıl buldunuz?"));
   assert.ok(delivered.text.includes("ÜRÜNLERİMİZİ NASIL BULDUNUZ?"), "düz metinde Türkçe büyük harf");
   assert.ok(delivered.text.includes("• Zeytin"), "değerlendirilecek ürün listesi");
   assert.ok(delivered.html.includes(`/siparis/${order.reference}#degerlendir`));
   assert.ok(delivered.html.includes("Ürünleri değerlendir"));
-  // Üyelik siparişi (kod yok): hesapla giriş
-  assert.ok(orderDeliveredEmail(d, null).text.includes("üyelik hesabınızla giriş yaparak"));
+  // Üyelik siparişi: hesapla giriş
+  assert.ok(orderDeliveredEmail({ ...d, memberOrder: true }).text.includes("üyelik hesabınızla giriş yaparak"));
 });
 
 test("kartla ödenmemiş sipariş e-posta üretmez; süre dolunca iptal e-postası 'ödeme tamamlanmadı' der", async () => {
