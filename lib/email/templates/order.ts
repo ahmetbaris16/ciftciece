@@ -1,31 +1,36 @@
 /**
- * Müşteri sipariş e-postaları. Her e-posta: ne oldu, şimdi ne olacak, sipariş özeti, sipariş sayfası bağlantısı.
+ * Müşteri sipariş e-postaları — kısa ve sade (kullanıcı isteği 2026-10-13; örnek: büyük pazaryerlerinin sipariş
+ * e-postaları): ne oldu (sipariş numarasıyla), şimdi ne olacak, ürünler, gerekiyorsa tutar ve adres, sipariş
+ * sayfası bağlantısı.
  *
- * "Siparişiniz alındı" e-postası yasal teyittir (e-ticaret mevzuatı: sipariş gecikmeksizin teyit edilir) ve
- * Ön Bilgilendirme Formu ile Mesafeli Satış Sözleşmesi'nin siparişe özel hâlini içerir (kalıcı veri saklayıcısı).
+ * "Siparişiniz alındı" e-postası yasal teyittir (e-ticaret mevzuatı: sipariş gecikmeksizin teyit edilir). Ön
+ * Bilgilendirme Formu ile Mesafeli Satış Sözleşmesi'nin siparişe özel hâli gövdede değil, e-postanın ekinde metin
+ * dosyası olarak gider: e-postayla birlikte saklanır (kalıcı veri saklayıcısı); yalnız siteye bağlantı vermek
+ * bunun yerini tutmaz (sayfa sonradan değişebilir).
  */
 
-import { distanceSalesSections, preInformationSections, sectionsToParagraphs } from "@/lib/legal/content";
-import { formatPhoneTr } from "@/lib/business/info";
+import { distanceSalesSections, preInformationSections, type LegalSection } from "@/lib/legal/content";
+import { formatPhoneTr, storeDisplayName } from "@/lib/business/info";
 import { formatPrice } from "@/types";
-import { emailFooter, siteUrl } from "../brand";
+import { emailFooter, emailImageUrl, siteUrl } from "../brand";
 import {
   button,
-  divider,
   heading,
+  infoBox,
   keyValues,
-  legalText,
   notice,
-  orderSummary,
   paragraph,
-  progressSteps,
+  productList,
   renderEmail,
+  totalsTable,
   type Block,
+  type Inline,
   type SummaryTotal,
 } from "../layout";
+import type { EmailAttachment } from "../transport";
 import type { RenderedEmail } from "./account";
 import {
-  addressText,
+  addressLines,
   billingText,
   formatIban,
   itemDiscountKurus,
@@ -33,12 +38,13 @@ import {
   type OrderEmailData,
 } from "@/lib/notifications/order-data";
 
-const STEPS = ["Sipariş alındı", "Ödeme", "Hazırlanıyor", "Kargoda", "Teslim edildi"];
-
 const dateTimeTr = (d: Date) =>
   new Intl.DateTimeFormat("tr-TR", { dateStyle: "long", timeStyle: "short", timeZone: "Europe/Istanbul" }).format(d);
 
 export const orderUrl = (d: OrderEmailData) => `${siteUrl()}/siparis/${d.reference}`;
+
+/** Cümle içinde kalın sipariş numarası */
+const orderNo = (d: OrderEmailData): Inline => ({ strong: d.reference });
 
 function totals(d: OrderEmailData): SummaryTotal[] {
   // İndirimli kalem varsa ürünler indirimsiz tutarla, indirim ayrı satırda (sepet ve ödemedeki gibi)
@@ -60,28 +66,30 @@ function totals(d: OrderEmailData): SummaryTotal[] {
   return t;
 }
 
-function summary(d: OrderEmailData): Block {
-  return orderSummary(
-    d.items.map((i) => ({
-      name: i.name,
-      detail:
-        i.lineTotalKurus < i.unitPriceKurus * i.quantity
-          ? `${i.variant} × ${i.quantity} · indirimli (${formatPrice(i.unitPriceKurus * i.quantity)} yerine)`
-          : `${i.variant} × ${i.quantity}`,
-      amount: formatPrice(i.lineTotalKurus),
-    })),
-    totals(d)
+/** Ürünler; withPrices: tutarlarıyla (sipariş teyidi), değilse yalnız ürün ve adet (kargo, teslim) */
+function products(d: OrderEmailData, withPrices: boolean): Block {
+  return productList(
+    d.items.map((i) => {
+      const full = i.unitPriceKurus * i.quantity;
+      return {
+        name: i.name,
+        detail: `${i.variant} · ${i.quantity} adet`,
+        amount: withPrices ? formatPrice(i.lineTotalKurus) : undefined,
+        amountBefore: withPrices && i.lineTotalKurus < full ? formatPrice(full) : undefined,
+        imageUrl: emailImageUrl(i.imageUrl),
+      };
+    })
   );
 }
 
 function deliveryBlock(d: OrderEmailData): Block {
   return keyValues(
     [
-      { label: "Teslimat adresi", value: addressText(d.address) },
-      { label: "Fatura", value: billingText(d.billing, d.customerName) },
+      { label: "Teslimat adresi", value: addressLines(d.address).join("\n") },
+      { label: "Fatura bilgileri", value: billingText(d.billing, d.customerName) },
       { label: "Sipariş notunuz", value: d.customerNote ?? "" },
     ],
-    { boxed: true }
+    { boxed: true, stacked: true }
   );
 }
 
@@ -109,103 +117,137 @@ function bankBlocks(d: OrderEmailData): Block[] {
   if (d.paymentDueAt) {
     blocks.push(
       notice(
-        `Son ödeme: ${dateTimeTr(d.paymentDueAt)}. Açıklamaya sipariş numaranızı yazmayı unutmayın. Bu zamana kadar ödeme gelmezse sipariş kendiliğinden iptal olur.`,
-        "warn",
-        "Önemli"
+        `Son ödeme: ${dateTimeTr(d.paymentDueAt)}. Açıklamaya sipariş numaranızı yazın; bu zamana kadar ödeme gelmezse sipariş kendiliğinden iptal olur.`,
+        "warn"
       )
     );
   }
   return blocks;
 }
 
-function legalBlocks(d: OrderEmailData): Block[] {
+// ── Sözleşmeler (e-postanın eki) ─────────────────────────────────────────
+
+function sectionText(s: LegalSection): string[] {
+  const lines = ["", s.heading, "-".repeat(Math.min(s.heading.length, 60))];
+  if (s.rows?.length) lines.push(...s.rows.map((r) => `${r.label}: ${r.value}`));
+  for (const p of s.paragraphs ?? []) lines.push("", p);
+  if (s.list?.length) lines.push("", ...s.list.map((l) => `• ${l}`));
+  if (s.note) lines.push("", s.note);
+  return lines;
+}
+
+const BOM = String.fromCharCode(0xfeff);
+
+/**
+ * Siparişe özel Ön Bilgilendirme Formu ve Mesafeli Satış Sözleşmesi (düz metin, UTF-8): her e-posta programında ve
+ * telefonda açılır, filtrelere takılmaz. Satırlar CRLF; başta BOM (Windows Not Defteri Türkçe karakterleri doğru
+ * göstersin).
+ */
+export function contractsAttachment(d: OrderEmailData): EmailAttachment {
   const ctx = orderLegalContext(d);
-  return [
-    divider(),
-    heading("Sözleşme metinleriniz"),
-    paragraph(
-      "Siparişinizde onayladığınız Ön Bilgilendirme Formu ve Mesafeli Satış Sözleşmesi aşağıdadır. Bu e-postayı saklayın; metinlere sipariş sayfanızdan da ulaşabilirsiniz.",
-      { muted: true, small: true }
-    ),
-    legalText("Ön Bilgilendirme Formu", sectionsToParagraphs(preInformationSections(d.business, ctx))),
-    legalText("Mesafeli Satış Sözleşmesi", sectionsToParagraphs(distanceSalesSections(d.business, ctx))),
+  const doc = (title: string, sections: LegalSection[]) => [
+    "",
+    "",
+    title.toLocaleUpperCase("tr-TR"),
+    "=".repeat(title.length),
+    ...sections.flatMap(sectionText),
   ];
+  const lines = [
+    `${storeDisplayName(d.business)} — Sipariş ${d.reference}`,
+    "",
+    "Siparişinizde onayladığınız metinlerin kopyasıdır; bu dosyayı saklayın. Metinlere sipariş sayfanızdan da ulaşabilirsiniz:",
+    orderUrl(d),
+    ...doc("Ön Bilgilendirme Formu", preInformationSections(d.business, ctx)),
+    ...doc("Mesafeli Satış Sözleşmesi", distanceSalesSections(d.business, ctx)),
+  ];
+  return {
+    filename: `siparis-${d.reference}-sozlesmeler.txt`,
+    contentType: "text/plain; charset=utf-8",
+    content: `${BOM}${lines.join("\r\n")}\r\n`,
+  };
+}
+
+function contractsNote(d: OrderEmailData): Block {
+  return infoBox("Sözleşmeleriniz", [
+    "Siparişinizde onayladığınız Ön Bilgilendirme Formu ve Mesafeli Satış Sözleşmesi bu e-postanın ekindedir. ",
+    { link: "Sipariş sayfanızdan", href: `${orderUrl(d)}#sozlesmeler` },
+    " da ulaşabilirsiniz.",
+  ]);
 }
 
 function customerEmail(
   d: OrderEmailData,
-  opts: { subject: string; preheader: string; title: string; blocks: Block[]; reason?: string }
+  opts: { subject: string; preheader: string; title: string; blocks: Block[]; reason?: string; attachments?: EmailAttachment[] }
 ): RenderedEmail {
   const { html, text } = renderEmail({
     brandName: d.business.tradeName,
     preheader: opts.preheader,
-    eyebrow: `Sipariş #${d.reference}`,
     title: opts.title,
     blocks: opts.blocks,
     footer: emailFooter(
       d.business,
-      opts.reason ?? "Bu e-postayı sitemizden verdiğiniz sipariş hakkında bilgilendirme amacıyla aldınız."
+      opts.reason ?? "Bu e-postayı sitemizden verdiğiniz sipariş hakkında bilgilendirme amacıyla aldınız. Sorularınız için bu e-postayı yanıtlayabilirsiniz."
     ),
   });
-  return { subject: opts.subject, html, text };
+  return { subject: opts.subject, html, text, attachments: opts.attachments };
 }
 
 const hello = (d: OrderEmailData) => paragraph(`Merhaba ${d.firstName},`);
 
-// ── Sipariş alındı (yasal teyit + sözleşmeler) ───────────────────────────
+// ── Sipariş alındı (yasal teyit; sözleşmeler ekte) ───────────────────────
 
 export function orderReceivedEmail(d: OrderEmailData): RenderedEmail {
   const blocks: Block[] = [hello(d)];
   let title = "Siparişiniz alındı";
   let preheader = `Sipariş #${d.reference} — ${formatPrice(d.totalKurus)}`;
-  let step = 1;
 
   if (d.paymentMethod === "BANK_TRANSFER" && d.status === "PENDING") {
     title = "Siparişiniz alındı — ödemenizi bekliyoruz";
     preheader = `Havale/EFT bilgileri: ${formatPrice(d.totalKurus)}, açıklama ${d.reference}`;
     blocks.push(
-      paragraph(
-        "Siparişinizi aldık ve ürünlerinizi sizin için ayırdık. Aşağıdaki hesaba havale/EFT yaptığınızda siparişiniz hazırlanmaya başlar; ödemeniz bize ulaşınca size ayrıca haber veririz."
-      ),
-      heading("Havale / EFT bilgileri"),
+      paragraph([
+        orderNo(d),
+        " numaralı siparişinizi aldık ve ürünlerinizi sizin için ayırdık. Aşağıdaki hesaba havale/EFT yaptığınızda siparişiniz hazırlanmaya başlar.",
+      ]),
       ...bankBlocks(d)
     );
-    step = 1;
   } else if (d.paymentMethod === "CASH_ON_DELIVERY") {
     blocks.push(
-      paragraph(
-        `Siparişiniz kesinleşti ve hazırlanıyor. Ödemeyi (${formatPrice(d.totalKurus)}) teslimatta kargo görevlisine yapacaksınız. Kargoya verdiğimizde takip numaranızı göndereceğiz.`
-      )
+      paragraph([
+        orderNo(d),
+        ` numaralı siparişiniz kesinleşti ve hazırlanıyor. Ödemeyi (${formatPrice(d.totalKurus)}) teslimatta kargo görevlisine yapacaksınız.`,
+      ])
     );
-    step = 2;
   } else {
     // Kart: e-posta ödeme onaylanınca gider; başlık müşterinin beklediği ilk adım ("Siparişiniz alındı")
     preheader = `Ödemeniz onaylandı — ${formatPrice(d.totalKurus)}. Siparişiniz hazırlanıyor.`;
     blocks.push(
-      paragraph(
-        "Ödemeniz onaylandı, teşekkür ederiz. Siparişinizi hazırlamaya başlıyoruz; kargoya verdiğimizde takip numaranızı e-postayla göndereceğiz."
-      )
+      paragraph([
+        orderNo(d),
+        " numaralı siparişinizi aldık. Ödemeniz onaylandı; siparişinizi hazırlamaya başlıyoruz. Kargoya verdiğimizde takip numarasını e-postayla göndereceğiz.",
+      ])
     );
-    step = 2;
   }
 
   blocks.push(
-    progressSteps(STEPS, step),
-    heading("Sipariş özeti"),
-    summary(d),
-    deliveryBlock(d),
     button("Siparişi görüntüle", orderUrl(d)),
-    paragraph(
-      `Bir sorunuz mu var? Bu e-postayı yanıtlayabilir ya da ${formatPhoneTr(d.business.phone)} numarasından bize ulaşabilirsiniz.`,
-      { muted: true, small: true }
-    ),
-    ...legalBlocks(d)
+    heading("Ürünler"),
+    products(d, true),
+    totalsTable(totals(d)),
+    heading("Teslimat ve fatura"),
+    deliveryBlock(d),
+    paragraph("Adreste bir hata varsa siparişiniz kargoya verilene kadar sipariş sayfanızdan düzeltebilirsiniz.", {
+      muted: true,
+      small: true,
+    }),
+    contractsNote(d)
   );
   return customerEmail(d, {
     subject: `${title} — #${d.reference}`,
     preheader,
     title,
     blocks,
+    attachments: [contractsAttachment(d)],
   });
 }
 
@@ -218,11 +260,10 @@ export function paymentReceivedEmail(d: OrderEmailData): RenderedEmail {
     title: "Ödemeniz alındı",
     blocks: [
       hello(d),
-      paragraph(
-        `${formatPrice(d.totalKurus)} tutarındaki havale/EFT ödemeniz hesabımıza geçti, teşekkür ederiz. Siparişinizi hazırlamaya başlıyoruz; kargoya verdiğimizde takip numaranızı göndereceğiz.`
-      ),
-      progressSteps(STEPS, 2),
-      summary(d),
+      paragraph([
+        orderNo(d),
+        ` numaralı siparişinizin ${formatPrice(d.totalKurus)} tutarındaki havale/EFT ödemesi hesabımıza geçti, teşekkür ederiz. Siparişinizi hazırlamaya başlıyoruz; kargoya verdiğimizde takip numarasını göndereceğiz.`,
+      ]),
       button("Siparişi görüntüle", orderUrl(d)),
     ],
   });
@@ -236,8 +277,8 @@ export function orderShippedEmail(d: OrderEmailData, shipmentId: string, additio
     hello(d),
     paragraph(
       additional
-        ? "Siparişinizin bir paketi daha kargoya verildi. Takip bilgileri aşağıda."
-        : "Siparişiniz özenle paketlendi ve kargoya verildi. Kargo firmasının sayfasından takip edebilirsiniz."
+        ? [orderNo(d), " numaralı siparişinizin bir paketi daha kargoya verildi."]
+        : [orderNo(d), " numaralı siparişiniz kargoya verildi."]
     ),
   ];
   if (s) {
@@ -251,24 +292,21 @@ export function orderShippedEmail(d: OrderEmailData, shipmentId: string, additio
       )
     );
     if (s.link) blocks.push(button("Kargomu takip et", s.link));
-    blocks.push(
-      paragraph(
-        "Takip sayfası numarayı kendiliğinden göstermezse takip numaranızı sayfadaki kutuya yazın. Kargo bilgilerinin sisteme düşmesi birkaç saat sürebilir.",
-        { muted: true, small: true }
-      )
-    );
   }
-  blocks.push(
-    progressSteps(STEPS, 3),
-    notice(
-      "Paketi teslim alırken dışını kontrol edin; hasar varsa kargo görevlisine tutanak tutturup bize bildirin.",
-      "info"
-    )
-  );
   if (d.paymentMethod === "CASH_ON_DELIVERY") {
     blocks.push(notice(`Teslimatta ödenecek tutar: ${formatPrice(d.totalKurus)}`, "warn"));
   }
-  blocks.push(summary(d), button("Siparişi görüntüle", orderUrl(d)));
+  blocks.push(
+    heading("Siparişinizdeki ürünler"),
+    products(d, false),
+    paragraph(
+      [
+        "Paketi teslim alırken kontrol edin; hasar varsa kargo görevlisine tutanak tutturup bize bildirin. ",
+        { link: "Siparişi görüntüle", href: orderUrl(d) },
+      ],
+      { muted: true, small: true }
+    )
+  );
   return customerEmail(d, {
     subject: `Siparişiniz kargoya verildi — #${d.reference}`,
     preheader: s ? `${s.carrier} takip no: ${s.trackingNumber}` : "Siparişiniz yolda.",
@@ -284,20 +322,16 @@ export function orderShippedEmail(d: OrderEmailData, shipmentId: string, additio
  * Bağlantıya konmaz (e-posta tarayıcıları/önizlemeleri adresleri açabilir; kod yalnız müşterinin elinde kalsın).
  */
 export function orderDeliveredEmail(d: OrderEmailData, reviewCode: string | null = null): RenderedEmail {
-  // Değerlendirilecek ürünler (aynı ürünün seçenekleri tek satır)
-  const products = [...new Set(d.items.map((i) => i.name))];
   return customerEmail(d, {
     subject: `Siparişiniz teslim edildi — #${d.reference}`,
     preheader: "Afiyet olsun! Ürünlerimizi nasıl buldunuz?",
     title: "Siparişiniz teslim edildi",
     blocks: [
       hello(d),
-      paragraph("Siparişiniz teslim edildi; afiyet olsun!"),
-      progressSteps(STEPS, 5),
+      paragraph([orderNo(d), " numaralı siparişiniz teslim edildi. Afiyet olsun!"]),
       heading("Ürünlerimizi nasıl buldunuz?"),
-      paragraph(
-        `Puanınız ve birkaç cümlelik yorumunuz, ürünü merak eden diğer müşterilerimize yol gösterir; değerlendirmeniz ürün sayfasında yayınlanır.\n${products.map((p) => `• ${p}`).join("\n")}`
-      ),
+      paragraph("Değerlendirmeniz ürün sayfasında yayınlanır ve ürünü merak eden diğer müşterilerimize yol gösterir."),
+      products(d, false),
       ...(reviewCode
         ? [
             keyValues([{ label: "Değerlendirme kodunuz", value: reviewCode, mono: true, strong: true }], { boxed: true }),
@@ -310,10 +344,10 @@ export function orderDeliveredEmail(d: OrderEmailData, reviewCode: string | null
             paragraph("Değerlendirmeyi siparişi verdiğiniz üyelik hesabınızla giriş yaparak yazabilirsiniz.", { small: true, muted: true }),
           ]),
       button("Ürünleri değerlendir", `${orderUrl(d)}#degerlendir`),
-      notice(
-        "Bir sorun varsa (eksik, hasarlı ya da yanlış ürün) sipariş sayfanızdaki “İade / iptal” bölümünden ya da bu e-postayı yanıtlayarak bize bildirin. Teslimattan itibaren 14 gün içinde cayma hakkınızı kullanabilirsiniz (ambalajı açılmış gıda ürünleri hariç).",
-        "info"
-      ),
+      paragraph("Eksik, hasarlı ya da yanlış ürün varsa bu e-postayı yanıtlayarak ya da sipariş sayfanızdan bize bildirin.", {
+        muted: true,
+        small: true,
+      }),
     ],
   });
 }
@@ -324,21 +358,23 @@ export function orderCancelledEmail(
   d: OrderEmailData,
   opts: { expired: boolean; byCustomer: boolean; reason: string | null }
 ): RenderedEmail {
-  const message = opts.expired
+  const detail = opts.expired
     ? d.paymentMethod === "BANK_TRANSFER"
-      ? "Havale/EFT ödemeniz son ödeme zamanına kadar bize ulaşmadığı için siparişiniz iptal edildi ve ayrılan ürünler serbest bırakıldı. Ödeme yaptıysanız lütfen bize hemen ulaşın; sorunu birlikte çözelim."
-      : "Kart ödemesi tamamlanmadığı için siparişiniz iptal edildi ve ayrılan ürünler serbest bırakıldı. Kartınızdan çekim yapıldığını görüyorsanız lütfen bize hemen ulaşın."
+      ? "Havale/EFT ödemeniz son ödeme zamanına kadar bize ulaşmadığı için ayrılan ürünler serbest bırakıldı. Ödeme yaptıysanız lütfen bize hemen ulaşın; sorunu birlikte çözelim."
+      : "Kart ödemesi tamamlanmadığı için ayrılan ürünler serbest bırakıldı. Kartınızdan çekim yapıldığını görüyorsanız lütfen bize hemen ulaşın."
     : opts.byCustomer
-      ? "İsteğiniz üzerine siparişiniz iptal edildi."
-      : `Siparişiniz iptal edildi${opts.reason ? `: ${opts.reason}` : "."}`;
+      ? ""
+      : opts.reason
+        ? `İptal sebebi: ${opts.reason}`
+        : "";
   return customerEmail(d, {
     subject: `Siparişiniz iptal edildi — #${d.reference}`,
     preheader: opts.expired ? "Ödeme süresi doldu." : "Siparişiniz iptal edildi.",
     title: "Siparişiniz iptal edildi",
     blocks: [
       hello(d),
-      paragraph(message),
-      summary(d),
+      paragraph([orderNo(d), opts.byCustomer ? " numaralı siparişiniz isteğiniz üzerine iptal edildi." : " numaralı siparişiniz iptal edildi."]),
+      ...(detail ? [paragraph(detail)] : []),
       button("Alışverişe devam et", `${siteUrl()}/urunler`),
       paragraph(`Sorunuz için: ${formatPhoneTr(d.business.phone)}${d.business.email ? ` · ${d.business.email}` : ""}`, {
         muted: true,
@@ -364,9 +400,10 @@ export function refundEmail(d: OrderEmailData, refundId: string): RenderedEmail 
   const closed = d.status === "CANCELLED" || d.status === "REFUNDED";
   const lines: Block[] = [
     hello(d),
-    paragraph(
-      `${amount} tutarındaki iadeniz ${where ? `${where} ` : ""}yapıldı.${closed ? (d.status === "CANCELLED" ? " Siparişiniz iptal edildi." : " Siparişiniz iade edildi olarak kapatıldı.") : ""}`
-    ),
+    paragraph([
+      orderNo(d),
+      ` numaralı siparişiniz için ${amount} tutarındaki iadeniz ${where ? `${where} ` : ""}yapıldı.${closed ? (d.status === "CANCELLED" ? " Siparişiniz iptal edildi." : " Siparişiniz iade edildi olarak kapatıldı.") : ""}`,
+    ]),
   ];
   if (r?.method === "CARD_PROVIDER") {
     lines.push(
@@ -391,9 +428,10 @@ export function transferReminderEmail(d: OrderEmailData): RenderedEmail {
     title: "Siparişiniz sizi bekliyor",
     blocks: [
       hello(d),
-      paragraph(
-        "Siparişiniz için ayırdığımız ürünler hâlâ sizi bekliyor, ancak ödemeniz henüz hesabımıza ulaşmadı. Ödemeyi yaptıysanız bu e-postayı dikkate almayın; geçmesi biraz sürebilir."
-      ),
+      paragraph([
+        orderNo(d),
+        " numaralı siparişiniz için ayırdığımız ürünler sizi bekliyor, ancak ödemeniz henüz hesabımıza ulaşmadı. Ödemeyi yaptıysanız bu e-postayı dikkate almayın; geçmesi biraz sürebilir.",
+      ]),
       ...bankBlocks(d),
       button("Siparişi görüntüle", orderUrl(d)),
       paragraph("Vazgeçtiyseniz sipariş sayfanızdan iptal edebilirsiniz.", { muted: true, small: true }),
@@ -413,8 +451,14 @@ export function requestReceivedEmail(d: OrderEmailData, type: "CANCEL" | "RETURN
       hello(d),
       paragraph(
         isReturn
-          ? "Cayma (iade) bildiriminiz bize ulaştı. Ürünü nasıl göndereceğinizi ve iade kodunu en kısa sürede ileteceğiz. Ödemeniz, bildiriminizin bize ulaştığı tarihten itibaren en geç 14 gün içinde iade edilir."
-          : "İptal isteğiniz bize ulaştı. Siparişiniz kargoya verilmediyse iptal edip ödemenizin tamamını iade edeceğiz; sonucu size e-postayla bildireceğiz."
+          ? [
+              orderNo(d),
+              " numaralı siparişiniz için cayma (iade) bildiriminiz bize ulaştı. Ürünü nasıl göndereceğinizi ve iade kodunu en kısa sürede ileteceğiz. Ödemeniz, bildiriminizin bize ulaştığı tarihten itibaren en geç 14 gün içinde iade edilir.",
+            ]
+          : [
+              orderNo(d),
+              " numaralı siparişiniz için iptal isteğiniz bize ulaştı. Siparişiniz kargoya verilmediyse iptal edip ödemenizin tamamını iade edeceğiz; sonucu size e-postayla bildireceğiz.",
+            ]
       ),
       button("Siparişi görüntüle", orderUrl(d)),
     ],
@@ -436,10 +480,10 @@ export function deliveryChangedEmail(d: OrderEmailData, by: "CUSTOMER" | "ADMIN"
       hello(d),
       paragraph(
         by === "CUSTOMER"
-          ? "Siparişinizin teslimat bilgilerini sipariş sayfanızdan güncellediniz. Siparişiniz aşağıdaki bilgilerle gönderilecek."
-          : "Siparişinizin teslimat bilgilerini güncelledik. Siparişiniz aşağıdaki bilgilerle gönderilecek."
+          ? [orderNo(d), " numaralı siparişinizin teslimat bilgilerini sipariş sayfanızdan güncellediniz. Siparişiniz aşağıdaki adrese gönderilecek."]
+          : [orderNo(d), " numaralı siparişinizin teslimat bilgilerini güncelledik. Siparişiniz aşağıdaki adrese gönderilecek."]
       ),
-      keyValues([{ label: "Teslimat", value: addressText(d.address) }], { boxed: true }),
+      keyValues([{ label: "Teslimat adresi", value: addressLines(d.address).join("\n") }], { boxed: true, stacked: true }),
       notice(
         `Bu değişikliği siz yapmadıysanız hemen bize ulaşın: ${formatPhoneTr(d.business.phone)}. Siparişiniz kargoya verilene kadar teslimat bilgilerini sipariş sayfanızdan yeniden değiştirebilirsiniz.`,
         "warn"
@@ -460,9 +504,10 @@ export function deliveryLinkEmail(d: OrderEmailData, link: string, hours: number
     title: "Teslimat bilgilerinizi değiştirin",
     blocks: [
       hello(d),
-      paragraph(
-        `Siparişinizin teslimat bilgilerini (alıcı, telefon, adres) değiştirmek için aşağıdaki düğmeye basın. Bağlantı ${hours} saat geçerlidir ve yalnız bu sipariş içindir; siparişiniz kargoya verilene kadar kullanılabilir.`
-      ),
+      paragraph([
+        orderNo(d),
+        ` numaralı siparişinizin teslimat bilgilerini (alıcı, telefon, adres) değiştirmek için aşağıdaki düğmeye basın. Bağlantı ${hours} saat geçerlidir ve yalnız bu sipariş içindir; siparişiniz kargoya verilene kadar kullanılabilir.`,
+      ]),
       button("Teslimat bilgilerini değiştir", link),
       paragraph("Bu isteği siz yapmadıysanız e-postayı dikkate almayın; teslimat bilgileriniz değişmez.", { muted: true, small: true }),
     ],
@@ -477,6 +522,10 @@ export function customMessageEmail(d: OrderEmailData, subject: string, message: 
     subject: `${subject} — #${d.reference}`,
     preheader: message.slice(0, 120),
     title: subject,
-    blocks: [hello(d), paragraph(message), button("Siparişi görüntüle", orderUrl(d))],
+    blocks: [
+      hello(d),
+      paragraph(message),
+      button("Siparişi görüntüle", orderUrl(d)),
+    ],
   });
 }

@@ -11,6 +11,18 @@ export function siteUrl(): string {
   return (url || "http://localhost:3000").replace(/\/+$/, "");
 }
 
+/**
+ * E-postadaki ürün görseli: sitenin görsel küçültücüsünden (/_next/image, 128 px) gelir; e-posta programı görseli
+ * siteden indirir. Site internetten erişilemiyorsa (yerel adres, https değil) görsel konmaz — kırık görsel yerine
+ * görselsiz liste. Dış adresli görseller konmaz (küçültücü yalnız site içi görselleri işler).
+ */
+export function emailImageUrl(src: string | null | undefined): string | null {
+  const base = siteUrl();
+  if (!src || !src.startsWith("/") || src.startsWith("//")) return null;
+  if (!base.startsWith("https://") || /^https:\/\/(localhost|127\.|\[::1\])/i.test(base)) return null;
+  return `${base}/_next/image?url=${encodeURIComponent(src)}&w=128&q=75`;
+}
+
 export function emailFooter(business: BusinessInfo, reason: string): EmailFooter {
   return {
     sellerName: storeDisplayName(business),

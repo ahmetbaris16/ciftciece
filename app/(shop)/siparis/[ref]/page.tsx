@@ -376,11 +376,11 @@ export default async function SiparisPage({ params, searchParams }: Props) {
               openRequests={view.openRequests.map((r) => ({ type: r.type, createdAt: r.createdAt.toISOString() }))}
             />
 
-            <section className={styles.card} aria-labelledby="docs-title">
+            <section id="sozlesmeler" className={`${styles.card} ${styles.anchorCard}`} aria-labelledby="docs-title">
               <h2 id="docs-title" className={styles.cardTitle}>
                 Sözleşmeleriniz
               </h2>
-              <p className={styles.muted}>Siparişinizde onayladığınız metinler (bir kopyası sipariş e-postanızda da var).</p>
+              <p className={styles.muted}>Siparişinizde onayladığınız metinler (bir kopyası sipariş e-postanızın ekinde de var).</p>
               <details className={styles.doc}>
                 <summary>Ön Bilgilendirme Formu</summary>
                 <div className={styles.docBody}>

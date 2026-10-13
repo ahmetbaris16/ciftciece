@@ -4,6 +4,7 @@
  */
 
 import { Prisma, type PrismaClient } from "@prisma/client";
+import type { EmailAttachment } from "@/lib/email/transport";
 
 type Db = Prisma.TransactionClient | PrismaClient;
 
@@ -19,6 +20,7 @@ export interface EmailDraft {
   subject: string;
   html: string;
   text: string;
+  attachments?: EmailAttachment[];
   availableAt?: Date;
   expiresAt?: Date | null;
 }
@@ -42,6 +44,7 @@ export async function enqueueEmail(db: Db, draft: EmailDraft): Promise<boolean> 
         subject: draft.subject.slice(0, 300),
         html: draft.html,
         text: draft.text,
+        attachments: draft.attachments?.length ? (draft.attachments as unknown as Prisma.InputJsonValue) : undefined,
         availableAt: draft.availableAt ?? new Date(),
         expiresAt: draft.expiresAt ?? null,
       },

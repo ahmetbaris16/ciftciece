@@ -749,6 +749,8 @@ model EmailMessage {
   subject           String      @db.VarChar(300)
   html              String      @db.MediumText
   text              String      @db.MediumText
+  // Ek dosyalar: [{ filename, contentType, content }] (metin; ör. siparişe özel sözleşmeler). Logo gönderirken eklenir.
+  attachments       Json?
   status            EmailStatus @default(QUEUED)
   attempts          Int         @default(0)
   // Gönderici bu andan sonra dener (yeniden deneme gecikmesi)

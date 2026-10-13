@@ -26,7 +26,21 @@ import {
   PermanentEmailError,
   SmtpAuthError,
   SmtpConnectionError,
+  type EmailAttachment,
 } from "@/lib/email/transport";
+
+/** Kuyruktaki ek dosyalar (JSON sütunu); biçimi bozuk olan atlanır */
+function attachmentsOf(value: unknown): EmailAttachment[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(
+    (a): a is EmailAttachment =>
+      typeof a === "object" &&
+      a !== null &&
+      typeof (a as EmailAttachment).filename === "string" &&
+      typeof (a as EmailAttachment).contentType === "string" &&
+      typeof (a as EmailAttachment).content === "string"
+  );
+}
 
 export const RETRY_DELAYS_MS = [60_000, 5 * 60_000, 15 * 60_000, 60 * 60_000, 4 * 60 * 60_000, 12 * 60 * 60_000];
 export const MAX_EMAIL_ATTEMPTS = RETRY_DELAYS_MS.length;
@@ -88,6 +102,7 @@ export async function sendDueEmails(opts: { limit?: number; now?: Date } = {}): 
         html: msg.html,
         text: msg.text,
         replyTo: msg.replyTo,
+        attachments: attachmentsOf(msg.attachments),
       });
       await prisma.emailMessage.update({
         where: { id },

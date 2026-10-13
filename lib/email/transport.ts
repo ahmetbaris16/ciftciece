@@ -7,9 +7,20 @@
  * (daha eskilerinde güvenlik duyuruları var).
  */
 
-import nodemailer, { type Transporter } from "nodemailer";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import nodemailer, { type Attachment, type Transporter } from "nodemailer";
 import { updateMock } from "@/lib/data/mock-store";
+import { siteUrl } from "./brand";
 import { emailMode, smtpConfigFingerprint, smtpConfigFromEnv, type EmailMode } from "./config";
+import { EMAIL_LOGO } from "./layout";
+
+/** E-postaya eklenen metin dosyası (ör. siparişe özel sözleşmeler) */
+export interface EmailAttachment {
+  filename: string;
+  contentType: string;
+  content: string;
+}
 
 export interface OutgoingEmail {
   to: string;
@@ -17,6 +28,7 @@ export interface OutgoingEmail {
   html: string;
   text: string;
   replyTo?: string | null;
+  attachments?: EmailAttachment[] | null;
 }
 
 export interface DeliveryResult {
@@ -126,6 +138,38 @@ function classify(err: unknown): Error {
   return new Error(e?.code ? `${e.code}: ${msg}` : msg);
 }
 
+/**
+ * Logo e-postanın içine gömülür (cid): görseller kapalıyken ya da site adresine ulaşılamazken (yerelde deneme) de
+ * görünür. Dosya okunamazsa sitedeki adresi kullanılır.
+ */
+async function logoBytes(): Promise<Buffer | null> {
+  try {
+    return await readFile(path.join(process.cwd(), "public", EMAIL_LOGO.publicPath));
+  } catch (err) {
+    console.error("[email] Logo dosyası okunamadı, site adresi kullanılacak:", (err as Error).message);
+    return null;
+  }
+}
+
+async function withAttachments(message: OutgoingEmail): Promise<{ html: string; attachments: Attachment[] }> {
+  const attachments: Attachment[] = (message.attachments ?? []).map((a) => ({
+    filename: a.filename,
+    content: a.content,
+    contentType: a.contentType,
+  }));
+  let html = message.html;
+  const logoSrc = `cid:${EMAIL_LOGO.cid}`;
+  if (html.includes(logoSrc)) {
+    const logo = await logoBytes();
+    if (logo) {
+      attachments.push({ filename: "logo.png", content: logo, contentType: "image/png", cid: EMAIL_LOGO.cid, contentDisposition: "inline" });
+    } else {
+      html = html.split(logoSrc).join(`${siteUrl()}${EMAIL_LOGO.publicPath}`);
+    }
+  }
+  return { html, attachments };
+}
+
 export async function deliver(message: OutgoingEmail): Promise<DeliveryResult> {
   const mode = emailMode();
   if (mode === "none") throw new EmailNotConfiguredError();
@@ -134,14 +178,16 @@ export async function deliver(message: OutgoingEmail): Promise<DeliveryResult> {
     return { mode, messageId: null };
   }
   const cfg = smtpConfigFromEnv()!;
+  const { html, attachments } = await withAttachments(message);
   try {
     const info = await transporter().sendMail({
       from: { name: cfg.fromName, address: cfg.fromAddress },
       to: message.to,
       replyTo: message.replyTo || undefined,
       subject: message.subject,
-      html: message.html,
+      html,
       text: message.text,
+      attachments,
       // Dosya/URL'den içerik okuma kapalı (şablonlar hep satır içi)
       disableFileAccess: true,
       disableUrlAccess: true,

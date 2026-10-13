@@ -222,20 +222,76 @@ export function decodeQuotedPrintable(s: string): string {
   return Buffer.from(bytes).toString("utf8");
 }
 
-/** multipart/alternative içinden istenen bölümü çözer (text/html ya da text/plain) */
-export function partOf(raw: string, type: "text/html" | "text/plain"): string {
-  const boundary = /boundary="?([^";\r\n]+)"?/i.exec(raw)?.[1];
-  const sections = boundary ? raw.split(`--${boundary}`) : [raw];
-  for (const section of sections) {
-    const headerEnd = section.indexOf("\r\n\r\n");
-    if (headerEnd < 0) continue;
-    const headers = section.slice(0, headerEnd);
-    if (!new RegExp(`Content-Type: ${type.replace("/", "\\/")}`, "i").test(headers)) continue;
-    const body = section.slice(headerEnd + 4);
-    const enc = /Content-Transfer-Encoding: ([\w-]+)/i.exec(headers)?.[1]?.toLowerCase();
-    if (enc === "base64") return Buffer.from(body.replace(/\s+/g, ""), "base64").toString("utf8");
-    if (enc === "quoted-printable") return decodeQuotedPrintable(body);
-    return body;
+export interface MimePart {
+  /** Küçük harf tür/alt tür, ör. "text/html", "image/png" */
+  contentType: string;
+  /** "attachment" | "inline" | null */
+  disposition: string | null;
+  filename: string | null;
+  contentId: string | null;
+  body: Buffer;
+}
+
+/** Başlık parametresi: name="x", name=x ya da RFC 2231 (name*=utf-8''x, name*0=…; name*1=…) */
+function headerParam(header: string, name: string): string | null {
+  const pieces: Array<{ index: number; value: string; extended: boolean }> = [];
+  for (const param of header.split(";").slice(1)) {
+    const eq = param.indexOf("=");
+    if (eq < 0) continue;
+    const key = /^([a-z-]+)(?:\*(\d+))?(\*)?$/.exec(param.slice(0, eq).trim().toLowerCase());
+    if (!key || key[1] !== name) continue;
+    let value = param.slice(eq + 1).trim();
+    if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
+    pieces.push({ index: key[2] ? Number(key[2]) : 0, value, extended: Boolean(key[3]) });
   }
-  return "";
+  if (!pieces.length) return null;
+  pieces.sort((a, b) => a.index - b.index);
+  const joined = pieces.map((p) => p.value).join("");
+  return pieces[0].extended ? decodeURIComponent(joined.replace(/^[\w-]*'[\w-]*'/, "")) : joined;
+}
+
+/** Ham e-postanın yaprak bölümleri: iç içe multipart (mixed → alternative → related) açılır, içerik çözülür */
+export function mimeParts(raw: string): MimePart[] {
+  const headerEnd = raw.indexOf("\r\n\r\n");
+  const headers = (headerEnd >= 0 ? raw.slice(0, headerEnd) : raw).replace(/\r\n[ \t]+/g, " ");
+  const body = headerEnd >= 0 ? raw.slice(headerEnd + 4) : "";
+  const contentTypeHeader = /^Content-Type:\s*(.*)$/im.exec(headers)?.[1] ?? "text/plain";
+  const contentType = contentTypeHeader.split(";")[0].trim().toLowerCase();
+  if (contentType.startsWith("multipart/")) {
+    const boundary = headerParam(contentTypeHeader, "boundary");
+    if (!boundary) return [];
+    return body
+      .split(`--${boundary}`)
+      .slice(1)
+      .filter((chunk) => !chunk.startsWith("--"))
+      .flatMap((chunk) => mimeParts(chunk.replace(/^\r\n/, "").replace(/\r\n$/, "")));
+  }
+  const encoding = /^Content-Transfer-Encoding:\s*([\w-]+)/im.exec(headers)?.[1]?.toLowerCase();
+  const decoded =
+    encoding === "base64"
+      ? Buffer.from(body.replace(/\s+/g, ""), "base64")
+      : encoding === "quoted-printable"
+        ? Buffer.from(decodeQuotedPrintable(body), "utf8")
+        : Buffer.from(body, "utf8");
+  const dispositionHeader = /^Content-Disposition:\s*(.*)$/im.exec(headers)?.[1] ?? null;
+  return [
+    {
+      contentType,
+      disposition: dispositionHeader ? dispositionHeader.split(";")[0].trim().toLowerCase() : null,
+      filename: (dispositionHeader && headerParam(dispositionHeader, "filename")) || headerParam(contentTypeHeader, "name"),
+      contentId: /^Content-ID:\s*<?([^>\r\n]+)>?/im.exec(headers)?.[1] ?? null,
+      body: decoded,
+    },
+  ];
+}
+
+/** E-postanın gövdesi (text/html ya da text/plain; ek dosya olan metin bölümü sayılmaz) */
+export function partOf(raw: string, type: "text/html" | "text/plain"): string {
+  const part = mimeParts(raw).find((p) => p.contentType === type && p.disposition !== "attachment");
+  return part ? part.body.toString("utf8") : "";
+}
+
+/** Ek dosyalar ve gömülü görseller (logo) */
+export function attachmentsOf(raw: string): MimePart[] {
+  return mimeParts(raw).filter((p) => p.disposition === "attachment" || p.contentId !== null);
 }

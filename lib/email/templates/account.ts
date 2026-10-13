@@ -3,6 +3,7 @@
  */
 
 import type { BusinessInfo } from "@/lib/business/info";
+import type { EmailAttachment } from "../transport";
 import { emailFooter } from "../brand";
 import { button, notice, paragraph, renderEmail } from "../layout";
 
@@ -10,6 +11,7 @@ export interface RenderedEmail {
   subject: string;
   html: string;
   text: string;
+  attachments?: EmailAttachment[];
 }
 
 export function passwordResetEmail(opts: {

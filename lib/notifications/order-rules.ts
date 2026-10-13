@@ -67,6 +67,7 @@ function toCustomer(d: OrderEmailData, kind: string, mail: RenderedEmail, opts: 
       subject: mail.subject,
       html: mail.html,
       text: mail.text,
+      attachments: mail.attachments,
       expiresAt: opts.expiresAt ?? null,
     },
   ];

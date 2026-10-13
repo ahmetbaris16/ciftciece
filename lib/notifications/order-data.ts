@@ -28,7 +28,15 @@ export interface OrderEmailData {
   address: ShippingAddress;
   billing: BillingInfo | null;
   customerNote: string | null;
-  items: Array<{ name: string; variant: string; quantity: number; unitPriceKurus: number; lineTotalKurus: number }>;
+  items: Array<{
+    name: string;
+    variant: string;
+    quantity: number;
+    unitPriceKurus: number;
+    lineTotalKurus: number;
+    /** Ürünün ilk görseli (site içi adres; e-postada küçültülmüş hâli) */
+    imageUrl: string | null;
+  }>;
   subtotalKurus: number;
   shippingKurus: number;
   recipientPaysShipping: boolean;
@@ -46,7 +54,13 @@ export async function loadOrderEmailData(orderId: string): Promise<OrderEmailDat
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     include: {
-      items: true,
+      items: {
+        include: {
+          variant: {
+            select: { product: { select: { images: { orderBy: { sortOrder: "asc" }, take: 1, select: { url: true } } } } },
+          },
+        },
+      },
       shipments: { orderBy: { shippedAt: "asc" } },
       refunds: { orderBy: { createdAt: "asc" } },
     },
@@ -76,6 +90,7 @@ export async function loadOrderEmailData(orderId: string): Promise<OrderEmailDat
       quantity: i.quantity,
       unitPriceKurus: i.snapshotPrice,
       lineTotalKurus: i.snapshotPrice * i.quantity - i.discountKurus,
+      imageUrl: i.variant?.product?.images[0]?.url ?? null,
     })),
     subtotalKurus: order.subtotalKurus,
     shippingKurus: order.shippingKurus,
@@ -97,16 +112,19 @@ export async function loadOrderEmailData(orderId: string): Promise<OrderEmailDat
   };
 }
 
-export function addressText(a: ShippingAddress | null | undefined): string {
-  if (!a) return "";
+/** Adres satırları: alıcı, adres, ilçe / il posta kodu, telefon */
+export function addressLines(a: ShippingAddress | null | undefined): string[] {
+  if (!a) return [];
   return [
     `${a.firstName ?? ""} ${a.lastName ?? ""}`.trim(),
     a.address,
     `${a.district ?? ""}${a.district && a.city ? " / " : ""}${a.city ?? ""}${a.postalCode ? ` ${a.postalCode}` : ""}`,
     a.phone,
-  ]
-    .filter(Boolean)
-    .join(", ");
+  ].filter(Boolean);
+}
+
+export function addressText(a: ShippingAddress | null | undefined): string {
+  return addressLines(a).join(", ");
 }
 
 export function billingText(billing: BillingInfo | null, fallbackName: string): string {
