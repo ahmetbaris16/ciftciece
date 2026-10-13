@@ -2,7 +2,7 @@
  * Ön Bilgilendirme Formu ve Mesafeli Satış Sözleşmesi — TEK KAYNAK (saf; sunucu ve istemci ortak).
  *
  * Aynı metin üç yerde kullanılır: yasal sayfalar (genel), ödeme adımı (sepete özel, onaydan hemen önce) ve
- * sipariş onay e-postası (siparişe özel; kalıcı veri saklayıcısı). Satıcı bilgileri admin → İşletme
+ * sipariş sayfası (siparişe özel; sipariş onay e-postası buraya bağlantı verir). Satıcı bilgileri admin → İşletme
  * bilgileri'nden gelir; girilmemiş kimlik bilgisi uydurulmaz (satır gösterilmez).
  *
  * Dayanak: 6502 sayılı Kanun, Mesafeli Sözleşmeler Yönetmeliği (RG 27.11.2014) md. 5 (ön bilgilendirme içeriği),
@@ -187,7 +187,7 @@ export function preInformationSections(business: BusinessInfo, order?: OrderCont
       heading: "Sözleşmenin kurulması ve saklanması",
       list: [
         "Alıcı, ödeme adımında bilgilerini kontrol edip “Geri” ile düzeltebilir. Sipariş, son adımda “Siparişi onayla” düğmesine basılmasıyla verilir ve ÖDEME YÜKÜMLÜLÜĞÜ doğurur.",
-        "Satıcı, siparişin alındığını gecikmeksizin e-postayla teyit eder. Bu form ve Mesafeli Satış Sözleşmesi siparişe özel olarak kaydedilir, sipariş onay e-postasıyla Alıcı'ya gönderilir ve sipariş sayfasından erişilebilir.",
+        "Satıcı, siparişin alındığını gecikmeksizin e-postayla teyit eder. Bu form ve Mesafeli Satış Sözleşmesi siparişe özel olarak kaydedilir; Alıcı bunlara sipariş onay e-postasındaki bağlantıdan ve sipariş sayfasından her zaman erişebilir.",
         "Kişisel veriler KVKK Aydınlatma Metni ve Gizlilik Politikası'na göre işlenir.",
       ],
     },
@@ -237,7 +237,7 @@ export function distanceSalesSections(business: BusinessInfo, order?: OrderConte
     {
       heading: "Madde 11 — Yürürlük",
       paragraphs: [
-        "Alıcı, Ön Bilgilendirme Formu'nu ve bu sözleşmeyi okuyup onayladığını, siparişi onaylamakla ödeme yükümlülüğü altına girdiğini kabul eder. Sözleşme, siparişin Alıcı tarafından elektronik ortamda onaylandığı anda kurulur; bir kopyası sipariş onay e-postasıyla Alıcı'ya gönderilir.",
+        "Alıcı, Ön Bilgilendirme Formu'nu ve bu sözleşmeyi okuyup onayladığını, siparişi onaylamakla ödeme yükümlülüğü altına girdiğini kabul eder. Sözleşme, siparişin Alıcı tarafından elektronik ortamda onaylandığı anda kurulur; siparişe özel metnine sipariş onay e-postasındaki bağlantıdan ve sipariş sayfasından erişilebilir.",
       ],
     },
   ];

@@ -6,7 +6,7 @@
  * de gönderilir).
  *
  * Sade düzen (kullanıcı isteği 2026-10-13): üstte logo, kısa açıklama, ürünler, tutar, adres. Uzun metinler
- * (sözleşmeler) e-postanın gövdesinde değil ekinde.
+ * (sözleşmeler) e-postada yazmaz; sitedeki sayfasına bağlantı verilir.
  *
  * GÜVENLİK: Müşteriden gelen her metin (ad, adres, not) esc() ile kaçışlanır. Ham HTML yalnız bu dosyadaki
  * bloklardan gelir.
@@ -231,14 +231,13 @@ export function totalsTable(totals: SummaryTotal[]): Block {
   };
 }
 
-/** Çerçeveli kısa bilgi kutusu (ör. "Sözleşmeleriniz bu e-postanın ekinde") */
-export function infoBox(title: string, content: Inline[]): Block {
+/** Ortalanmış, ince çerçeveli tek satırlık bağlantı kutusu (ör. "Sözleşmelere buradan ulaşabilirsiniz") */
+export function linkBox(content: Inline[]): Block {
   return {
-    html: `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 6px"><tr>
-<td style="border:1px solid ${COLORS.line};border-radius:12px;padding:12px 16px;font-family:${FONT};font-size:13px;line-height:1.6;color:${COLORS.body}">
-<strong style="display:block;margin-bottom:2px;font-size:14px;color:${COLORS.ink}">${esc(title)}</strong>${inlineHtml(content)}
-</td></tr></table>`,
-    text: `${title}: ${inlineText(content)}`,
+    html: `<table role="presentation" align="center" cellpadding="0" cellspacing="0" style="margin:10px auto 4px"><tr>
+<td align="center" style="border:1px solid ${COLORS.line};border-radius:10px;padding:10px 16px;font-family:${FONT};font-size:13px;line-height:1.5;color:${COLORS.muted};text-align:center">${inlineHtml(content)}</td>
+</tr></table>`,
+    text: inlineText(content),
   };
 }
 

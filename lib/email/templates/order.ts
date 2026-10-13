@@ -4,20 +4,19 @@
  * sayfası bağlantısı.
  *
  * "Siparişiniz alındı" e-postası yasal teyittir (e-ticaret mevzuatı: sipariş gecikmeksizin teyit edilir). Ön
- * Bilgilendirme Formu ile Mesafeli Satış Sözleşmesi'nin siparişe özel hâli gövdede değil, e-postanın ekinde metin
- * dosyası olarak gider: e-postayla birlikte saklanır (kalıcı veri saklayıcısı); yalnız siteye bağlantı vermek
- * bunun yerini tutmaz (sayfa sonradan değişebilir).
+ * Bilgilendirme Formu ile Mesafeli Satış Sözleşmesi'nin siparişe özel hâli e-postada yazmaz; pazaryerlerindeki gibi
+ * sipariş sayfasındaki sözleşmelere bağlantı verilir (kullanıcı kararı 2026-10-14: e-posta kalabalık görünmesin).
+ * Kalan risk: bağlantı, e-postanın içinde saklanan bir kopya kadar güçlü bir "kalıcı veri saklayıcısı" sayılmayabilir.
  */
 
-import { distanceSalesSections, preInformationSections, type LegalSection } from "@/lib/legal/content";
-import { formatPhoneTr, storeDisplayName } from "@/lib/business/info";
+import { formatPhoneTr } from "@/lib/business/info";
 import { formatPrice } from "@/types";
 import { emailFooter, emailImageUrl, siteUrl } from "../brand";
 import {
   button,
   heading,
-  infoBox,
   keyValues,
+  linkBox,
   notice,
   paragraph,
   productList,
@@ -27,16 +26,8 @@ import {
   type Inline,
   type SummaryTotal,
 } from "../layout";
-import type { EmailAttachment } from "../transport";
 import type { RenderedEmail } from "./account";
-import {
-  addressLines,
-  billingText,
-  formatIban,
-  itemDiscountKurus,
-  orderLegalContext,
-  type OrderEmailData,
-} from "@/lib/notifications/order-data";
+import { addressLines, billingText, formatIban, itemDiscountKurus, type OrderEmailData } from "@/lib/notifications/order-data";
 
 const dateTimeTr = (d: Date) =>
   new Intl.DateTimeFormat("tr-TR", { dateStyle: "long", timeStyle: "short", timeZone: "Europe/Istanbul" }).format(d);
@@ -125,59 +116,18 @@ function bankBlocks(d: OrderEmailData): Block[] {
   return blocks;
 }
 
-// ── Sözleşmeler (e-postanın eki) ─────────────────────────────────────────
-
-function sectionText(s: LegalSection): string[] {
-  const lines = ["", s.heading, "-".repeat(Math.min(s.heading.length, 60))];
-  if (s.rows?.length) lines.push(...s.rows.map((r) => `${r.label}: ${r.value}`));
-  for (const p of s.paragraphs ?? []) lines.push("", p);
-  if (s.list?.length) lines.push("", ...s.list.map((l) => `• ${l}`));
-  if (s.note) lines.push("", s.note);
-  return lines;
-}
-
-const BOM = String.fromCharCode(0xfeff);
-
-/**
- * Siparişe özel Ön Bilgilendirme Formu ve Mesafeli Satış Sözleşmesi (düz metin, UTF-8): her e-posta programında ve
- * telefonda açılır, filtrelere takılmaz. Satırlar CRLF; başta BOM (Windows Not Defteri Türkçe karakterleri doğru
- * göstersin).
- */
-export function contractsAttachment(d: OrderEmailData): EmailAttachment {
-  const ctx = orderLegalContext(d);
-  const doc = (title: string, sections: LegalSection[]) => [
-    "",
-    "",
-    title.toLocaleUpperCase("tr-TR"),
-    "=".repeat(title.length),
-    ...sections.flatMap(sectionText),
-  ];
-  const lines = [
-    `${storeDisplayName(d.business)} — Sipariş ${d.reference}`,
-    "",
-    "Siparişinizde onayladığınız metinlerin kopyasıdır; bu dosyayı saklayın. Metinlere sipariş sayfanızdan da ulaşabilirsiniz:",
-    orderUrl(d),
-    ...doc("Ön Bilgilendirme Formu", preInformationSections(d.business, ctx)),
-    ...doc("Mesafeli Satış Sözleşmesi", distanceSalesSections(d.business, ctx)),
-  ];
-  return {
-    filename: `siparis-${d.reference}-sozlesmeler.txt`,
-    contentType: "text/plain; charset=utf-8",
-    content: `${BOM}${lines.join("\r\n")}\r\n`,
-  };
-}
-
-function contractsNote(d: OrderEmailData): Block {
-  return infoBox("Sözleşmeleriniz", [
-    "Siparişinizde onayladığınız Ön Bilgilendirme Formu ve Mesafeli Satış Sözleşmesi bu e-postanın ekindedir. ",
-    { link: "Sipariş sayfanızdan", href: `${orderUrl(d)}#sozlesmeler` },
-    " da ulaşabilirsiniz.",
+/** Siparişe özel sözleşmelere bağlantı (sipariş sayfasının "Sözleşmeleriniz" bölümü) */
+function contractsLink(d: OrderEmailData): Block {
+  return linkBox([
+    "Ön Bilgilendirme Formu ve Mesafeli Satış Sözleşmesi'ne ",
+    { link: "buradan", href: `${orderUrl(d)}#sozlesmeler` },
+    " ulaşabilirsiniz.",
   ]);
 }
 
 function customerEmail(
   d: OrderEmailData,
-  opts: { subject: string; preheader: string; title: string; blocks: Block[]; reason?: string; attachments?: EmailAttachment[] }
+  opts: { subject: string; preheader: string; title: string; blocks: Block[]; reason?: string }
 ): RenderedEmail {
   const { html, text } = renderEmail({
     brandName: d.business.tradeName,
@@ -189,12 +139,12 @@ function customerEmail(
       opts.reason ?? "Bu e-postayı sitemizden verdiğiniz sipariş hakkında bilgilendirme amacıyla aldınız. Sorularınız için bu e-postayı yanıtlayabilirsiniz."
     ),
   });
-  return { subject: opts.subject, html, text, attachments: opts.attachments };
+  return { subject: opts.subject, html, text };
 }
 
 const hello = (d: OrderEmailData) => paragraph(`Merhaba ${d.firstName},`);
 
-// ── Sipariş alındı (yasal teyit; sözleşmeler ekte) ───────────────────────
+// ── Sipariş alındı (yasal teyit; sözleşmelere bağlantı) ───────────────────────
 
 export function orderReceivedEmail(d: OrderEmailData): RenderedEmail {
   const blocks: Block[] = [hello(d)];
@@ -240,14 +190,13 @@ export function orderReceivedEmail(d: OrderEmailData): RenderedEmail {
       muted: true,
       small: true,
     }),
-    contractsNote(d)
+    contractsLink(d)
   );
   return customerEmail(d, {
     subject: `${title} — #${d.reference}`,
     preheader,
     title,
     blocks,
-    attachments: [contractsAttachment(d)],
   });
 }
 

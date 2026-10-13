@@ -384,7 +384,7 @@ export default async function SiparisPage({ params, searchParams }: Props) {
               <h2 id="docs-title" className={styles.cardTitle}>
                 Sözleşmeleriniz
               </h2>
-              <p className={styles.muted}>Siparişinizde onayladığınız metinler (bir kopyası sipariş e-postanızın ekinde de var).</p>
+              <p className={styles.muted}>Siparişinizde onayladığınız metinler.</p>
               <details className={styles.doc}>
                 <summary>Ön Bilgilendirme Formu</summary>
                 <div className={styles.docBody}>

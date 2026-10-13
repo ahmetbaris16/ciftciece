@@ -8,16 +8,18 @@
 
 export const LEGAL_DOCUMENTS = {
   // 2026-10-07: ödeme bölümünde kapıda ödeme yok (seçenek kaldırıldı)
+  // 2026-10-14: metin sipariş onay e-postasına eklenmez; e-postadaki bağlantıdan ve sipariş sayfasından erişilir
   PRE_INFORMATION_FORM: {
     title: "Ön Bilgilendirme Formu",
     path: "/on-bilgilendirme",
-    version: "2026-10-07",
+    version: "2026-10-14",
   },
   // 2026-10-07: Madde 5 — kapıda ödeme yok
+  // 2026-10-14: Madde 11 — kopya e-postayla gönderilmez; e-postadaki bağlantıdan ve sipariş sayfasından erişilir
   DISTANCE_SALES_CONTRACT: {
     title: "Mesafeli Satış Sözleşmesi",
     path: "/mesafeli-satis-sozlesmesi",
-    version: "2026-10-07",
+    version: "2026-10-14",
   },
   // Üye olurken onaylanır (siparişte değil). 2026-10-07: değerlendirme cümleleri (06.10 anında yayın, 07.10
   // değerlendirme kodu)

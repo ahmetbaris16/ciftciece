@@ -19,7 +19,7 @@ import { GET as cronGet } from "@/app/api/cron/run/route";
 import { lastCronRun } from "@/lib/cron/heartbeat";
 import { getLaunchChecklist } from "@/lib/admin/dashboard";
 import { setupTestDb } from "./helpers/db";
-import { FakeSmtpServer, partOf, subjectOf } from "./helpers/fake-smtp";
+import { FakeSmtpServer, attachmentsOf, partOf, subjectOf } from "./helpers/fake-smtp";
 
 setupTestDb();
 
@@ -109,6 +109,17 @@ test("kuyruk: aynı anahtar ikinci kez eklenmez; gönderilir ve SENT olur", asyn
   // İkinci çalıştırma tekrar göndermez
   assert.equal((await sendDueEmails()).sent, 0);
   assert.equal(smtp.received.length, 1);
+});
+
+test("kuyruk: ek dosya saklanır ve SMTP'ye ek olarak gider (ileride fatura PDF'i gibi belgeler için)", async () => {
+  const content = "Çiftçi Ece — deneme eki\r\nİçerik: zeytinyağı";
+  await enqueueEmail(prisma, { ...draft("ayse@ornek.test", "ekli"), attachments: [{ filename: "deneme.txt", contentType: "text/plain; charset=utf-8", content }] });
+  assert.equal((await sendDueEmails()).sent, 1);
+  const files = attachmentsOf(smtp.received[0].raw).filter((p) => p.disposition === "attachment");
+  assert.equal(files.length, 1);
+  assert.equal(files[0].filename, "deneme.txt");
+  assert.equal(files[0].body.toString("utf8"), content);
+  assert.ok(!partOf(smtp.received[0].raw, "text/plain").includes("deneme eki"), "ek, düz metin gövdesiyle karışmaz");
 });
 
 test("geçici hata: yeniden denenecek şekilde ertelenir; deneme hakkı bitince FAILED", async () => {

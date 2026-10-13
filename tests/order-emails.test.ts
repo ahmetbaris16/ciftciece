@@ -1,6 +1,6 @@
 /**
  * Sipariş e-postaları uçtan uca: olay → kural → kuyruk → SMTP (sahte sunucu, gerçek protokol).
- * Sipariş teyidi (yasal) sözleşmelerin siparişe özel hâlini ek dosyada taşır (gövde kısa); logo e-postaya gömülür;
+ * Sipariş teyidi (yasal) kısa; siparişe özel sözleşmelere bağlantı verir; logo e-postaya gömülür;
  * her adımda müşteriye doğru e-posta gider; işletmeye yeni sipariş/talep/mesaj bildirimi; müşteri verisi e-postada
  * kaçışlanır.
  */
@@ -62,7 +62,7 @@ async function flush() {
 const emails = (orderId?: string) =>
   prisma.emailMessage.findMany({ where: orderId ? { orderId } : {}, orderBy: { createdAt: "asc" } });
 
-test("havale siparişi: müşteriye kısa teyit + IBAN, sözleşmeler ekte, logo gömülü; işletmeye yeni sipariş", async () => {
+test("havale siparişi: müşteriye kısa teyit + IBAN, sözleşmelere bağlantı (ek yok), logo gömülü; işletmeye yeni sipariş", async () => {
   const { order } = await createTestOrder({ method: "BANK_TRANSFER", dueInMinutes: 48 * 60 });
   await flush();
   const list = await emails(order.id);
@@ -71,49 +71,33 @@ test("havale siparişi: müşteriye kısa teyit + IBAN, sözleşmeler ekte, logo
   assert.equal(customer.toAddress, "musteri@example.com");
   assert.equal(customer.replyTo, "bilgi@ornek-magaza.test");
   assert.match(customer.subject, new RegExp(order.reference));
-  for (const part of ["TR33 0006 1005 1978 6457 8413 26", "Test Bankası", order.reference, "bu e-postanın ekindedir", `/siparis/${order.reference}#sozlesmeler`]) {
+  for (const part of ["TR33 0006 1005 1978 6457 8413 26", "Test Bankası", order.reference, `/siparis/${order.reference}#sozlesmeler`]) {
     assert.ok(customer.html.includes(part), `HTML'de yok: ${part}`);
   }
-  // Sözleşme metni gövdede değil (kullanıcı isteği 2026-10-13): e-posta kısa
+  assert.ok(customer.text.includes("Ön Bilgilendirme Formu ve Mesafeli Satış Sözleşmesi'ne buradan"), "sözleşme bağlantısı");
+  // Sözleşme metni e-postada yazmaz, ek de yok (kullanıcı kararı 2026-10-14: pazaryerlerindeki gibi bağlantı)
   for (const part of ["Madde 1", "14 (on dört) gün", "10000000146"]) {
-    assert.ok(!customer.html.includes(part) && !customer.text.includes(part), `gövdede olmamalı: ${part}`);
+    assert.ok(!customer.html.includes(part) && !customer.text.includes(part), `e-postada olmamalı: ${part}`);
   }
+  assert.equal(customer.attachments, null, "ek dosya yok");
   assert.ok(customer.html.length < 25_000, `gövde kısa olmalı (${customer.html.length} bayt)`);
   assert.ok(customer.text.includes(order.reference), "düz metin sürümünde sipariş no");
-  // Ek: siparişe özel Ön Bilgilendirme Formu + Mesafeli Satış Sözleşmesi (kuyrukta saklı)
-  const files = customer.attachments as Array<{ filename: string; contentType: string; content: string }>;
-  assert.equal(files.length, 1);
-  assert.equal(files[0].filename, `siparis-${order.reference}-sozlesmeler.txt`);
-  for (const part of ["ÖN BİLGİLENDİRME FORMU", "MESAFELİ SATIŞ SÖZLEŞMESİ", "Ece Çiftçi", "10000000146", "14 (on dört) gün", order.reference]) {
-    assert.ok(files[0].content.includes(part), `ekte yok: ${part}`);
-  }
   const store = list.find((e) => e.kind === "STORE_NEW_ORDER")!;
   assert.equal(store.toAddress, "siparis-bildirim@ornek-magaza.test");
   assert.equal(store.replyTo, "musteri@example.com");
-  assert.equal(store.attachments, null, "işletme bildiriminde ek yok");
   assert.equal(smtp.received.length, 2);
 
-  // SMTP'ye giden e-posta: gövde + ek dosya + gömülü logo
+  // SMTP'ye giden e-posta: gövde + gömülü logo; ek dosya yok
   const received = smtp.received.find((m) => m.to[0] === "musteri@example.com")!;
   assert.match(subjectOf(received.raw), /Siparişiniz alındı/);
   assert.match(partOf(received.raw, "text/html"), /src="cid:logo@ciftciece"/);
-  assert.ok(!partOf(received.raw, "text/plain").includes("Madde 1"), "düz metin gövdesinde sözleşme yok");
   const parts = attachmentsOf(received.raw);
-  const contract = parts.find((p) => p.disposition === "attachment")!;
-  assert.equal(contract.filename, `siparis-${order.reference}-sozlesmeler.txt`);
-  assert.equal(contract.contentType, "text/plain");
-  const contractText = contract.body.toString("utf8");
-  assert.ok(contractText.charCodeAt(0) === 0xfeff, "Not Defteri için BOM");
-  assert.ok(contractText.includes("MESAFELİ SATIŞ SÖZLEŞMESİ") && contractText.includes("Madde 11"), "sözleşme eksiksiz");
-  const logo = parts.find((p) => p.contentId?.startsWith("logo@ciftciece"))!;
-  assert.equal(logo.contentType, "image/png");
-  assert.ok(logo.body.length > 1000 && logo.body.subarray(1, 4).toString() === "PNG", "logo PNG");
-  // İşletme bildiriminde de logo var, ek dosya yok
+  assert.deepEqual(parts.map((p) => p.contentType), ["image/png"], "yalnız gömülü logo");
+  assert.equal(parts[0].disposition, "inline");
+  assert.ok(parts[0].contentId?.startsWith("logo@ciftciece"));
+  assert.ok(parts[0].body.length > 1000 && parts[0].body.subarray(1, 4).toString() === "PNG", "logo PNG");
   const storeRaw = smtp.received.find((m) => m.to[0] === "siparis-bildirim@ornek-magaza.test")!.raw;
-  assert.deepEqual(
-    attachmentsOf(storeRaw).map((p) => p.contentType),
-    ["image/png"]
-  );
+  assert.deepEqual(attachmentsOf(storeRaw).map((p) => p.contentType), ["image/png"]);
 });
 
 test("ürün görseli yalnız site internetten erişilebilirken (https, yerel değil) e-postaya konur", async () => {
