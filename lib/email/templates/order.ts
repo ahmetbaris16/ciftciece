@@ -423,10 +423,7 @@ export function requestRejectedEmail(d: OrderEmailData, type: "CANCEL" | "RETURN
           : [orderNo(d), " numaralı siparişiniz için iptal isteğinizi kabul edemedik; siparişiniz işleme devam ediyor."]
       ),
       ...(note ? [keyValues([{ label: "Açıklamamız", value: note }], { boxed: true, stacked: true })] : []),
-      paragraph(
-        `Sorunuz varsa bu e-postayı yanıtlayabilir ya da ${formatPhoneTr(d.business.phone)} numarasından bize ulaşabilirsiniz.`,
-        { muted: true, small: true }
-      ),
+      paragraph(`Sorunuz varsa ${formatPhoneTr(d.business.phone)} numarasından da bize ulaşabilirsiniz.`, { muted: true, small: true }),
       button("Siparişi görüntüle", orderUrl(d)),
     ],
   });
