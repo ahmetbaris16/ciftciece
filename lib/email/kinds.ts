@@ -10,6 +10,7 @@ export const EMAIL_KIND_TR: Record<string, string> = {
   ORDER_CANCELLED: "Sipariş iptali",
   REFUND_RECORDED: "İade",
   REQUEST_RECEIVED: "Talep alındı",
+  REQUEST_REJECTED: "Talep reddedildi",
   TRANSFER_REMINDER: "Havale hatırlatması",
   CUSTOM_MESSAGE: "Admin mesajı",
   ADDRESS_CHANGED: "Teslimat bilgisi güncellendi",

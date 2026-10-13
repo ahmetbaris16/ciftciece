@@ -2,8 +2,8 @@
 
 /**
  * Müşterinin iptal / iade talebi: iki açık seçenek. "Kabul et" talebi elle kapatmaz, ilgili işleme götürür (iade kaydı
- * ya da "İptal et"); talep o işlemle kendiliğinden kapanır. "Reddet" talebi kapatır, sipariş sürer (müşteri sipariş
- * sayfasında görür).
+ * ya da "İptal et"); talep o işlemle kendiliğinden kapanır. "Reddet" talebi kapatır, sipariş sürer; müşteriye e-posta
+ * gider ve sipariş sayfasında görür (yazılan sebep ikisinde de yazar).
  */
 
 import { useState } from "react";
@@ -27,8 +27,8 @@ export default function RequestActions({
   const reject = () => {
     const question =
       (type === "CANCEL" ? "İptal isteği reddedilsin mi? Sipariş İPTAL EDİLMEZ, devam eder." : "İade bildirimi reddedilsin mi?") +
-      " Müşteri sipariş sayfasında isteğinin kabul edilmediğini görür." +
-      (note.trim().length < 3 ? "\n\nSebep yazmadınız; müşteriye ayrıca e-postayla açıklamanız önerilir." : "");
+      " Müşteriye e-posta gider ve sipariş sayfasında da görür." +
+      (note.trim().length < 3 ? "\n\nSebep yazmadınız; e-postada sebep yazmaz. Sebep yazmanız önerilir." : "");
     if (!window.confirm(question)) return;
     void send(`/api/admin/requests/${requestId}`, { status: "REJECTED", note: note.trim() || null }, { method: "PATCH" });
   };
@@ -47,9 +47,9 @@ export default function RequestActions({
         className={f.input}
         value={note}
         onChange={(e) => setNote(e.target.value)}
-        placeholder="Reddederseniz sebebi (iç not; ör. ürün kargoya verilmişti)"
+        placeholder="Reddederseniz sebebi (müşteriye e-postayla gider; ör. ürün kargoya verilmişti)"
         maxLength={2000}
-        aria-label="Ret sebebi"
+        aria-label="Ret sebebi (müşteriye gider)"
       />
       {error && <p className={f.error}>{error}</p>}
     </div>

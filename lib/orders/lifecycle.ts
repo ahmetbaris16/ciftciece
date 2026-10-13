@@ -345,9 +345,9 @@ export async function createCustomerRequest(reference: string, input: CustomerRe
 }
 
 /**
- * Müşterinin talebini reddeder; sipariş sürer. Kabul edilen talep elle kapatılmaz: iptal isteği sipariş iptal
- * edilince, iade bildirimi iade kaydı girilince kendiliğinden kapanır (talep "sonuçlandı" görünüp sipariş devam
- * etmesin).
+ * Müşterinin talebini reddeder; sipariş sürer. Müşteriye e-posta gider; yöneticinin yazdığı sebep e-postada ve sipariş
+ * sayfasında görünür. Kabul edilen talep elle kapatılmaz: iptal isteği sipariş iptal edilince, iade bildirimi iade
+ * kaydı girilince kendiliğinden kapanır (talep "sonuçlandı" görünüp sipariş devam etmesin).
  */
 export async function rejectCustomerRequest(requestId: string, note: string | null | undefined, actorId: string) {
   return prisma.$transaction(async (tx) => {
@@ -374,9 +374,17 @@ export async function rejectCustomerRequest(requestId: string, note: string | nu
       actorId,
       visibleToCustomer: true,
       message:
-        req.type === "CANCEL"
-          ? "İptal isteğiniz kabul edilemedi; siparişiniz işleme devam ediyor. Sorunuz için bize ulaşabilirsiniz."
-          : "İade (cayma) bildiriminiz kabul edilemedi. Ayrıntı için bize ulaşabilirsiniz.",
+        (req.type === "CANCEL"
+          ? "İptal isteğiniz kabul edilemedi; siparişiniz işleme devam ediyor."
+          : "İade (cayma) bildiriminiz kabul edilemedi.") + (text ? ` Açıklama: ${text}` : " Sorunuz için bize ulaşabilirsiniz."),
+    });
+    // Müşteriye e-posta ("İptal isteğiniz alındı" e-postası sonucu e-postayla bildireceğimizi söylüyor)
+    await writeOutbox(tx, {
+      topic: "order.request_rejected",
+      aggregateType: "order",
+      aggregateId: req.orderId,
+      dedupeKey: `order.request_rejected:${req.id}`,
+      payload: { orderId: req.orderId, requestId: req.id, type: req.type, note: text },
     });
     return { ...req, status: "REJECTED" as const };
   });

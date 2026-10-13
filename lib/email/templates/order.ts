@@ -414,6 +414,32 @@ export function requestReceivedEmail(d: OrderEmailData, type: "CANCEL" | "RETURN
   });
 }
 
+// ── Müşteri talebi reddedildi ───────────────────────────────────────────
+
+/** note: yöneticinin panelde yazdığı sebep (müşteriye gider; boşsa genel cümle) */
+export function requestRejectedEmail(d: OrderEmailData, type: "CANCEL" | "RETURN", note: string | null): RenderedEmail {
+  const isReturn = type === "RETURN";
+  return customerEmail(d, {
+    subject: `${isReturn ? "İade (cayma) bildiriminiz" : "İptal isteğiniz"} hakkında — #${d.reference}`,
+    preheader: isReturn ? "İade bildiriminiz kabul edilemedi." : "İptal isteğiniz kabul edilemedi; siparişiniz devam ediyor.",
+    title: isReturn ? "İade bildiriminiz kabul edilemedi" : "İptal isteğiniz kabul edilemedi",
+    blocks: [
+      hello(d),
+      paragraph(
+        isReturn
+          ? [orderNo(d), " numaralı siparişiniz için gönderdiğiniz iade (cayma) bildirimini kabul edemedik."]
+          : [orderNo(d), " numaralı siparişiniz için iptal isteğinizi kabul edemedik; siparişiniz işleme devam ediyor."]
+      ),
+      ...(note ? [keyValues([{ label: "Açıklamamız", value: note }], { boxed: true, stacked: true })] : []),
+      paragraph(
+        `Sorunuz varsa bu e-postayı yanıtlayabilir ya da ${formatPhoneTr(d.business.phone)} numarasından bize ulaşabilirsiniz.`,
+        { muted: true, small: true }
+      ),
+      button("Siparişi görüntüle", orderUrl(d)),
+    ],
+  });
+}
+
 // ── Teslimat bilgisi değişti ────────────────────────────────────────────
 
 /**

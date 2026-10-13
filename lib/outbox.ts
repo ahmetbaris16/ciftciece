@@ -17,6 +17,7 @@ export type OutboxTopic =
   | "order.shipped" // kargo gönderisi eklendi (takip numarasıyla)
   | "order.refunded" // iade kaydı girildi
   | "order.customer_request" // müşteri iptal/iade talebi
+  | "order.request_rejected" // müşteri talebi reddedildi (müşteriye e-posta)
   | "order.payment_reminder" // havale son ödeme hatırlatması
   | "order.address_changed" // teslimat bilgisi değişti (eski/yeni adres olayda değil, sipariş geçmişinde)
   | "payment.alert" // ödeme uyarısı (insan kararı)

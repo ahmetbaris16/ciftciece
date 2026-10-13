@@ -15,7 +15,7 @@ import { saveBusinessInfo } from "@/lib/business/business.repository";
 import { parseBusinessInfo } from "@/lib/business/info";
 import { confirmBankTransferPayment } from "@/lib/payment/offline";
 import { releaseExpiredOrders, updateOrderStatus } from "@/lib/repositories/order.repository";
-import { createCustomerRequest, recordRefund, shipOrder } from "@/lib/orders/lifecycle";
+import { createCustomerRequest, recordRefund, rejectCustomerRequest, shipOrder } from "@/lib/orders/lifecycle";
 import { enqueueTransferReminders } from "@/lib/orders/reminders";
 import { writeOutbox } from "@/lib/outbox";
 import { customMessageDraft } from "@/lib/notifications/order-rules";
@@ -195,6 +195,37 @@ test("müşteri talebi: müşteriye alındı, işletmeye talep e-postası", asyn
   assert.ok(store.html.includes("Adresim değişti"));
   assert.equal(store.replyTo, "musteri@example.com");
   assert.ok(list.some((e) => e.kind === "REQUEST_RECEIVED"));
+});
+
+test("talep reddi: müşteriye sebebiyle e-posta gider (kaçışlanmış), sipariş sayfasında da yazar; bir kez gider", async () => {
+  const { order } = await createTestOrder({ method: "BANK_TRANSFER", dueInMinutes: 48 * 60 });
+  await confirmBankTransferPayment(order.id, "admin-1");
+  await createCustomerRequest(order.reference, { type: "CANCEL", message: "Vazgeçtim, iptal edin." });
+  await flush();
+  const req = await prisma.customerRequest.findFirstOrThrow({ where: { orderId: order.id } });
+  await rejectCustomerRequest(req.id, "Siparişiniz <b>kargoya</b> verilmişti.", "admin-1");
+  await flush();
+  const rejected = (await emails(order.id)).filter((e) => e.kind === "REQUEST_REJECTED");
+  assert.equal(rejected.length, 1, "red e-postası");
+  const mail = rejected[0];
+  assert.equal(mail.toAddress, "musteri@example.com");
+  assert.equal(mail.subject, `İptal isteğiniz hakkında — #${order.reference}`);
+  assert.ok(mail.text.includes("kabul edemedik") && mail.text.includes("Siparişiniz <b>kargoya</b> verilmişti."), "sebep yazıyor");
+  assert.ok(!mail.html.includes("<b>kargoya</b>") && mail.html.includes("&lt;b&gt;kargoya&lt;/b&gt;"), "HTML kaçışlanmalı");
+  assert.ok(smtp.received.some((m) => m.to[0] === "musteri@example.com" && /İptal isteğiniz hakkında/.test(subjectOf(m.raw))), "SMTP'ye gitti");
+  const visible = await prisma.orderEvent.findFirst({ where: { orderId: order.id, visibleToCustomer: true, message: { contains: "Açıklama: Siparişiniz" } } });
+  assert.ok(visible, "sipariş sayfasında sebep");
+  // Olay yeniden işlense de ikinci e-posta yok; sebepsiz ret de e-posta gönderir
+  await prisma.outboxEvent.updateMany({ data: { publishedAt: null } });
+  await processOutbox();
+  assert.equal((await emails(order.id)).filter((e) => e.kind === "REQUEST_REJECTED").length, 1);
+  await createCustomerRequest(order.reference, { type: "CANCEL", message: "Yine de iptal edin." });
+  const req2 = await prisma.customerRequest.findFirstOrThrow({ where: { orderId: order.id, status: "OPEN" } });
+  await rejectCustomerRequest(req2.id, "  ", "admin-1");
+  await flush();
+  const second = (await emails(order.id)).filter((e) => e.kind === "REQUEST_REJECTED");
+  assert.equal(second.length, 2, "ikinci talebin reddi ayrı e-posta");
+  assert.ok(!second[1].text.includes("Açıklamamız"), "sebep yoksa açıklama kutusu yok");
 });
 
 test("havale hatırlatması: son ödemeye 12 saatten az kala bir kez; süresi geçince gönderilmez", async () => {

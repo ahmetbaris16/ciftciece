@@ -14,6 +14,7 @@
  * | order.refunded            | İadeniz yapıldı                              | —                          |
  * | order.payment_reminder    | Havale hatırlatma (son ödeme sonrası gitmez) | —                          |
  * | order.customer_request    | Talebiniz alındı                             | Müşteri talebi             |
+ * | order.request_rejected    | Talebiniz kabul edilemedi (sebebiyle)        | —                          |
  * | order.address_changed     | Teslimat bilgileriniz güncellendi            | Müşteri değiştirdiyse bilgi |
  * | contact.received          | —                                            | İletişim mesajı (yanıtla → müşteri) |
  * | review.submitted          | —                                            | Yeni değerlendirme yayınlandı |
@@ -34,6 +35,7 @@ import {
   paymentReceivedEmail,
   refundEmail,
   requestReceivedEmail,
+  requestRejectedEmail,
   transferReminderEmail,
 } from "@/lib/email/templates/order";
 import {
@@ -209,6 +211,13 @@ const reminder: Handler = async (event) => {
   return toCustomer(d, "TRANSFER_REMINDER", transferReminderEmail(d), { expiresAt: d.paymentDueAt });
 };
 
+const requestRejected: Handler = async (event) => {
+  const p = payloadOf(event);
+  const d = await orderData(event);
+  if (!d) return [];
+  return toCustomer(d, "REQUEST_REJECTED", requestRejectedEmail(d, str(p.type) === "RETURN" ? "RETURN" : "CANCEL", str(p.note)));
+};
+
 const customerRequest: Handler = async (event, ctx) => {
   const p = payloadOf(event);
   const d = await orderData(event);
@@ -314,6 +323,7 @@ export const ORDER_HANDLERS: Record<string, Handler> = {
   "order.refunded": refunded,
   "order.payment_reminder": reminder,
   "order.customer_request": customerRequest,
+  "order.request_rejected": requestRejected,
   "order.address_changed": deliveryChanged,
   "contact.received": contactReceived,
   "review.submitted": reviewSubmitted,
