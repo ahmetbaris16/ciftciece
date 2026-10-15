@@ -12,6 +12,7 @@ import { deliver, PermanentEmailError, resetTransportCache } from "@/lib/email/t
 import { enqueueEmail } from "@/lib/notifications/queue";
 import { MAX_EMAIL_ATTEMPTS, requeueEmail, sendDueEmails } from "@/lib/notifications/sender";
 import { processOutbox } from "@/lib/notifications/dispatcher";
+import { runNotifications } from "@/lib/notifications/run";
 import { saveBusinessInfo } from "@/lib/business/business.repository";
 import { parseBusinessInfo } from "@/lib/business/info";
 import { writeOutbox } from "@/lib/outbox";
@@ -227,6 +228,44 @@ test("outbox: bildirim adresi yoksa işletmeye e-posta oluşmaz, olay yine kapan
   assert.equal(await prisma.emailMessage.count(), 0);
   const ev = await prisma.outboxEvent.findUniqueOrThrow({ where: { dedupeKey: "payment.alert:test-2" } });
   assert.ok(ev.publishedAt);
+});
+
+test("bildirim döngüsü e-posta gönderirken yazılan olay atlanmaz: döngü bitince bir tur daha çalışır", async () => {
+  // Gerçek durum: "Kargoya verildi" e-postası gönderilirken sipariş "Teslim edildi" yapıldı; ikinci çağrı
+  // sürmekte olan döngüye katılıyordu ve teslim olayı zamanlanmış göreve kadar bekliyordu
+  await saveBusinessInfo({ ...parseBusinessInfo(null), email: "bilgi@ornek.test", notificationEmail: "patron@ornek.test" });
+  const alert = (n: number) =>
+    prisma.$transaction((tx) =>
+      writeOutbox(tx, {
+        topic: "payment.alert",
+        aggregateType: "payment",
+        aggregateId: `race-${n}`,
+        dedupeKey: `payment.alert:race-${n}`,
+        payload: { kind: "PAYMENT_MISMATCH", message: `Uyarı ${n}`, orderId: null, attemptId: null },
+      })
+    );
+  await alert(1);
+  let inSend!: () => void;
+  const sending = new Promise<void>((resolve) => (inSend = resolve));
+  smtp.opts.onMessage = () => inSend();
+  smtp.opts.dataReplyDelayMs = 300;
+  try {
+    const first = runNotifications();
+    await sending; // ilk döngü olay adımını geçti, e-postayı gönderiyor
+    await alert(2);
+    const second = runNotifications();
+    const [r1, r2] = await Promise.all([first, second]);
+    assert.equal(r1.dispatch.processed, 1);
+    assert.equal(r2.dispatch.processed, 1, "ikinci olay ikinci turda işlenir");
+  } finally {
+    smtp.opts.onMessage = undefined;
+    smtp.opts.dataReplyDelayMs = undefined;
+  }
+  const ev = await prisma.outboxEvent.findUniqueOrThrow({ where: { dedupeKey: "payment.alert:race-2" } });
+  assert.ok(ev.publishedAt);
+  assert.equal(smtp.received.length, 2, "iki uyarı da gönderildi");
+  // Döngü boştayken çağrı yine hemen çalışır (bekleyen ikinci tur kalmadı)
+  assert.equal((await runNotifications()).dispatch.processed, 0);
 });
 
 test("cron ucu: anahtar yoksa 503, yanlışsa 401, doğruysa işleri çalıştırır", async () => {

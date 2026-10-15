@@ -7,8 +7,10 @@
  *    scheduleNotifications() ile döngüyü çalıştırır (müşteri beklemeden e-posta alır).
  *  - Zamanlanmış iş: /api/cron/run (hPanel Cron Jobs, 5 dakikada bir) — yeniden denemeler ve kaçanlar.
  *  - Admin: E-postalar sayfasındaki "Şimdi gönder".
- * Aynı süreçte üst üste binen çağrılar tek döngüyü paylaşır; farklı süreçler arası güvenlik satır
- * düzeyindedir (dispatcher/sender).
+ * Aynı süreçte üst üste binen çağrılar döngüyü paylaşmaz: sürmekte olan döngü olay adımını geçmiş olabilir
+ * (ör. "Kargoya verildi" e-postası gönderilirken yazılan "Teslim edildi" olayı atlanırdı), bu yüzden döngü
+ * bitince bir tur daha çalışır; o arada gelen bütün çağrılar bu ikinci turu bekler. Farklı süreçler arası
+ * güvenlik satır düzeyindedir (dispatcher/sender).
  */
 
 import { after } from "next/server";
@@ -27,10 +29,21 @@ const EMPTY: NotificationRunResult = {
 };
 
 let running: Promise<NotificationRunResult> | null = null;
+let rerun: Promise<NotificationRunResult> | null = null;
 
 export function runNotifications(): Promise<NotificationRunResult> {
   if (!USE_DB) return Promise.resolve(EMPTY);
-  if (running) return running;
+  if (running) {
+    if (!rerun) {
+      rerun = running
+        .catch(() => undefined)
+        .then(() => {
+          rerun = null;
+          return runNotifications();
+        });
+    }
+    return rerun;
+  }
   running = (async () => {
     try {
       const dispatch = await processOutbox();

@@ -4,6 +4,8 @@
  *  - rejectRecipients: bu adreslere RCPT TO → 550 (kalıcı hata)
  *  - tempFailRecipients: bu adreslere RCPT TO → 451 (geçici hata)
  *  - password: verilirse AUTH bu şifreyi ister (yanlışsa 535)
+ *  - dataReplyDelayMs: e-posta alındıktan sonra "250" yanıtı bu kadar geciktirilir (yavaş sunucu; gönderim sürerken
+ *    olanları sınamak için)
  * Hiçbir yere e-posta iletmez.
  */
 
@@ -23,6 +25,7 @@ export interface FakeSmtpOptions {
   password?: string;
   rejectRecipients?: string[];
   tempFailRecipients?: string[];
+  dataReplyDelayMs?: number;
   onMessage?: (msg: ReceivedEmail) => void;
 }
 
@@ -105,7 +108,9 @@ export class FakeSmtpServer {
           this.opts.onMessage?.(msg);
           dataLines = [];
           mode = "cmd";
-          write(`250 2.0.0 Ok: queued as fake-${this.received.length}`);
+          const ok = `250 2.0.0 Ok: queued as fake-${this.received.length}`;
+          if (this.opts.dataReplyDelayMs) setTimeout(() => write(ok), this.opts.dataReplyDelayMs);
+          else write(ok);
         } else {
           dataLines.push(line.startsWith("..") ? line.slice(1) : line);
         }
