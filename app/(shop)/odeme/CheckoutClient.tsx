@@ -9,6 +9,7 @@
  * form taslağı (lib/checkout/draft.ts) geri yüklenir, ödeme adımından devam edilir.
  * Kart: sipariş açılır → /api/payment/create → bankanın (Akbank) 3D Secure ortak ödeme sayfasına imzalı form
  * gönderilir; kart bilgisi sitemize gelmez. Havale: sipariş sayfasına geçilir (IBAN orada). Kapıda ödeme yok.
+ * Sipariş fişinde adet değiştirilir ve ürün çıkarılır (geri alınabilir); son ürün buradan çıkarılmaz.
  *
  * Güvenlik ve doğruluk:
  * - Tutar, kargo ve ödeme yöntemi sunucuda yeniden hesaplanır/doğrulanır; buradaki gösterimdir.
@@ -23,7 +24,7 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCart } from "@/lib/cart/CartContext";
-import { formatPrice } from "@/types";
+import { formatPrice, type CartItem } from "@/types";
 import {
   BillingSchema,
   CHECKOUT_MESSAGES,
@@ -83,7 +84,7 @@ const PAYMENT_RETURN_ERRORS: Record<string, string> = {
 };
 
 export default function CheckoutClient({ business, cardProvider }: { business: BusinessInfo; cardProvider: string }) {
-  const { cart, isHydrated, syncCart } = useCart();
+  const { cart, isHydrated, syncCart, updateQuantity, removeItem, addItem } = useCart();
   const router = useRouter();
   const searchParams = useSearchParams();
   const errorParam = searchParams.get("error");
@@ -113,7 +114,11 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
   const [note, setNote] = useState(restored?.note ?? "");
   const [showNote, setShowNote] = useState(Boolean(restored?.note));
   const [chosenMethod, setChosenMethod] = useState<PaymentMethodId | null>((restored?.method as PaymentMethodId | null) ?? null);
-  const [acceptTerms, setAcceptTerms] = useState(false);
+  // Onay, o an gösterilen sözleşmeye verilir (aşağıda termsKey): sonradan sipariş değişirse (fişte adet/ürün,
+  // ödeme yöntemi, adres) onay düşer, güncel hâli yeniden onaylanır
+  const [acceptedTerms, setAcceptedTerms] = useState<string | null>(null);
+  // Fişten çıkarılan son ürün ("Geri al")
+  const [removedItem, setRemovedItem] = useState<CartItem | null>(null);
   const [errors, setErrors] = useState<Partial<Record<CheckoutField, string>>>({});
   const [submitting, setSubmitting] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
@@ -202,7 +207,13 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
           : quote.status === "recipient"
             ? "Teslimatta ödenir"
             : formatPrice(quote.feeKurus);
-  const totalLabel = shippingKnown ? formatPrice(totalKurus) : `${formatPrice(cart.subtotalKurus)} + kargo`;
+  const totalLabel = shippingKnown ? (
+    formatPrice(totalKurus)
+  ) : (
+    <>
+      {formatPrice(cart.subtotalKurus)} <small className={styles.plusShipping}>+ kargo</small>
+    </>
+  );
   const fullName = `${contact.firstName} ${contact.lastName}`.trim();
 
   // Sözleşmelerin sepete özel hâli (onaydan hemen önce gösterilir)
@@ -233,6 +244,21 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
       paymentMethodLabel: PAYMENT_METHOD_LABELS[selected.id],
       carrierName,
     };
+  const termsKey = legalContext ? JSON.stringify(legalContext) : null;
+  const acceptTerms = termsKey !== null && acceptedTerms === termsKey;
+  const termsChanged = acceptedTerms !== null && !acceptTerms;
+
+  // Fişte adet değişikliği ve ürün çıkarma (sipariş gönderilirken kapalı)
+  const editLocked = submitting || redirecting;
+  const removeLine = (item: CartItem) => {
+    setRemovedItem(item);
+    removeItem(item.variantId);
+  };
+  const undoRemove = () => {
+    if (removedItem) addItem(removedItem, { notify: false });
+    setRemovedItem(null);
+  };
+  const showUndo = removedItem !== null && !cart.items.some((i) => i.variantId === removedItem.variantId);
 
   const clearError = (field: CheckoutField) =>
     setErrors((e) => {
@@ -851,9 +877,9 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
                         type="checkbox"
                         checked={acceptTerms}
                         aria-invalid={!!errors.acceptTerms}
-                        aria-describedby={errors.acceptTerms ? "terms-error" : undefined}
+                        aria-describedby={errors.acceptTerms ? "terms-error" : termsChanged ? "terms-changed" : undefined}
                         onChange={(e) => {
-                          setAcceptTerms(e.target.checked);
+                          setAcceptedTerms(e.target.checked ? termsKey : null);
                           clearError("acceptTerms");
                         }}
                       />
@@ -861,11 +887,15 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
                         Ön Bilgilendirme Formu&apos;nu ve Mesafeli Satış Sözleşmesi&apos;ni okudum, onaylıyorum.
                       </span>
                     </label>
-                    {errors.acceptTerms && (
+                    {errors.acceptTerms ? (
                       <span id="terms-error" className={styles.fieldError} role="alert">
                         {errors.acceptTerms}
                       </span>
-                    )}
+                    ) : termsChanged ? (
+                      <span id="terms-changed" className={styles.termsChanged} role="status">
+                        Siparişiniz değişti; sözleşmelerin güncel hâlini yeniden onaylayın.
+                      </span>
+                    ) : null}
                   </div>
                 )}
 
@@ -918,13 +948,45 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
                       {item.imageUrl ? (
                         <Image src={item.imageUrl} alt={item.imageAlt || item.productName} width={56} height={56} sizes="56px" />
                       ) : null}
-                      <span className={styles.qty} aria-label={`${item.quantity} adet`}>
-                        {item.quantity}
-                      </span>
                     </span>
                     <span className={styles.lineText}>
                       <span className={styles.lineName}>{item.productName}</span>
                       <span className={styles.lineVariant}>{item.variantName}</span>
+                    </span>
+                    <span className={styles.lineEdit}>
+                      <span className={styles.stepper} role="group" aria-label={`${item.productName}, ${item.variantName} adedi`}>
+                        <button
+                          type="button"
+                          onClick={() => updateQuantity(item.variantId, item.quantity - 1)}
+                          disabled={editLocked || item.quantity <= 1}
+                          aria-label="Bir azalt"
+                        >
+                          <MinusIcon />
+                        </button>
+                        <span className={styles.stepperValue} aria-live="polite">
+                          {item.quantity}
+                          <span className="sr-only"> adet</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => updateQuantity(item.variantId, item.quantity + 1)}
+                          disabled={editLocked || item.quantity >= (item.maxQuantity ?? 99)}
+                          aria-label="Bir artır"
+                        >
+                          <PlusIcon />
+                        </button>
+                      </span>
+                      {cart.items.length > 1 && (
+                        <button
+                          type="button"
+                          className={styles.removeBtn}
+                          onClick={() => removeLine(item)}
+                          disabled={editLocked}
+                          aria-label={`${item.productName}, ${item.variantName}: siparişten çıkar`}
+                        >
+                          Çıkar
+                        </button>
+                      )}
                     </span>
                     <span className={styles.linePrice}>
                       {item.compareAtPriceKurus && item.compareAtPriceKurus > item.priceKurus && (
@@ -938,6 +1000,16 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
                   </li>
                 ))}
               </ul>
+              {showUndo && removedItem && (
+                <p className={styles.undo} role="status">
+                  <span>
+                    {removedItem.productName} ({removedItem.variantName}) çıkarıldı.
+                  </span>
+                  <button type="button" className={styles.textBtn} onClick={undoRemove} disabled={editLocked}>
+                    Geri al
+                  </button>
+                </p>
+              )}
               <dl className={styles.sums}>
                 {savingsKurus > 0 && (
                   <>
@@ -1054,6 +1126,22 @@ function LockIcon({ size = 16 }: { size?: number }) {
     <svg width={size} height={size} viewBox="0 0 24 24" strokeWidth="2.2" {...svg}>
       <rect x="3" y="11" width="18" height="11" rx="2" />
       <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  );
+}
+
+function MinusIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" strokeWidth="2.4" {...svg}>
+      <path d="M5 12h14" />
+    </svg>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" strokeWidth="2.4" {...svg}>
+      <path d="M12 5v14M5 12h14" />
     </svg>
   );
 }
