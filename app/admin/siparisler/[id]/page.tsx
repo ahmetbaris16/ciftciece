@@ -699,7 +699,8 @@ export default async function AdminSiparisDetay({ params }: Props) {
                 </p>
               ) : (
                 <p className={s.muted} style={{ marginBottom: "0.5rem" }}>
-                  e-Arşiv faturayı düzenleyince numarasını girin; müşteri sipariş sayfasında görür.
+                  e-Arşiv faturayı düzenleyince numarasını girin; müşteri sipariş sayfasında görür. Teslim edildi
+                  yapınca müşteriye e-postayla PDF fatura gider; numara önceden girildiyse üzerinde yazar.
                 </p>
               )}
               <InvoiceForm orderId={order.id} current={order.invoiceNumber} />

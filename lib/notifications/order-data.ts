@@ -15,7 +15,7 @@ import type { BillingInfo, ShippingAddress } from "@/types";
 export interface OrderEmailData {
   id: string;
   reference: string;
-  /** Üyelikle verilmiş sipariş (değerlendirme girişle); false = üye olmadan (değerlendirme koduyla) */
+  /** Üyelikle verilmiş sipariş (değerlendirme girişle); false = üye olmadan (sipariş sayfasından) */
   memberOrder: boolean;
   status: string;
   paymentMethod: "CARD" | "BANK_TRANSFER" | "CASH_ON_DELIVERY";
@@ -36,7 +36,12 @@ export interface OrderEmailData {
     lineTotalKurus: number;
     /** Ürünün ilk görseli (site içi adres; e-postada küçültülmüş hâli) */
     imageUrl: string | null;
+    /** Sipariş anındaki KDV oranı (baz puan); ürüne girilmemişse null */
+    vatRateBps: number | null;
   }>;
+  /** Panelden girilen e-Arşiv fatura numarası ve tarihi (yoksa null) */
+  invoiceNumber: string | null;
+  invoiceIssuedAt: Date | null;
   subtotalKurus: number;
   shippingKurus: number;
   recipientPaysShipping: boolean;
@@ -91,7 +96,10 @@ export async function loadOrderEmailData(orderId: string): Promise<OrderEmailDat
       unitPriceKurus: i.snapshotPrice,
       lineTotalKurus: i.snapshotPrice * i.quantity - i.discountKurus,
       imageUrl: i.variant?.product?.images[0]?.url ?? null,
+      vatRateBps: i.vatRateBps,
     })),
+    invoiceNumber: order.invoiceNumber,
+    invoiceIssuedAt: order.invoiceIssuedAt,
     subtotalKurus: order.subtotalKurus,
     shippingKurus: order.shippingKurus,
     recipientPaysShipping: address?.shippingMode === "recipient",

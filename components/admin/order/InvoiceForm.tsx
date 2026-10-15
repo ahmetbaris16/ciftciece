@@ -2,7 +2,8 @@
 
 /**
  * e-Arşiv fatura numarası: fatura muhasebe/GİB portalında düzenlenir, numarası buraya yazılır. Müşteri sipariş
- * sayfasında görür. Fatura PDF'i bu sürümde siteden gönderilmez.
+ * sayfasında görür. Teslim e-postasına siteden üretilen basit bir fatura PDF'i eklenir (lib/invoice/pdf.ts); numara
+ * teslimden önce girilmişse PDF'te de yazar.
  */
 
 import { useState } from "react";

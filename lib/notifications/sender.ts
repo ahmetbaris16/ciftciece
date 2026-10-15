@@ -38,7 +38,8 @@ function attachmentsOf(value: unknown): EmailAttachment[] {
       a !== null &&
       typeof (a as EmailAttachment).filename === "string" &&
       typeof (a as EmailAttachment).contentType === "string" &&
-      typeof (a as EmailAttachment).content === "string"
+      typeof (a as EmailAttachment).content === "string" &&
+      ((a as EmailAttachment).encoding === undefined || (a as EmailAttachment).encoding === "base64")
   );
 }
 

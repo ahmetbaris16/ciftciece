@@ -749,7 +749,8 @@ model EmailMessage {
   subject           String      @db.VarChar(300)
   html              String      @db.MediumText
   text              String      @db.MediumText
-  // Ek dosyalar: [{ filename, contentType, content }] (metin; ör. siparişe özel sözleşmeler). Logo gönderirken eklenir.
+  // Ek dosyalar: [{ filename, contentType, content, encoding? }] (ikili dosya base64; ör. teslimde fatura PDF'i).
+  // Logo gönderirken eklenir.
   attachments       Json?
   status            EmailStatus @default(QUEUED)
   attempts          Int         @default(0)

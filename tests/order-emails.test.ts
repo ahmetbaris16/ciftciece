@@ -135,6 +135,18 @@ test("havale onayı → ödeme alındı; kargo → takip numaralı e-posta; tesl
   assert.ok(delivered.html.includes(`/siparis/${order.reference}#degerlendir`), "değerlendirme bağlantısı");
   assert.ok(!delivered.text.includes("üyelik hesabınızla"), "misafire giriş cümlesi yok");
   assert.equal(await prisma.orderReviewCode.count(), 0, "kod üretilmez");
+  // Fatura PDF'i ekte (kullanıcı kararı 2026-10-15); SMTP'ye PDF olarak ulaşır, logo yine gömülü
+  assert.ok(delivered.text.includes("Faturanızı bu e-postanın ekinde"));
+  assert.deepEqual(
+    (delivered.attachments as Array<{ filename: string; contentType: string; encoding: string }>).map((a) => [a.filename, a.contentType, a.encoding]),
+    [[`fatura-${order.reference}.pdf`, "application/pdf", "base64"]]
+  );
+  const deliveredRaw = smtp.received.find((m) => subjectOf(m.raw).startsWith("Siparişiniz teslim edildi"))!.raw;
+  const pdfPart = attachmentsOf(deliveredRaw).find((p) => p.contentType === "application/pdf")!;
+  assert.equal(pdfPart.filename, `fatura-${order.reference}.pdf`);
+  assert.equal(pdfPart.disposition, "attachment");
+  assert.equal(pdfPart.body.subarray(0, 5).toString("latin1"), "%PDF-");
+  assert.ok(attachmentsOf(deliveredRaw).some((p) => p.contentType === "image/png" && p.contentId !== null), "logo");
   // Aynı olaylar yeniden işlense de e-posta çoğalmaz
   await prisma.outboxEvent.updateMany({ data: { publishedAt: null } });
   await processOutbox();

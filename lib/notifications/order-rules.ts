@@ -9,7 +9,7 @@
  * | order.paid (kart)         | Sipariş alındı/ödeme alındı + sözleşmeler    | Yeni sipariş (ödendi)      |
  * | order.paid (havale)       | Ödemeniz alındı                              | —                          |
  * | order.paid (kapıda tahsil)| — (teslim e-postası yeterli)                 | —                          |
- * | order.status_changed      | Teslim edildi / İptal edildi                 | Müşteri iptal ettiyse bilgi |
+ * | order.status_changed      | Teslim edildi (+ fatura PDF eki) / İptal     | Müşteri iptal ettiyse bilgi |
  * | order.shipped             | Kargoya verildi (takip no)                   | —                          |
  * | order.refunded            | İadeniz yapıldı                              | —                          |
  * | order.payment_reminder    | Havale hatırlatma (son ödeme sonrası gitmez) | —                          |
@@ -46,6 +46,7 @@ import {
   reviewPublishedStoreEmail,
 } from "@/lib/email/templates/store";
 import type { RenderedEmail } from "@/lib/email/templates/account";
+import { invoiceFileName, renderInvoicePdf } from "@/lib/invoice/pdf";
 import { addressText, loadOrderEmailData, type OrderEmailData } from "./order-data";
 import type { EmailDraft } from "./queue";
 import type { RuleContext } from "./rules";
@@ -153,7 +154,17 @@ const statusChanged: Handler = async (event, ctx) => {
   const to = str(p.to);
   const d = await orderData(event);
   if (!d) return [];
-  if (to === "DELIVERED") return toCustomer(d, "ORDER_DELIVERED", orderDeliveredEmail(d));
+  if (to === "DELIVERED") {
+    // Fatura PDF'i (lib/invoice/pdf.ts); üretilemezse hata yukarı çıkar, olay yeniden denenir (faturasız gitmez)
+    const pdf = await renderInvoicePdf(d, { issuedAt: d.invoiceIssuedAt ?? new Date() });
+    const invoice = {
+      filename: invoiceFileName(d.reference),
+      contentType: "application/pdf",
+      content: Buffer.from(pdf).toString("base64"),
+      encoding: "base64" as const,
+    };
+    return toCustomer(d, "ORDER_DELIVERED", { ...orderDeliveredEmail(d), attachments: [invoice] });
+  }
   if (to === "CANCELLED") {
     // İade kaydıyla birlikte kapanan sipariş: iade e-postası iptali de söyler (tek e-posta)
     if (str(p.refundId)) return [];

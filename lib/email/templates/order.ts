@@ -268,7 +268,8 @@ export function orderShippedEmail(d: OrderEmailData, shipmentId: string, additio
 
 /**
  * "Ürünleri değerlendir" sipariş sayfasının değerlendirme bölümüne gider: üye olmadan verilmiş siparişte kod
- * gerekmez (kullanıcı kararı 2026-10-14), üyelik siparişinde müşteri hesabıyla giriş yapar.
+ * gerekmez (kullanıcı kararı 2026-10-14), üyelik siparişinde müşteri hesabıyla giriş yapar. Fatura PDF'ini kural
+ * ekler (order-rules → lib/invoice/pdf.ts).
  */
 export function orderDeliveredEmail(d: OrderEmailData): RenderedEmail {
   return customerEmail(d, {
@@ -278,6 +279,7 @@ export function orderDeliveredEmail(d: OrderEmailData): RenderedEmail {
     blocks: [
       hello(d),
       paragraph([orderNo(d), " numaralı siparişiniz teslim edildi. Afiyet olsun!"]),
+      paragraph("Faturanızı bu e-postanın ekinde (PDF) bulabilirsiniz."),
       heading("Ürünlerimizi nasıl buldunuz?"),
       paragraph("Değerlendirmeniz ürün sayfasında yayınlanır ve ürünü merak eden diğer müşterilerimize yol gösterir."),
       products(d, false),

@@ -15,11 +15,13 @@ import { siteUrl } from "./brand";
 import { emailMode, smtpConfigFingerprint, smtpConfigFromEnv, type EmailMode } from "./config";
 import { EMAIL_LOGO } from "./layout";
 
-/** E-postaya eklenen metin dosyası (ör. siparişe özel sözleşmeler) */
+/** E-postaya eklenen dosya (ör. teslim e-postasında fatura PDF'i) */
 export interface EmailAttachment {
   filename: string;
   contentType: string;
+  /** Metin; ikili dosyada (PDF) base64 */
   content: string;
+  encoding?: "base64";
 }
 
 export interface OutgoingEmail {
@@ -156,6 +158,7 @@ async function withAttachments(message: OutgoingEmail): Promise<{ html: string; 
     filename: a.filename,
     content: a.content,
     contentType: a.contentType,
+    encoding: a.encoding,
   }));
   let html = message.html;
   const logoSrc = `cid:${EMAIL_LOGO.cid}`;
