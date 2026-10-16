@@ -126,5 +126,6 @@ export const MOCK_REVIEWS: MockReview[] = REVIEWS.map((r, i) => ({
 }));
 
 export function getPublishedMockReviews(): MockReview[] {
-  return MOCK_REVIEWS.filter((r) => r.isPublished).sort(bySort);
+  // En yeni üstte; aynı tarihliler sortOrder'a göre (DB sürümüyle aynı)
+  return MOCK_REVIEWS.filter((r) => r.isPublished).sort((a, b) => b.date.getTime() - a.date.getTime() || a.sortOrder - b.sortOrder);
 }

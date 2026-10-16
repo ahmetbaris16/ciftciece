@@ -28,7 +28,8 @@ export async function getPublishedReviews(): Promise<ReviewData[]> {
 
   const reviews = await prisma.review.findMany({
     where: { isPublished: true },
-    orderBy: { sortOrder: "asc" },
+    // En yeni üstte; aynı tarihliler sortOrder'a göre
+    orderBy: [{ date: "desc" }, { sortOrder: "asc" }],
   });
 
   return reviews.map((r) => ({
