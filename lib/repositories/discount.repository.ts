@@ -291,6 +291,19 @@ export async function endDiscount(id: string, adminId: string, now = new Date())
 }
 
 /**
+ * Süren TÜM indirimleri şimdi bitirir (acil durum: yanlış oran, yanlış fiyat). Kayıtlar silinmez; bitirilen sayısı döner.
+ * Bitişten sonra ürünler eski fiyatına döner; sepet ve ödeme sunucudaki güncel fiyatı kullanır.
+ */
+export async function endAllDiscounts(adminId: string, now = new Date()): Promise<number> {
+  if (!USE_DB || discountsUnavailable()) return 0;
+  const { count } = await prisma.productDiscount.updateMany({
+    where: activeDiscountWhere(now),
+    data: { endedAt: now, endedById: adminId },
+  });
+  return count;
+}
+
+/**
  * Süren indirimin bitiş anını değiştirir (uzatma ya da kısaltma). Fiyatlar değişmez: eski fiyat indirimin başladığı
  * andaki hesaptır, kampanya tarihleri sitede yeni bitişle yazar. Etkin değilse (bitmiş/bulunamadı) null.
  */

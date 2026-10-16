@@ -15,6 +15,7 @@ import { getProductBySlug, getCartVariants } from "@/lib/repositories";
 import {
   changeDiscountEnd,
   discountsEndedRecently,
+  endAllDiscounts,
   endDiscount,
   startDiscounts,
 } from "@/lib/repositories/discount.repository";
@@ -220,4 +221,30 @@ test("tek etkin indirim (yenisi eskisini bitirir); oran %1–99, süre sınırı
   const logs = await prisma.variantPriceLog.findMany({ where: { variantId: variant.id }, orderBy: { createdAt: "asc" } });
   assert.deepEqual(logs.map((l) => l.priceKurus), [35_000, 45_000, 47_500]);
   assert.equal(logs[0].createdAt.getTime(), product.createdAt.getTime());
+});
+
+test("acil durum: süren bütün indirimler tek adımda biter; ürünler eski fiyatına döner; bitmişler etkilenmez", async () => {
+  const a = await createProduct({ priceKurus: 35_000, stock: 5 });
+  const b = await createProduct({ priceKurus: 20_000, stock: 5 });
+  const c = await createProduct({ priceKurus: 10_000, stock: 5 });
+  const endsAt = days(5);
+  await startDiscounts({ productIds: [a.product.id, b.product.id, c.product.id], percent: 20, endsAt, adminId: "admin-1" });
+  const before = await getProductBySlug(a.product.slug);
+  assert.equal(before?.variants[0].priceKurus, 28_000);
+
+  // c'nin indirimi önceden bitmiş (zaten bitmiş olan sayıya katılmaz)
+  const cRow = await prisma.productDiscount.findFirstOrThrow({ where: { productId: c.product.id } });
+  assert.ok(await endDiscount(cRow.id, "admin-1"));
+
+  assert.equal(await endAllDiscounts("admin-2"), 2, "yalnız süren iki indirim bitti");
+  for (const p of [a.product, b.product]) {
+    const after = await getProductBySlug(p.slug);
+    assert.equal(after?.discount ?? null, null);
+    assert.equal(after?.variants[0].compareAtPriceKurus ?? null, null);
+  }
+  assert.equal((await getProductBySlug(a.product.slug))?.variants[0].priceKurus, 35_000);
+  const ended = await prisma.productDiscount.findMany({ where: { productId: { in: [a.product.id, b.product.id] } } });
+  assert.ok(ended.every((d) => d.endedAt && d.endedById === "admin-2"), "kayıtlar silinmedi, kim bitirdi yazıldı");
+  // İkinci çağrıda bitirilecek indirim yok
+  assert.equal(await endAllDiscounts("admin-2"), 0);
 });

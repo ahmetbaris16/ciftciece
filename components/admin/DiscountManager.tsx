@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Admin — İndirimler: süren indirimler (bitiş gününü değiştir / Bitir), yeni indirim (oran, bitiş günü, ürün seçimi,
+ * Admin — İndirimler: süren indirimler (bitiş gününü değiştir / Hemen bitir / Hepsini hemen bitir), yeni indirim (oran, bitiş günü, ürün seçimi,
  * fiyat önizlemesi) ve geçmiş. Oranı ve süreyi yönetici belirler (yalnız %1–99 ve gelecekte bir bitiş günü). Önizlemedeki eski fiyat sunucunun hesapladığı "son 10 günün en düşük fiyatı"dır; indirim başlarken sunucu
  * aynı hesabı yeniden yapar (istemcinin gönderdiği fiyat kullanılmaz).
  */
@@ -59,6 +59,7 @@ export default function DiscountManager({
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [ending, setEnding] = useState<string | null>(null);
+  const [endingAll, setEndingAll] = useState(false);
   // Bitiş günü değiştirilen süren indirim
   const [endEdit, setEndEdit] = useState<{ id: string; value: string } | null>(null);
   const [savingEnd, setSavingEnd] = useState(false);
@@ -132,7 +133,7 @@ export default function DiscountManager({
   };
 
   const end = async (row: DiscountRow) => {
-    if (!window.confirm(`“${row.productName}” indirimi şimdi bitsin mi? Ürün eski fiyatına döner.`)) return;
+    if (!window.confirm(`“${row.productName}” indirimi şimdi bitsin mi? Ürün hemen eski fiyatına döner; sitede indirim görünmez.`)) return;
     setEnding(row.id);
     setStatus(null);
     try {
@@ -149,6 +150,33 @@ export default function DiscountManager({
       setStatus({ kind: "error", text: "Bağlantı hatası. Tekrar deneyin." });
     } finally {
       setEnding(null);
+    }
+  };
+
+  // Acil durum: süren bütün indirimleri tek adımda bitirir (yanlış oran/fiyat girildiyse)
+  const endAll = async () => {
+    if (
+      !window.confirm(
+        `Süren ${active.length} indirimin hepsi şimdi bitsin mi? Bu ürünler hemen eski fiyatına döner; sitede indirim görünmez. Kayıtlar geçmişte kalır.`
+      )
+    )
+      return;
+    setEndingAll(true);
+    setStatus(null);
+    try {
+      const res = await fetch("/api/admin/discounts/end-all", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) setStatus({ kind: "error", text: data?.error ?? "İndirimler bitirilemedi." });
+      else setStatus({ kind: "ok", text: `${data?.result?.ended ?? active.length} indirim bitti; ürünler eski fiyatında.` });
+      router.refresh();
+    } catch {
+      setStatus({ kind: "error", text: "Bağlantı hatası. Tekrar deneyin." });
+    } finally {
+      setEndingAll(false);
     }
   };
 
@@ -186,6 +214,11 @@ export default function DiscountManager({
       <section className={s.card} aria-labelledby="suren">
         <h2 id="suren" className={s.h2}>
           Süren indirimler {active.length > 0 && <span className={s.count}>{active.length}</span>}
+          {active.length > 1 && (
+            <button type="button" className={`${s.dangerBtn} ${s.h2Action}`} onClick={endAll} disabled={endingAll || ending !== null}>
+              {endingAll ? "Bitiriliyor…" : "Hepsini hemen bitir"}
+            </button>
+          )}
         </h2>
         {active.length === 0 ? (
           <p className={s.muted}>Şu an süren indirim yok.</p>
@@ -233,8 +266,8 @@ export default function DiscountManager({
                     >
                       Bitiş gününü değiştir
                     </button>
-                    <button type="button" className={s.secondaryBtn} onClick={() => end(row)} disabled={ending === row.id}>
-                      {ending === row.id ? "Bitiriliyor…" : "Bitir"}
+                    <button type="button" className={s.dangerBtn} onClick={() => end(row)} disabled={ending === row.id || endingAll}>
+                      {ending === row.id ? "Bitiriliyor…" : "Hemen bitir"}
                     </button>
                   </div>
                 )}
