@@ -4,7 +4,7 @@
  * "ödenmiş" sipariş veremez (kartı "yakında" görür). Geliştirmede herkese açıktır.
  */
 
-import { getCurrentUser } from "@/lib/auth/session";
+import { isAdminViewer } from "@/lib/auth/session";
 import type { CardAvailability } from "./methods";
 import { cardPaymentMode } from "./provider";
 
@@ -13,8 +13,7 @@ export async function cardAvailabilityForRequest(): Promise<CardAvailability> {
   if (mode === "live") return "ready";
   if (mode === "off") return "unavailable";
   if (process.env.NODE_ENV === "production") {
-    const user = await getCurrentUser().catch(() => null);
-    if (user?.role !== "ADMIN") return "unavailable";
+    if (!(await isAdminViewer())) return "unavailable";
   }
   return mode === "demo" ? "demo" : "test";
 }

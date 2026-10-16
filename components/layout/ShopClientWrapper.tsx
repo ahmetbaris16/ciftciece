@@ -12,7 +12,7 @@ import type { ReactNode } from "react";
 
 export default function ShopClientWrapper({ children }: { children: ReactNode }) {
   return (
-    <SessionProvider refetchOnWindowFocus={false}>
+    <SessionProvider basePath="/api/auth" refetchOnWindowFocus={false}>
       <CartProvider>
         {children}
         <CartAddedDrawer />

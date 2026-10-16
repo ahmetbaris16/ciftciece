@@ -8,14 +8,14 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { hash } from "bcryptjs";
 import { prisma } from "@/lib/db/prisma";
-import { authOptions, LOGIN_RATE_LIMITED } from "@/lib/auth/auth-options";
+import { adminAuthOptions, LOGIN_RATE_LIMITED } from "@/lib/auth/auth-options";
 import { setupTestDb } from "./helpers/db";
 
 setupTestDb();
 
 type Authorize = (credentials: Record<string, string>, req: { headers: Record<string, string> }) => Promise<unknown>;
 const adminAuthorize = (
-  authOptions.providers.find((p) => p.id === "credentials") as unknown as { options: { authorize: Authorize } }
+  adminAuthOptions.providers.find((p) => p.id === "credentials") as unknown as { options: { authorize: Authorize } }
 ).options.authorize;
 
 const PASSWORD = "Dogru-Sifre-123";

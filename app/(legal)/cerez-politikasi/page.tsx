@@ -35,8 +35,13 @@ export default function CerezPolitikasiPage() {
         <tbody>
           <tr>
             <td>next-auth.session-token (güvenli bağlantıda __Secure- önekiyle)</td>
-            <td>Üye ya da yönetici girişinin açık kalması</td>
-            <td>Üyelerde 30 gün, yönetimde 8 saat; çıkış yapınca silinir</td>
+            <td>Üye girişinin açık kalması</td>
+            <td>Üyelerde 30 gün; çıkış yapınca silinir</td>
+          </tr>
+          <tr>
+            <td>ce-admin.session-token (güvenli bağlantıda __Secure- önekiyle)</td>
+            <td>Yalnız yönetim paneline giren yetkililerin girişinin açık kalması</td>
+            <td>8 saat; çıkış yapınca silinir</td>
           </tr>
           <tr>
             <td>next-auth.csrf-token (güvenli bağlantıda __Host- önekiyle)</td>

@@ -6,7 +6,7 @@
 
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
-import { authOptions } from "./auth-options";
+import { adminAuthOptions, authOptions } from "./auth-options";
 import { isStoreRole } from "./roles";
 
 export interface SessionUser {
@@ -17,7 +17,7 @@ export interface SessionUser {
 }
 
 /**
- * Geçerli session'ı döner. Yoksa null.
+ * Mağaza oturumu (üye ya da kendi hesabıyla alışveriş yapan yönetici/personel). Yoksa null.
  */
 export async function getCurrentUser(): Promise<SessionUser | null> {
   const session = await getServerSession(authOptions);
@@ -26,11 +26,29 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
 }
 
 /**
+ * Yönetim paneli oturumu (ayrı çerez, /api/admin-auth). Mağaza oturumu burada geçerli sayılmaz. Yoksa null.
+ */
+export async function getAdminSessionUser(): Promise<SessionUser | null> {
+  const session = await getServerSession(adminAuthOptions);
+  if (!session?.user) return null;
+  return session.user as SessionUser;
+}
+
+/**
+ * Bu istekte yönetici var mı: panel oturumu ya da mağazaya yönetici hesabıyla girilmiş oturum (demo/test kart
+ * ödemesi yalnız yöneticiye açıktır; yönetici panelden de mağazadan da girmiş olabilir).
+ */
+export async function isAdminViewer(): Promise<boolean> {
+  const [panel, shop] = await Promise.all([getAdminSessionUser().catch(() => null), getCurrentUser().catch(() => null)]);
+  return panel?.role === "ADMIN" || shop?.role === "ADMIN";
+}
+
+/**
  * Admin rolü gerektirir. Yoksa login sayfasına yönlendirir.
  * Server component'larda kullanılır.
  */
 export async function requireAdmin(): Promise<SessionUser> {
-  const user = await getCurrentUser();
+  const user = await getAdminSessionUser();
   if (!user || user.role !== "ADMIN") {
     redirect("/admin/giris");
   }
@@ -41,7 +59,7 @@ export async function requireAdmin(): Promise<SessionUser> {
  * Staff veya Admin rolü gerektirir.
  */
 export async function requireStaff(): Promise<SessionUser> {
-  const user = await getCurrentUser();
+  const user = await getAdminSessionUser();
   if (!user || (user.role !== "ADMIN" && user.role !== "STAFF")) {
     redirect("/admin/giris");
   }
@@ -73,7 +91,7 @@ export async function requireCustomer(returnTo: string): Promise<SessionUser> {
  * Redirect yerine null döner — caller 401 response verir.
  */
 export async function requireAdminApi(): Promise<SessionUser | null> {
-  const user = await getCurrentUser();
+  const user = await getAdminSessionUser();
   if (!user || user.role !== "ADMIN") {
     return null;
   }

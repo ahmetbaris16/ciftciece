@@ -8,7 +8,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { hash } from "bcryptjs";
 import { prisma } from "@/lib/db/prisma";
-import { authOptions, LOGIN_RATE_LIMITED } from "@/lib/auth/auth-options";
+import { adminAuthOptions, authOptions, LOGIN_RATE_LIMITED } from "@/lib/auth/auth-options";
 import { isStaffRole, isStoreRole } from "@/lib/auth/roles";
 import { setupTestDb } from "./helpers/db";
 
@@ -17,10 +17,11 @@ setupTestDb();
 type Authorize = (credentials: Record<string, string>, req: { headers: Record<string, string> }) => Promise<unknown>;
 type ProviderShape = { id: string; options: { id?: string; authorize: Authorize } };
 // CredentialsProvider'ın kendi id'si hep "credentials"; verilen id options.id'de durur (NextAuth çalışırken birleştirir)
-const authorizeOf = (id: string) =>
-  (authOptions.providers as unknown as ProviderShape[]).find((p) => (p.options.id ?? p.id) === id)!.options.authorize;
+const authorizeOf = (id: string, options = authOptions) =>
+  (options.providers as unknown as ProviderShape[]).find((p) => (p.options.id ?? p.id) === id)!.options.authorize;
 const storeAuthorize = authorizeOf("customer");
-const adminAuthorize = authorizeOf("credentials");
+// Yönetim paneli girişi mağaza oturumundan ayrıdır (adminAuthOptions)
+const adminAuthorize = authorizeOf("credentials", adminAuthOptions);
 
 const PASSWORD = "Dogru-Sifre-123";
 const req = (ip: string) => ({ headers: { "x-forwarded-for": ip } });
