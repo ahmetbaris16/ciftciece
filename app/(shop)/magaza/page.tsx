@@ -28,16 +28,6 @@ const GALLERY_IMAGES = [
     caption: "Naturel Sızma Zeytinyağı",
   },
   {
-    src: "/images/products/zeytin/ciftciece-gemlik-zeytin-1kg.jpg",
-    alt: "Çiftçi Ece Gemlik zeytin 1 kg paket",
-    caption: "Gemlik Zeytin 1 kg",
-  },
-  {
-    src: "/images/atmosphere/magaza-zeytin-tepsi.jpg",
-    alt: "Mağazada kuru sele siyah zeytin",
-    caption: "Kuru Sele Zeytin",
-  },
-  {
     src: "/images/products/diger/kestane-sekeri-kavanoz.jpg",
     alt: "Bülent Dağlı kavanoz kestane şekeri",
     caption: "Kestane Şekeri",
@@ -46,6 +36,11 @@ const GALLERY_IMAGES = [
     src: "/images/store/magaza-zeytinyagi-raf.webp",
     alt: "Çiftçi Ece mağazasında zeytinyağı rafları",
     caption: "Zeytinyağı Rafımız",
+  },
+  {
+    src: "/images/atmosphere/yesil-zeytin.jpg",
+    alt: "Çiftçi Ece mağazasında yeşil zeytin",
+    caption: "Yeşil Zeytin",
   },
 ];
 
