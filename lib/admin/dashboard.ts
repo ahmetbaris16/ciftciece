@@ -57,6 +57,32 @@ export async function getAdminBadges(): Promise<AdminBadges> {
   return { attention, pendingTransfers, toShip, openRequests, newMessages, failedEmails };
 }
 
+/**
+ * Panelin kendiliğinden güncellenmesi için nabız: rozet sayıları ve "bir şey değişti mi" damgası (sipariş, talep ve
+ * mesaj sayıları + son değişiklik anları + rozetler). Kişisel veri yok. Damga değişince açık sayfa yenilenir
+ * (components/admin/AdminShell.tsx), yöneticinin elle yenilemesi gerekmez.
+ */
+export async function getAdminPulse(): Promise<{ badges: AdminBadges; stamp: string }> {
+  if (!USE_DB) return { badges: EMPTY, stamp: "" };
+  const [badges, orders, requests, messages] = await Promise.all([
+    getAdminBadges(),
+    prisma.order.aggregate({ _count: { _all: true }, _max: { updatedAt: true } }),
+    prisma.customerRequest.aggregate({ _count: { _all: true }, _max: { createdAt: true } }),
+    prisma.contactMessage.aggregate({ _count: { _all: true }, _max: { updatedAt: true } }),
+  ]);
+  const t = (d: Date | null) => d?.getTime() ?? 0;
+  const stamp = [
+    orders._count._all,
+    t(orders._max.updatedAt),
+    requests._count._all,
+    t(requests._max.createdAt),
+    messages._count._all,
+    t(messages._max.updatedAt),
+    Object.values(badges).join("-"),
+  ].join(".");
+  return { badges, stamp };
+}
+
 export interface DashboardStats {
   todayOrders: number;
   /** Bu ay alınan ödemeler (banka/havale onayı, kapıda tahsilat); test ödemeleri hariç */

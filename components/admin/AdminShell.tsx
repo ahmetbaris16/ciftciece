@@ -4,12 +4,15 @@
  * Admin iskeleti — yan menü (geniş ekran) / üst menü (telefon) + içerik.
  * Menüde bekleyen işler rozetle görünür (/api/admin/summary): kargolanacak siparişler, havale bekleyenler,
  * ödeme uyarısı, açık müşteri talepleri, okunmamış mesajlar, gönderilemeyen e-postalar.
+ * Panel açıkken kendini günceller: özet ucu birkaç saniyede bir yoklanır (sekme görünürken ve sekmeye dönünce);
+ * yeni sipariş, ödeme, talep ya da mesaj gelince (ya da başka sekmede bir işlem yapılınca) açık sayfa yenilenir,
+ * yöneticinin elle yenilemesi gerekmez. Yazılmakta olan formlar korunur (yalnız sunucu verisi yenilenir).
  */
 
 import Link from "next/link";
 import { signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { SessionUser } from "@/lib/auth/session";
 import type { AdminBadges } from "@/lib/admin/dashboard";
 import styles from "./AdminShell.module.css";
@@ -40,20 +43,63 @@ const NAV_ITEMS: Array<{ key: string; label: string; href: string; icon: string;
   { key: "ayarlar", label: "Ayarlar", href: "/admin/ayarlar", icon: "⚙️" },
 ];
 
+/** Özet ucunun yoklanma aralığı (yalnız sekme görünürken) */
+const POLL_MS = 10_000;
+
 export default function AdminShell({ user, activeSection, children }: AdminShellProps) {
   const router = useRouter();
   const [badges, setBadges] = useState<AdminBadges | null>(null);
+  // Son görülen değişim damgası: sayfa açılışında ve her sunucu yenilemesinden sonra "şu an gösterilen" durum
+  const stamp = useRef<string | null>(null);
+  const busy = useRef(false);
 
+  /** Özeti çeker; rozetleri günceller. `refreshOnChange`: damga değiştiyse açık sayfayı yeniler */
+  const check = useCallback(
+    async (refreshOnChange: boolean) => {
+      if (busy.current) return;
+      busy.current = true;
+      try {
+        const res = await fetch("/api/admin/summary", { cache: "no-store" });
+        // Oturum bitmiş: sunucu sayfası giriş sayfasına yönlendirir
+        if (res.status === 401) return void router.refresh();
+        if (!res.ok) return;
+        const d = (await res.json()) as { badges?: AdminBadges; stamp?: string };
+        if (d.badges) setBadges(d.badges);
+        if (typeof d.stamp === "string") {
+          const changed = stamp.current !== null && stamp.current !== d.stamp;
+          stamp.current = d.stamp;
+          if (changed && refreshOnChange) router.refresh();
+        }
+      } catch {
+        // Bağlantı kesildi: sonraki yoklamada yeniden denenir
+      } finally {
+        busy.current = false;
+      }
+    },
+    [router]
+  );
+
+  // Sayfa açılınca, sayfa değişince ve sunucu verisi yenilenince (kendi işlemimiz dahil: `children` yeni gelir)
+  // rozetler ve damga tazelenir; bu sayfa zaten güncel olduğundan burada yenileme tetiklenmez
   useEffect(() => {
-    let alive = true;
-    fetch("/api/admin/summary", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: { badges?: AdminBadges } | null) => alive && d?.badges && setBadges(d.badges))
-      .catch(() => undefined);
-    return () => {
-      alive = false;
+    const first = window.setTimeout(() => void check(false), 0);
+    return () => window.clearTimeout(first);
+  }, [check, activeSection, children]);
+
+  // Açık panelde yeni sipariş/ödeme/mesaj/talep gelirse sayfayı kendiliğinden yenile
+  useEffect(() => {
+    const tick = () => {
+      if (document.visibilityState === "visible") void check(true);
     };
-  }, [activeSection]);
+    const id = window.setInterval(tick, POLL_MS);
+    document.addEventListener("visibilitychange", tick);
+    window.addEventListener("focus", tick);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", tick);
+      window.removeEventListener("focus", tick);
+    };
+  }, [check]);
 
   const logout = () =>
     // NEXTAUTH_URL sitenin açıldığı adresten farklıysa callbackUrl yanlış porta gider; yönlendirme burada
