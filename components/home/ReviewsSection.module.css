@@ -569,6 +569,26 @@
   color: #5f6368;
 }
 
+/* Yazar rozeti (ör. "Yerel Rehber"): küçük simge + metin, ad satırının altında */
+.itemBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28em;
+  color: #3c4043;
+  font-weight: 500;
+}
+
+.itemBadgeIcon {
+  width: 1.05em;
+  height: 1.05em;
+  flex-shrink: 0;
+  fill: #e8710a;
+}
+
+.itemBadgeStar {
+  fill: #ffffff;
+}
+
 .itemRating {
   display: flex;
   align-items: center;

@@ -798,7 +798,7 @@ export const PRODUCTS = [
 // Ana sayfada en yeni tarih en üstte görünür (sortOrder yalnız aynı tarihlilerin sırasını belirler).
 export const REVIEWS = [
   // 2026-10-16: Google'da "bir ay önce" yazıyordu (yaklaşık 2026-09-16; ekranda yalnız ay ve yıl görünür). Yerel Rehber, 25 yorum.
-  { authorName: "Huseyin Celikkiran", rating: 5, text: "Ürünleri kaliteli ve ürün paketlemesi çok özenli. Emeğinize sağlık", date: new Date("2026-09-16"), source: "google", sortOrder: 4 },
+  { authorName: "Huseyin Celikkiran", authorBadge: "Yerel Rehber", rating: 5, text: "Ürünleri kaliteli ve ürün paketlemesi çok özenli. Emeğinize sağlık", date: new Date("2026-09-16"), source: "google", sortOrder: 4 },
   { authorName: "Ayşenur", rating: 5, text: "Dağlı kestane şekeri ürünleri alabileceğiniz güler yüzlü sahibi olan dükkan", date: new Date("2026-06-26"), source: "google", sortOrder: 1 },
   { authorName: "Uğur Mestanlar", rating: 5, text: "", date: new Date("2026-06-26"), source: "google", sortOrder: 2 },
   { authorName: "Suat Çiftçi", rating: 5, text: "", date: new Date("2026-06-26"), source: "google", sortOrder: 3 },

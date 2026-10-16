@@ -39,6 +39,8 @@ import styles from "./ReviewsSection.module.css";
 interface Review {
   id: string;
   authorName: string;
+  /** Yazarın rozeti (ör. "Yerel Rehber") */
+  authorBadge?: string | null;
   rating: number;
   text: string;
   date: string;
@@ -189,6 +191,16 @@ const UNIFORM_HOURS = HOURS.every((h) => h.isOpen === HOURS[0].isOpen && h.open 
 function statusDetail(s: StoreStatus): string {
   if (s.isOpen) return s.closesAt === "00:00" ? "gece yarısına kadar" : `${s.closesAt}'e kadar`;
   return s.opensAt ? `${s.opensAt}'de açılıyor` : "";
+}
+
+/** Yazar rozeti için küçük simge (dekoratif; metin yanında) */
+function GuideIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className={styles.itemBadgeIcon} aria-hidden="true">
+      <path d="M12 2.2a7.3 7.3 0 0 0-7.3 7.3c0 5.2 7.3 12.3 7.3 12.3s7.3-7.1 7.3-12.3A7.3 7.3 0 0 0 12 2.2Z" />
+      <path className={styles.itemBadgeStar} d="m12 6.6 1.35 2.75 3.03.44-2.19 2.14.52 3.02L12 13.5l-2.71 1.45.52-3.02-2.19-2.14 3.03-.44Z" />
+    </svg>
+  );
 }
 
 function Stars({ rating, className = "" }: { rating: number; className?: string }) {
@@ -482,8 +494,17 @@ export default function ReviewsSection({ reviews }: ReviewsSectionProps) {
                               </span>
                               <div className={styles.itemWho}>
                                 <p className={styles.itemName}>{review.authorName}</p>
-                                {sourceLabel(review.source) && (
-                                  <p className={styles.itemMeta}>{sourceLabel(review.source)}</p>
+                                {(review.authorBadge || sourceLabel(review.source)) && (
+                                  <p className={styles.itemMeta}>
+                                    {review.authorBadge && (
+                                      <span className={styles.itemBadge}>
+                                        <GuideIcon />
+                                        {review.authorBadge}
+                                      </span>
+                                    )}
+                                    {review.authorBadge && sourceLabel(review.source) && " · "}
+                                    {sourceLabel(review.source)}
+                                  </p>
                                 )}
                               </div>
                             </div>

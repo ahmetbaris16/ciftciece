@@ -552,6 +552,8 @@ model Review {
   id           String   @id @default(cuid())
   authorName   String
   authorAvatar String?  @db.VarChar(500) // URL veya initials için null
+  // Yazarın Google'daki rozeti (ör. "Yerel Rehber"); yoksa null. Ana sayfadaki yorum kartında adın altında görünür
+  authorBadge  String?  @db.VarChar(60)
   rating       Int      // 1-5
   text         String   @db.Text
   date         DateTime

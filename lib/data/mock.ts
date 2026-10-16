@@ -103,6 +103,7 @@ export interface MockReview {
   id: string;
   authorName: string;
   authorAvatar: string | null;
+  authorBadge: string | null;
   rating: number;
   text: string;
   date: Date;
@@ -116,6 +117,7 @@ export const MOCK_REVIEWS: MockReview[] = REVIEWS.map((r, i) => ({
   id: `mock-rev-${i + 1}`,
   authorName: r.authorName,
   authorAvatar: null,
+  authorBadge: ("authorBadge" in r && r.authorBadge) || null,
   rating: r.rating,
   text: r.text,
   date: r.date,

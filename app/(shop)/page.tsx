@@ -31,6 +31,7 @@ export default async function HomePage() {
   const reviewsForClient = reviews.map((r) => ({
     id: r.id,
     authorName: r.authorName,
+    authorBadge: r.authorBadge,
     rating: r.rating,
     text: r.text,
     date: r.date.toISOString(),

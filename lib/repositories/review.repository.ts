@@ -11,6 +11,8 @@ export interface ReviewData {
   id: string;
   authorName: string;
   authorAvatar: string | null;
+  /** Yazarın rozeti (ör. "Yerel Rehber") */
+  authorBadge: string | null;
   rating: number;
   text: string;
   date: Date;
@@ -36,6 +38,7 @@ export async function getPublishedReviews(): Promise<ReviewData[]> {
     id: r.id,
     authorName: r.authorName,
     authorAvatar: r.authorAvatar,
+    authorBadge: r.authorBadge,
     rating: r.rating,
     text: r.text,
     date: r.date,

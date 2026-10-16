@@ -14,6 +14,7 @@ setupTestDb();
 
 const review = (authorName: string, date: string, sortOrder: number, isPublished = true) => ({
   authorName,
+  authorBadge: null as string | null,
   rating: 5,
   text: "",
   date: new Date(date),
@@ -48,4 +49,16 @@ test("katalogdaki yorumlar: yeni yorum var, en yenisi başta, kimse tarihsiz de�
   assert.ok(newest.text.length > 0);
   assert.ok(REVIEWS.every((r) => !Number.isNaN(r.date.getTime())));
   assert.equal(new Set(REVIEWS.map((r) => `${r.source}:${r.authorName}`)).size, REVIEWS.length, "seed yazar+kaynak ile tekilleştirir");
+});
+
+test("yazar rozeti (Yerel Rehber) depodan gelir; rozetsiz yorumda boş; katalogdaki yeni yorum rozetli", async () => {
+  await prisma.review.createMany({
+    data: [{ ...review("Rozetli", "2026-09-16", 1), authorBadge: "Yerel Rehber" }, review("Rozetsiz", "2026-06-26", 2)],
+  });
+  const list = await getPublishedReviews();
+  assert.equal(list.find((r) => r.authorName === "Rozetli")?.authorBadge, "Yerel Rehber");
+  assert.equal(list.find((r) => r.authorName === "Rozetsiz")?.authorBadge, null);
+
+  const guide = REVIEWS.find((r) => r.authorName === "Huseyin Celikkiran") as { authorBadge?: string } | undefined;
+  assert.equal(guide?.authorBadge, "Yerel Rehber");
 });

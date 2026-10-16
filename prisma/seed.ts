@@ -89,7 +89,14 @@ async function main() {
       where: { authorName: r.authorName, source: r.source },
     });
     if (exists) {
-      console.log(`  ↷ ${r.authorName} (zaten var)`);
+      // Sonradan eklenen rozet (ör. "Yerel Rehber") var olan yoruma da işlenir; başka alana dokunulmaz
+      const badge = "authorBadge" in r ? r.authorBadge : undefined;
+      if (badge && !exists.authorBadge) {
+        await prisma.review.update({ where: { id: exists.id }, data: { authorBadge: badge } });
+        console.log(`  ✓ ${r.authorName} (rozet eklendi: ${badge})`);
+      } else {
+        console.log(`  ↷ ${r.authorName} (zaten var)`);
+      }
       continue;
     }
     await prisma.review.create({ data: { ...r, isPublished: true } });
