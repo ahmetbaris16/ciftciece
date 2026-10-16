@@ -42,6 +42,11 @@ const GALLERY_IMAGES = [
     alt: "Bülent Dağlı kavanoz kestane şekeri",
     caption: "Kestane Şekeri",
   },
+  {
+    src: "/images/store/magaza-zeytinyagi-raf.webp",
+    alt: "Çiftçi Ece mağazasında zeytinyağı rafları",
+    caption: "Zeytinyağı Rafımız",
+  },
 ];
 
 export default function MagazaPage() {
