@@ -32,7 +32,7 @@ test("hesap: sınırın altında sabit ücret, sınırda ve üstünde ücretsiz,
 test("eski biçim (desi tarifesi, koliler): ücret girilmemiş sayılır, sınır korunur; bozuk değer varsayılana döner", () => {
   const legacy = JSON.stringify({ freeThresholdKurus: 250_000, tariff: { bands: [{ maxDesi: 3, priceKurus: 9_000 }] }, boxes: [], packaging: {} });
   assert.deepEqual(parseShippingSettings(legacy), { feeKurus: null, freeThresholdKurus: 250_000 });
-  assert.deepEqual(parseShippingSettings("{bozuk"), { feeKurus: null, freeThresholdKurus: 300_000 });
+  assert.deepEqual(parseShippingSettings("{bozuk"), { feeKurus: 40_000, freeThresholdKurus: 300_000 });
   assert.deepEqual(parseShippingSettings(JSON.stringify({ feeKurus: 12_500, freeThresholdKurus: 0 })), { feeKurus: 12_500, freeThresholdKurus: 0 });
 });
 
@@ -70,4 +70,28 @@ test("sipariş: sabit kargo ücreti toplama eklenir; sınırın üstünde ücret
   const big = await place(6); // 3.000 TL: sınırda ücretsiz
   assert.deepEqual([big.subtotalKurus, big.shippingKurus, big.totalKurus], [300_000, 0, 300_000]);
   assert.equal((big.shippingAddress as { shippingMode?: string }).shippingMode, "free");
+});
+
+test("ayar kaydı yokken varsayılan: 400 TL sabit kargo, 3.000 TL ve üzeri ücretsiz (2026-10-18)", async () => {
+  assert.deepEqual(parseShippingSettings(null), { feeKurus: 40_000, freeThresholdKurus: 300_000 });
+  assert.equal(await prisma.siteSetting.count({ where: { key: SHIPPING_SETTING_KEY } }), 0);
+  await enableBankTransfer();
+  const { variant } = await createProduct({ priceKurus: 50_000, stock: 20 });
+
+  const quote = await quoteRoute(jsonRequest("http://localhost/api/shipping/quote", { items: [{ variantId: variant.id, quantity: 1 }] }));
+  assert.deepEqual((await quote.json()).quote, { status: "priced", carrierName: "Yurtiçi Kargo", feeKurus: 40_000 });
+
+  const place = async (quantity: number) => {
+    const res = await checkout(
+      jsonRequest("http://localhost/api/checkout", checkoutBody([{ variantId: variant.id, quantity }], { paymentMethod: "BANK_TRANSFER" }))
+    );
+    assert.equal(res.status, 200);
+    const { orderId } = await res.json();
+    return prisma.order.findUniqueOrThrow({ where: { id: orderId } });
+  };
+  const small = await place(5); // 2.500 TL: 400 TL kargo
+  assert.deepEqual([small.subtotalKurus, small.shippingKurus, small.totalKurus], [250_000, 40_000, 290_000]);
+  assert.equal((small.shippingAddress as { shippingMode?: string }).shippingMode, "prepaid");
+  const big = await place(6); // 3.000 TL: ücretsiz
+  assert.deepEqual([big.shippingKurus, big.totalKurus], [0, 300_000]);
 });

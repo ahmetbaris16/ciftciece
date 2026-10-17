@@ -109,7 +109,7 @@ async function main() {
     await prisma.siteSetting.create({
       data: { key: SHIPPING_SETTING_KEY, value: JSON.stringify(DEFAULT_SHIPPING_SETTINGS) },
     });
-    console.log("\n🚚 Kargo ayarları oluşturuldu (firma ücretleri admin panelden girilmeli)");
+    console.log("\n🚚 Kargo ayarları oluşturuldu (400 TL sabit, 3.000 TL ve üzeri ücretsiz; admin panelden değişir)");
   }
 
   // 5. Yönetici — yalnız yoksa açılır, şifre ASLA ezilmez (Y-05). Gerçek e-posta ve güçlü şifre şart:

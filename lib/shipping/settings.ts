@@ -3,8 +3,8 @@
  *
  * Tek kargo firması: Yurtiçi Kargo (yalnız yurt içi gönderim).
  * Ücret sabittir: her siparişe aynı kargo ücreti eklenir; ara toplam ücretsiz kargo sınırına ulaşırsa kargo
- * ücretsizdir. Ücret admin panelinden (Ayarlar → Kargo) girilir; girilmemişse tutar uydurulmaz: gönderi ALICI
- * ÖDEMELİ olur (müşteri kargo ücretini teslimatta Yurtiçi Kargo'ya öder).
+ * ücretsizdir. Ücret admin panelinden (Ayarlar → Kargo) değiştirilir; kayıt yoksa varsayılan 400 TL. Kayıtta ücret
+ * açıkça boş bırakılmışsa (eski kayıt) tutar uydurulmaz: gönderi ALICI ÖDEMELİ olur.
  *
  * Eski sürümdeki desi tarifesi / koli / paket ölçüsü alanları DB'deki JSON'da kalabilir; okunmaz.
  */
@@ -28,8 +28,12 @@ export interface PublicShippingInfo {
   carrierName: string;
 }
 
+/**
+ * Ayar kaydı hiç yokken (yeni kurulum, seed) geçerli değerler. 400 TL sabit kargo + 3.000 TL ve üzeri ücretsiz:
+ * işletme kararı, 2026-10-18. Admin panelinden kaydedilen değer her zaman bunun önüne geçer.
+ */
 export const DEFAULT_SHIPPING_SETTINGS: ShippingSettings = {
-  feeKurus: null,
+  feeKurus: 40000, // 400 TL
   freeThresholdKurus: 300000, // 3.000 TL
 };
 
