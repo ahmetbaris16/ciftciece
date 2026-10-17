@@ -8,8 +8,6 @@ import { prisma } from "@/lib/db/prisma";
 import { USE_DB } from "@/lib/data/source";
 import { getBusinessInfo } from "@/lib/business/business.repository";
 import { missingBusinessFields } from "@/lib/business/info";
-import { getPaymentSettings } from "@/lib/payment/settings.repository";
-import { isBankTransferReady } from "@/lib/payment/methods";
 import { isTestProvider, paymentProviderStatus } from "@/lib/payment/provider";
 import { getEmailStatus } from "@/lib/email/health";
 import { getShippingSettings } from "@/lib/shipping/shipping.repository";
@@ -161,9 +159,8 @@ export interface CheckItem {
 
 /** Yayın ve banka (sanal POS) incelemesi kontrol listesi */
 export async function getLaunchChecklist(): Promise<CheckItem[]> {
-  const [business, payment, shipping, cron, mail] = await Promise.all([
+  const [business, shipping, cron, mail] = await Promise.all([
     getBusinessInfo(),
-    getPaymentSettings(),
     getShippingSettings(),
     USE_DB ? lastCronRun().catch(() => null) : Promise.resolve(null),
     getEmailStatus(),
@@ -185,14 +182,6 @@ export async function getLaunchChecklist(): Promise<CheckItem[]> {
       state: missing.length === 0 ? "ok" : "todo",
       detail: missing.length === 0 ? "Unvan, vergi ve iletişim bilgileri tamam." : `Eksik: ${missing.join(", ")}.`,
       href: "/admin/ayarlar#isletme",
-    },
-    {
-      label: "Havale/EFT hesabı",
-      state: isBankTransferReady(payment.bankTransfer) ? "ok" : "todo",
-      detail: isBankTransferReady(payment.bankTransfer)
-        ? "IBAN, banka ve hesap sahibi girildi; müşteriye havale seçeneği görünüyor."
-        : "IBAN girilmeden havale seçeneği görünmez. Sanal POS gelene kadar siparişler havale ile alınır.",
-      href: "/admin/ayarlar#odeme",
     },
     {
       label: "Kartla ödeme (Akbank sanal POS)",

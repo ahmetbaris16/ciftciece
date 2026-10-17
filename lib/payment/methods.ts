@@ -4,7 +4,7 @@
  *  - CARD             Kredi/banka kartı (Akbank Sanal POS ortak ödeme sayfası, 3D Secure). Para otomatik gelir;
  *                     satıcının yapacağı iş yok. Sanal POS bağlanmadan müşteriye "yakında" olarak görünür, seçilemez;
  *                     yönetici banka sayfasının demo kopyasıyla dener (lib/payment/provider.ts: demo / test / canlı).
- *  - BANK_TRANSFER    Havale/EFT. Sipariş verilir, müşteriye IBAN + açıklama (sipariş no) gösterilir; satıcı
+ *  - BANK_TRANSFER    (YENİ SİPARİŞTE KAPALI, 2026-10-16; bkz. bankTransferSalesOpen) Havale/EFT. Sipariş verilir, müşteriye IBAN + açıklama (sipariş no) gösterilir; satıcı
  *                     parayı görünce admin'de tek tıkla "ödeme alındı" der. Süresinde ödenmezse sipariş
  *                     kendiliğinden iptal olur, stok geri döner (satıcı takip etmek zorunda kalmaz).
  *
@@ -100,9 +100,18 @@ export function hasBankDetails(b: PaymentSettings["bankTransfer"]): boolean {
   return isValidTrIban(b.iban) && b.accountHolder.trim().length > 1 && b.bankName.trim().length > 1;
 }
 
+/**
+ * Yeni siparişte havale/EFT satışı: işletme kararıyla KAPALI (2026-10-16). Eski havale siparişleri (hesap bilgisi,
+ * "ödeme alındı" onayı, hatırlatma, otomatik iptal) çalışmaya devam eder; ayar kaydı silinmez.
+ * Yeniden açmak gerekirse yalnız ortam değişkeni BANK_TRANSFER_ORDERS=on (testler de bunu kullanır).
+ */
+export function bankTransferSalesOpen(): boolean {
+  return process.env.BANK_TRANSFER_ORDERS === "on";
+}
+
 /** Yeni siparişte havale sunulabilir mi */
 export function isBankTransferReady(b: PaymentSettings["bankTransfer"]): boolean {
-  return b.enabled && hasBankDetails(b);
+  return bankTransferSalesOpen() && b.enabled && hasBankDetails(b);
 }
 
 /**

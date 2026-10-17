@@ -902,9 +902,7 @@ export default function CheckoutClient({ business, cardProvider }: { business: B
                 <p className={styles.obligation}>
                   {selected?.id === "CARD"
                     ? "“Siparişi onayla ve öde” düğmesine bastığınızda siparişiniz ödeme yükümlülüğü doğurur ve bankanın güvenli ödeme sayfasına geçersiniz; kart bilgilerinizi orada girip telefonunuza gelen kodla onaylarsınız."
-                    : selected?.id === "BANK_TRANSFER"
-                      ? "“Siparişi onayla” düğmesine bastığınızda siparişiniz ödeme yükümlülüğü doğurur; havale bilgileri bir sonraki sayfada ve e-postanızda gösterilir."
-                      : "“Siparişi onayla” düğmesine bastığınızda siparişiniz ödeme yükümlülüğü doğurur; ödemeyi teslimatta yaparsınız."}
+                    : "“Siparişi onayla” düğmesine bastığınızda siparişiniz ödeme yükümlülüğü doğurur."}
                 </p>
 
                 <div className={styles.actions}>

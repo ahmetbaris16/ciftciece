@@ -19,15 +19,32 @@ const OLD_SETTINGS_WITH_COD = JSON.stringify({
   cashOnDelivery: { enabled: true, feeKurus: 2_500, maxOrderKurus: null },
 });
 
-test("eski ayarda kapıda ödeme açık olsa da yöntemler yalnız kart ve havale", () => {
+test("eski ayarda kapıda ödeme ve havale açık olsa da yeni siparişte yalnız kart sunulur", () => {
+  delete process.env.BANK_TRANSFER_ORDERS;
   const settings = parsePaymentSettings(OLD_SETTINGS_WITH_COD);
   assert.equal("cashOnDelivery" in settings, false);
   for (const card of ["ready", "test", "demo", "unavailable"] as const) {
     const ids = availablePaymentOptions(settings, card).map((o) => o.id);
-    assert.deepEqual(ids, ["CARD", "BANK_TRANSFER"]);
+    assert.deepEqual(ids, ["CARD"]);
   }
-  // Eski siparişler için etiket durur
+  // Eski siparişler için etiketler durur
   assert.equal(PAYMENT_METHOD_LABELS.CASH_ON_DELIVERY, "Kapıda Ödeme");
+  assert.equal(PAYMENT_METHOD_LABELS.BANK_TRANSFER, "Havale / EFT");
+});
+
+test("havale ile gelen sipariş isteği reddedilir, sipariş açılmaz; kayıtlı hesap bilgisi silinmez", async () => {
+  await enableBankTransfer();
+  delete process.env.BANK_TRANSFER_ORDERS; // satış kapalı
+  const { variant } = await createProduct({ priceKurus: 10_000, stock: 5 });
+  const res = await checkout(
+    jsonRequest("http://localhost/api/checkout", checkoutBody([{ variantId: variant.id, quantity: 1 }], { paymentMethod: "BANK_TRANSFER" }))
+  );
+  assert.equal(res.status, 409);
+  const body = await res.json();
+  assert.ok(body.fieldErrors?.paymentMethod, "ödeme yöntemi alan hatası");
+  assert.equal(await prisma.order.count(), 0);
+  const row = await prisma.siteSetting.findUnique({ where: { key: "payment" } });
+  assert.match(row?.value ?? "", /TR330006100519786457841326/);
 });
 
 test("kapıda ödemeyle gelen sipariş isteği reddedilir, sipariş açılmaz", async () => {

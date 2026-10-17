@@ -1,13 +1,12 @@
 /**
  * Sıkça Sorulan Sorular — /sss
- * Yanıtlar sitenin gerçek kurallarıyla aynı kaynaktan: kargo eşiği ve havale süresi admin ayarlarından,
+ * Yanıtlar sitenin gerçek kurallarıyla aynı kaynaktan: kargo eşiği ve ücreti admin ayarlarından,
  * teslimat ve iade metinleri lib/legal/content.ts'ten. Bir kural değişirse burası da kendiliğinden güncellenir.
  */
 
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getShippingSettings } from "@/lib/shipping/shipping.repository";
-import { getPaymentSettings } from "@/lib/payment/settings.repository";
 import { getBusinessInfo } from "@/lib/business/business.repository";
 import { formatPhoneTr } from "@/lib/business/info";
 import { DELIVERY_TERMS } from "@/lib/legal/content";
@@ -29,14 +28,13 @@ interface QA {
 }
 
 export default async function SssPage() {
-  const [shipping, payment, business] = await Promise.all([getShippingSettings(), getPaymentSettings(), getBusinessInfo()]);
+  const [shipping, business] = await Promise.all([getShippingSettings(), getBusinessInfo()]);
   const freeAbove = shipping.freeThresholdKurus > 0 ? formatPrice(shipping.freeThresholdKurus) : null;
   // Kargo sipariş başına sabit ücret (lib/shipping/quote.ts); ücret girilmemişse gönderi alıcı ödemeli
   const fee = shipping.feeKurus !== null ? formatPrice(shipping.feeKurus) : null;
   const feeText = fee
     ? `${freeAbove ? "Altındaki siparişlerde" : "Siparişlerde"} sipariş başına ${fee} kargo ücreti alınır (ürün sayısından bağımsız); tutar siparişi onaylamadan önce ödeme adımında gösterilir.`
     : `${freeAbove ? "Altındaki siparişlerde" : "Siparişlerde"} kargo ücreti teslimatta Yurtiçi Kargo görevlisine ödenir; bu durum siparişi onaylamadan önce ödeme adımında yazar.`;
-  const hours = payment.bankTransfer.paymentWindowHours;
   const phone = formatPhoneTr(business.phone);
 
   const groups: Array<{ title: string; items: QA[] }> = [
@@ -45,11 +43,11 @@ export default async function SssPage() {
       items: [
         {
           q: "Hangi ödeme yöntemleriyle ödeyebilirim?",
-          text: "Kredi/banka kartıyla (bankanın 3D Secure güvenli ödeme sayfasında) ya da havale/EFT ile ödeyebilirsiniz. Kapıda ödeme seçeneğimiz yoktur.",
+          text: "Kredi/banka kartıyla (bankanın 3D Secure güvenli ödeme sayfasında) ödeyebilirsiniz. Havale/EFT ve kapıda ödeme seçeneğimiz yoktur.",
           a: (
             <>
-              <strong>Kredi/banka kartıyla</strong> (bankanın 3D Secure güvenli ödeme sayfasında) ya da{" "}
-              <strong>havale/EFT</strong> ile ödeyebilirsiniz. Kapıda ödeme seçeneğimiz yoktur.
+              <strong>Kredi/banka kartıyla</strong> (bankanın 3D Secure güvenli ödeme sayfasında) ödeyebilirsiniz.
+              Havale/EFT ve kapıda ödeme seçeneğimiz yoktur.
             </>
           ),
         },
@@ -57,17 +55,6 @@ export default async function SssPage() {
           q: "Kart bilgilerim güvende mi?",
           text: "Kart bilgileriniz bankanın 3D Secure güvenli ödeme sayfasında girilir; sitemize gelmez ve saklanmaz.",
           a: "Evet. Kart numaranız, son kullanma tarihi ve güvenlik kodu bankanın 3D Secure güvenli ödeme sayfasında girilir; sitemize gelmez ve hiçbir yerde saklanmaz.",
-        },
-        {
-          q: "Havale/EFT ile nasıl öderim?",
-          text: `Siparişten sonra IBAN, tutar ve açıklama ekranda ve e-postada gösterilir. Açıklamaya sipariş numaranızı yazın; ödeme ${hours} saat içinde yapılmazsa sipariş iptal olur.`,
-          a: (
-            <>
-              Siparişi verdiğinizde IBAN, tutar ve açıklama ekranda gösterilir ve e-postanıza gönderilir. Açıklamaya{" "}
-              <strong>sipariş numaranızı</strong> yazmanız yeterli. Ürünleriniz <strong>{hours} saat</strong> sizin için ayrılır;
-              bu sürede ödeme gelmezse sipariş kendiliğinden iptal olur. Ödemeniz bize ulaşınca e-postayla haber veririz.
-            </>
-          ),
         },
         {
           q: "Siparişimi nasıl takip ederim?",

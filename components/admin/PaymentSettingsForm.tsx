@@ -2,14 +2,14 @@
 
 /**
  * Admin — Ödeme yöntemleri
- *  - Havale/EFT: banka adı, hesap sahibi, IBAN, ödeme süresi. IBAN girilmeden müşteriye gösterilmez.
+ *  - Havale/EFT: yeni siparişte KAPALI (2026-10-16); kayıtlı hesap bilgisi eski havale siparişleri için değişmeden saklanır.
  *  - Kart (Akbank Sanal POS): göster/gizle + durum (demo / test / canlı). Banka bilgileri sunucu ortam
  *    değişkenlerinde (hPanel; kurulum: docs/YAYIN.md, docs/AKBANK_TEST.md); burada yalnız durum görünür.
  * Kapıda ödeme sunulmaz (işletme kararı, 2026-10-07).
  */
 
 import { useState } from "react";
-import { formatIban, isValidTrIban, normalizeIban, type PaymentSettings } from "@/lib/payment/methods";
+import type { PaymentSettings } from "@/lib/payment/methods";
 import type { ProviderStatus } from "@/lib/payment/provider";
 
 const CARD_STATUS: Record<ProviderStatus["mode"], { label: string; color: string; text: string }> = {
@@ -32,28 +32,17 @@ export default function PaymentSettingsForm({
 }) {
   const [cardEnabled, setCardEnabled] = useState(initial.card.enabled);
   const maxInstallment = initial.card.maxInstallment;
-  const [bankEnabled, setBankEnabled] = useState(initial.bankTransfer.enabled);
-  const [bankName, setBankName] = useState(initial.bankTransfer.bankName);
-  const [holder, setHolder] = useState(initial.bankTransfer.accountHolder);
-  const [iban, setIban] = useState(initial.bankTransfer.iban ? formatIban(initial.bankTransfer.iban) : "");
-  const [windowHours, setWindowHours] = useState(String(initial.bankTransfer.paymentWindowHours));
   const [status, setStatus] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const ibanOk = iban.trim() === "" || isValidTrIban(iban);
-  const bankReady = bankEnabled && isValidTrIban(iban) && holder.trim().length > 1 && bankName.trim().length > 1;
   const visible = [
     cardEnabled && provider.mode === "live" && "Kart",
     cardEnabled && provider.mode !== "live" && "Kart (müşteriye “yakında”, seçilemez)",
-    bankReady && "Havale/EFT",
   ].filter(Boolean) as string[];
 
   const save = async () => {
     setStatus(null);
     const err = (text: string) => setStatus({ kind: "error", text });
-    if (!ibanOk) return err("IBAN geçersiz: TR ile başlayan 26 karakter olmalı ve kontrol hanesi tutmalı.");
-    const hours = Number(windowHours);
-    if (!Number.isInteger(hours) || hours < 6 || hours > 168) return err("Havale ödeme süresi 6–168 saat arasında olmalı.");
 
     setSaving(true);
     try {
@@ -62,13 +51,8 @@ export default function PaymentSettingsForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           card: { enabled: cardEnabled, maxInstallment },
-          bankTransfer: {
-            enabled: bankEnabled,
-            bankName: bankName.trim(),
-            accountHolder: holder.trim(),
-            iban: normalizeIban(iban),
-            paymentWindowHours: hours,
-          },
+          // Havale ayarı değişmeden geri yazılır (eski havale siparişleri hesap bilgisini kullanır)
+          bankTransfer: initial.bankTransfer,
         }),
       });
       const data = await res.json().catch(() => null);
@@ -89,41 +73,10 @@ export default function PaymentSettingsForm({
         Müşteriye açık: <strong>{visible.length ? visible.join(" · ") : "hiçbiri — çevrimiçi sipariş alınamaz"}</strong>
       </p>
 
-      {/* Havale */}
-      <fieldset style={s.box}>
-        <legend style={s.legend}>Havale / EFT</legend>
-        <label style={s.check}>
-          <input type="checkbox" checked={bankEnabled} onChange={(e) => setBankEnabled(e.target.checked)} />
-          Havale/EFT ile ödemeyi sun
-        </label>
-        <div style={s.grid}>
-          <label style={s.field}>
-            <span style={s.label}>Banka adı</span>
-            <input style={s.input} value={bankName} onChange={(e) => setBankName(e.target.value)} />
-          </label>
-          <label style={s.field}>
-            <span style={s.label}>Hesap sahibi</span>
-            <input style={s.input} value={holder} onChange={(e) => setHolder(e.target.value)} />
-          </label>
-          <label style={{ ...s.field, gridColumn: "1 / -1" }}>
-            <span style={s.label}>IBAN</span>
-            <input
-              style={{ ...s.input, fontFamily: "monospace", borderColor: ibanOk ? s.input.borderColor : "#f3a0a0" }}
-              value={iban}
-              placeholder="TR00 0000 0000 0000 0000 0000 00"
-              onChange={(e) => setIban(e.target.value.toUpperCase())}
-              onBlur={() => iban.trim() && setIban(formatIban(iban))}
-              aria-invalid={!ibanOk}
-            />
-            {!ibanOk && <span style={{ ...s.hint, color: "#f3a0a0" }}>IBAN geçersiz görünüyor.</span>}
-          </label>
-          <label style={s.field}>
-            <span style={s.label}>Ödeme süresi (saat)</span>
-            <input style={s.input} inputMode="numeric" value={windowHours} onChange={(e) => setWindowHours(e.target.value)} />
-          </label>
-        </div>
-        <p style={s.hint}>Bu sürede ödenmeyen sipariş kendiliğinden iptal olur, stok geri döner.</p>
-      </fieldset>
+      <p style={s.hint}>
+        Havale/EFT ile yeni sipariş alınmıyor. Daha önce havale ile verilmiş siparişler eskisi gibi takip edilir; kayıtlı hesap
+        bilgisi onlar için saklanır.
+      </p>
 
       {/* Kart */}
       <fieldset style={s.box}>

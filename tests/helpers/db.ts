@@ -116,6 +116,8 @@ export async function stockOf(variantId: string): Promise<number> {
 
 /** Havale/EFT'yi açar (geçerli örnek IBAN; ISO 13616 mod-97 doğrulamasından geçer). */
 export async function enableBankTransfer(paymentWindowHours = 48) {
+  // Havale satışı kodda kapalı (bankTransferSalesOpen); eski havale akışlarını denemek için testte açılır
+  process.env.BANK_TRANSFER_ORDERS = "on";
   const value = JSON.stringify({
     card: { enabled: true, maxInstallment: 6 },
     bankTransfer: {

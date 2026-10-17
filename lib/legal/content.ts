@@ -126,8 +126,7 @@ function buyerSection(order?: OrderContext): LegalSection {
 
 const PAYMENT_TEXTS = [
   "Kredi/banka kartı: ödeme bankanın 3D Secure güvenli ödeme sayfasında yapılır; kart bilgileri sitemize iletilmez ve saklanmaz.",
-  "Havale/EFT: sipariş sonrası gösterilen hesaba, açıklamaya sipariş numarası yazılarak, belirtilen süre içinde ödenir; süresinde ödenmeyen sipariş iptal edilir ve stok ayırması kalkar.",
-  "Kapıda ödeme seçeneği yoktur.",
+  "Havale/EFT ve kapıda ödeme seçeneği yoktur.",
   "Tüm fiyatlar Türk Lirası olup KDV dahildir.",
 ];
 
