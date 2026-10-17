@@ -58,9 +58,7 @@ export default async function TeslimatPage() {
           <p>
             <strong>{formatPrice(shipping.freeThresholdKurus)} ve üzeri</strong> siparişlerde
             kargo ücretsizdir.{" "}
-            {shipping.feeKurus !== null
-              ? `Bu tutarın altındaki siparişlerde sipariş başına ${formatPrice(shipping.feeKurus)} kargo bedeli alınır (ürün sayısından bağımsız); tutar siparişi onaylamadan önce ödeme sayfasında gösterilir.`
-              : "Bu tutarın altındaki siparişlerde kargo bedeli siparişi onaylamadan önce ödeme sayfasında gösterilir."}
+            {`Bu tutarın altındaki siparişlerde sipariş başına ${formatPrice(shipping.feeKurus)} kargo bedeli alınır (ürün sayısından bağımsız); tutar siparişi onaylamadan önce ödeme sayfasında gösterilir.`}
           </p>
           <p>Siparişler yalnızca yurt içine, {CARRIER.name} ile gönderilir.</p>
 

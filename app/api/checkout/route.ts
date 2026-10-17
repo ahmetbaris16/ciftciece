@@ -9,8 +9,7 @@
  *    Idempotency: aynı `idempotencyKey` ile daha önce sipariş açıldıysa yeni sipariş açılmaz, o döner
  *    (orders.idempotencyKey UNIQUE; içerik farklıysa 409)
  * 2. Her varyant için server'dan fiyat ve stok kontrol (Prisma)
- * 3. Kargo: sabit Yurtiçi Kargo ücreti; ücretsiz kargo sınırı aşıldıysa ücretsiz (lib/shipping/quote);
- *    ücret henüz girilmemişse gönderi alıcı ödemeli
+ * 3. Kargo: sabit Yurtiçi Kargo ücreti; ücretsiz kargo sınırı aşıldıysa ücretsiz (lib/shipping/quote)
  * 4. Ödeme yöntemi (kart / havale) ayara göre doğrulanır; kapıda ödeme sunulmaz (2026-10-07)
  * 5. Toplam = ara toplam + kargo
  * 6. DB'ye order kaydet (createOrder — transaction + stok düş)
@@ -265,7 +264,6 @@ export async function POST(request: NextRequest) {
     console.error("[/api/checkout] shipping quote error:", err);
     return fail(503, "UNAVAILABLE", CHECKOUT_MESSAGES.serviceUnavailable);
   }
-  if (quote.status === "recipient") console.info("[/api/checkout] kargo ücreti girilmemiş: gönderi alıcı ödemeli");
   const shippingKurus = quote.feeKurus;
 
   // ── Ödeme yöntemi — ayar + tutar sınırı SUNUCUDA kontrol edilir ──

@@ -12,6 +12,7 @@ import { isTestProvider, paymentProviderStatus } from "@/lib/payment/provider";
 import { getEmailStatus } from "@/lib/email/health";
 import { getShippingSettings } from "@/lib/shipping/shipping.repository";
 import { lastCronRun } from "@/lib/cron/heartbeat";
+import { formatPrice } from "@/types";
 
 const dateTimeTr = (d: Date) =>
   new Intl.DateTimeFormat("tr-TR", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Istanbul" }).format(d);
@@ -174,7 +175,6 @@ export async function getLaunchChecklist(): Promise<CheckItem[]> {
   const unpricedVat = USE_DB
     ? await prisma.product.count({ where: { isPublished: true, vatRateBps: null } })
     : 0;
-  const hasShippingFee = shipping.feeKurus !== null;
 
   const items: CheckItem[] = [
     {
@@ -218,10 +218,8 @@ export async function getLaunchChecklist(): Promise<CheckItem[]> {
     },
     {
       label: "Kargo ücreti",
-      state: hasShippingFee ? "ok" : "todo",
-      detail: hasShippingFee
-        ? "Sabit kargo ücreti girildi."
-        : "Kargo ücreti girilmedi: siparişler alıcı ödemeli gidiyor (müşteri kargoyu teslimatta öder).",
+      state: "ok",
+      detail: `Sipariş başına sabit ${formatPrice(shipping.feeKurus)}; ${formatPrice(shipping.freeThresholdKurus)} ve üzeri ücretsiz.`,
       href: "/admin/ayarlar#kargo",
     },
     {

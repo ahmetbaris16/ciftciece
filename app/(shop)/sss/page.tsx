@@ -30,11 +30,9 @@ interface QA {
 export default async function SssPage() {
   const [shipping, business] = await Promise.all([getShippingSettings(), getBusinessInfo()]);
   const freeAbove = shipping.freeThresholdKurus > 0 ? formatPrice(shipping.freeThresholdKurus) : null;
-  // Kargo sipariş başına sabit ücret (lib/shipping/quote.ts); ücret girilmemişse gönderi alıcı ödemeli
-  const fee = shipping.feeKurus !== null ? formatPrice(shipping.feeKurus) : null;
-  const feeText = fee
-    ? `${freeAbove ? "Altındaki siparişlerde" : "Siparişlerde"} sipariş başına ${fee} kargo ücreti alınır (ürün sayısından bağımsız); tutar siparişi onaylamadan önce ödeme adımında gösterilir.`
-    : `${freeAbove ? "Altındaki siparişlerde" : "Siparişlerde"} kargo ücreti teslimatta Yurtiçi Kargo görevlisine ödenir; bu durum siparişi onaylamadan önce ödeme adımında yazar.`;
+  // Kargo sipariş başına sabit ücret (lib/shipping/quote.ts)
+  const fee = formatPrice(shipping.feeKurus);
+  const feeText = `${freeAbove ? "Altındaki siparişlerde" : "Siparişlerde"} sipariş başına ${fee} kargo ücreti alınır (ürün sayısından bağımsız); tutar siparişi onaylamadan önce ödeme adımında gösterilir.`;
   const phone = formatPhoneTr(business.phone);
 
   const groups: Array<{ title: string; items: QA[] }> = [

@@ -1,6 +1,6 @@
 /**
- * Kargo: sabit ücret + ücretsiz kargo sınırı. Ücret girilmemişse alıcı ödemeli (tutar uydurulmaz). Eski sürümün
- * desi tarifesi/koli ayarları okunmaz ama kaydederken silinmez. Sipariş tutarı sunucudaki ayardan hesaplanır.
+ * Kargo: sabit ücret + ücretsiz kargo sınırı. Ücret kayıtta boşsa 400 TL varsayılanı kullanılır (alıcı ödemeli yok). Eski
+ * sürümün desi tarifesi/koli ayarları okunmaz ama kaydederken silinmez. Sipariş tutarı sunucudaki ayardan hesaplanır.
  */
 
 import { test } from "node:test";
@@ -16,24 +16,42 @@ import { checkoutBody, jsonRequest } from "./helpers/http";
 
 setupTestDb();
 
-test("hesap: sınırın altında sabit ücret, sınırda ve üstünde ücretsiz, ücret girilmemişse alıcı ödemeli", () => {
+test("hesap: sınırın altında sabit ücret, sınırda ve üstünde ücretsiz; alıcı ödemeli durumu üretilmez", () => {
   const settings = { feeKurus: 15_000, freeThresholdKurus: 300_000 };
   assert.deepEqual(
     [quoteShipping({ subtotalKurus: 10_000 }, settings).feeKurus, quoteShipping({ subtotalKurus: 299_999 }, settings).status],
     [15_000, "priced"]
   );
   assert.equal(quoteShipping({ subtotalKurus: 300_000 }, settings).status, "free");
-  const unset = quoteShipping({ subtotalKurus: 10_000 }, { feeKurus: null, freeThresholdKurus: 300_000 });
-  assert.deepEqual([unset.status, unset.feeKurus, shippingModeOf(unset)], ["recipient", 0, "recipient"]);
-  // Ücretsiz kargo, ücret girilmemiş olsa da ücretsiz
-  assert.equal(quoteShipping({ subtotalKurus: 400_000 }, { feeKurus: null, freeThresholdKurus: 300_000 }).status, "free");
+  const low = quoteShipping({ subtotalKurus: 10_000 }, settings);
+  assert.deepEqual([low.status, shippingModeOf(low)], ["priced", "prepaid"]);
+  assert.equal(shippingModeOf(quoteShipping({ subtotalKurus: 400_000 }, settings)), "free");
 });
 
-test("eski biçim (desi tarifesi, koliler): ücret girilmemiş sayılır, sınır korunur; bozuk değer varsayılana döner", () => {
+test("eski biçim (desi tarifesi) ve boş ücretli kayıt: ücret 400 TL varsayılanıyla tamamlanır, sınır korunur; bozuk değer varsayılana döner", () => {
   const legacy = JSON.stringify({ freeThresholdKurus: 250_000, tariff: { bands: [{ maxDesi: 3, priceKurus: 9_000 }] }, boxes: [], packaging: {} });
-  assert.deepEqual(parseShippingSettings(legacy), { feeKurus: null, freeThresholdKurus: 250_000 });
+  assert.deepEqual(parseShippingSettings(legacy), { feeKurus: 40_000, freeThresholdKurus: 250_000 });
+  assert.deepEqual(parseShippingSettings(JSON.stringify({ feeKurus: null, freeThresholdKurus: 300_000 })), { feeKurus: 40_000, freeThresholdKurus: 300_000 });
   assert.deepEqual(parseShippingSettings("{bozuk"), { feeKurus: 40_000, freeThresholdKurus: 300_000 });
   assert.deepEqual(parseShippingSettings(JSON.stringify({ feeKurus: 12_500, freeThresholdKurus: 0 })), { feeKurus: 12_500, freeThresholdKurus: 0 });
+  // Yönetici ücreti 0 yaparsa (her sipariş ücretsiz kargo) bu geçerli bir seçimdir, varsayılana dönmez
+  assert.equal(parseShippingSettings(JSON.stringify({ feeKurus: 0, freeThresholdKurus: 300_000 })).feeKurus, 0);
+});
+
+test("DB'de ücreti boş eski kayıt varsa sepet 400 TL gösterir, kayıt silinmez; yönetici değiştirince yeni ücret geçerli olur", async () => {
+  const stored = JSON.stringify({ feeKurus: null, freeThresholdKurus: 300_000, tariff: { bands: [] } });
+  await prisma.siteSetting.create({ data: { key: SHIPPING_SETTING_KEY, value: stored } });
+  const { variant } = await createProduct({ priceKurus: 50_000, stock: 20 });
+  const ask = async () =>
+    (await (await quoteRoute(jsonRequest("http://localhost/api/shipping/quote", { items: [{ variantId: variant.id, quantity: 1 }] }))).json()).quote;
+
+  assert.deepEqual(await ask(), { status: "priced", carrierName: "Yurtiçi Kargo", feeKurus: 40_000 });
+  assert.equal((await prisma.siteSetting.findUniqueOrThrow({ where: { key: SHIPPING_SETTING_KEY } })).value, stored, "okuma kaydı değiştirmez");
+
+  await saveShippingSettings({ feeKurus: 25_000, freeThresholdKurus: 300_000 });
+  assert.deepEqual(await ask(), { status: "priced", carrierName: "Yurtiçi Kargo", feeKurus: 25_000 });
+  const raw = JSON.parse((await prisma.siteSetting.findUniqueOrThrow({ where: { key: SHIPPING_SETTING_KEY } })).value);
+  assert.deepEqual(raw.tariff, { bands: [] }, "eski alanlar korunur");
 });
 
 test("kaydetme: yeni alanlar yazılır, eski tarife verisi silinmez", async () => {

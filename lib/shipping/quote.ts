@@ -4,7 +4,6 @@
  *
  *   ara toplam ≥ ücretsiz kargo sınırı → ücretsiz
  *   değilse                             → sabit kargo ücreti
- *   ücret henüz girilmemişse            → "recipient" (alıcı ödemeli: kargo teslimatta ödenir; rakam uydurulmaz)
  *
  * Sunucu (sipariş, /api/shipping/quote) aynı fonksiyonu çağırır; istemci tutarı hiçbir zaman kendisi hesaplamaz.
  */
@@ -14,12 +13,11 @@ import { CARRIER, isFreeShipping, type Carrier, type ShippingSettings } from "./
 export type ShippingQuote =
   | { status: "free"; carrier: Carrier; feeKurus: 0 }
   | { status: "priced"; carrier: Carrier; feeKurus: number }
-  /** Kargo ücreti girilmemiş, gönderi alıcı ödemeli: siparişte kargo tahsil edilmez, teslimatta ödenir */
+  /** Artık üretilmez (ücret her zaman vardır); yalnız eski siparişlerin kaydı ve eski istemciler için tip olarak durur */
   | { status: "recipient"; carrier: Carrier; feeKurus: 0 };
 
 export function quoteShipping(input: { subtotalKurus: number }, settings: ShippingSettings): ShippingQuote {
   if (isFreeShipping(input.subtotalKurus, settings)) return { status: "free", carrier: CARRIER, feeKurus: 0 };
-  if (settings.feeKurus === null) return { status: "recipient", carrier: CARRIER, feeKurus: 0 };
   return { status: "priced", carrier: CARRIER, feeKurus: settings.feeKurus };
 }
 

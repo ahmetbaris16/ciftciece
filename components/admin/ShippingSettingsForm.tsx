@@ -9,12 +9,11 @@ import { formatPrice } from "@/types";
 import { parseTlInput } from "@/lib/payment/money";
 import type { ShippingSettings } from "@/lib/shipping/settings";
 
-const toTl = (kurus: number | null) => (kurus === null ? "" : (kurus / 100).toLocaleString("tr-TR", { maximumFractionDigits: 2 }));
+const toTl = (kurus: number) => (kurus / 100).toLocaleString("tr-TR", { maximumFractionDigits: 2 });
 
 export default function ShippingSettingsForm({ initial }: { initial: ShippingSettings }) {
   const [fee, setFee] = useState(toTl(initial.feeKurus));
   const [threshold, setThreshold] = useState(toTl(initial.freeThresholdKurus));
-  const [savedFee, setSavedFee] = useState(initial.feeKurus);
   const [status, setStatus] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -36,7 +35,6 @@ export default function ShippingSettingsForm({ initial }: { initial: ShippingSet
       if (!res.ok) return setStatus({ kind: "error", text: data?.error ?? "Kaydedilemedi." });
       const saved = data.result as ShippingSettings;
       setFee(toTl(saved.feeKurus));
-      setSavedFee(saved.feeKurus);
       setThreshold(toTl(saved.freeThresholdKurus));
       setStatus({ kind: "ok", text: "Kaydedildi. Sepet ve ödeme sayfası yeni ücreti kullanır." });
     } catch {
@@ -51,11 +49,6 @@ export default function ShippingSettingsForm({ initial }: { initial: ShippingSet
 
   return (
     <div style={s.wrap}>
-      {savedFee === null && (
-        <p style={s.warn} role="status">
-          Kargo ücreti girilmedi. Girilene kadar siparişler alıcı ödemeli gider (müşteri kargoyu teslimatta öder).
-        </p>
-      )}
       <div style={s.grid}>
         <label style={s.field}>
           <span style={s.label}>Kargo ücreti (TL)</span>
@@ -88,16 +81,6 @@ export default function ShippingSettingsForm({ initial }: { initial: ShippingSet
 
 const s = {
   wrap: { display: "flex", flexDirection: "column", gap: "0.875rem" },
-  warn: {
-    margin: 0,
-    padding: "0.625rem 0.875rem",
-    borderRadius: 8,
-    fontSize: "0.8125rem",
-    lineHeight: 1.5,
-    background: "rgba(232,192,122,0.1)",
-    border: "1px solid rgba(232,192,122,0.35)",
-    color: "#e8c07a",
-  },
   grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "0.75rem", maxWidth: 520 },
   field: { display: "flex", flexDirection: "column", gap: "0.375rem", minWidth: 0 },
   label: { fontSize: "0.8125rem", color: "rgba(232,228,217,0.7)" },

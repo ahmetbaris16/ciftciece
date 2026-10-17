@@ -3,8 +3,9 @@
  *
  * Tek kargo firması: Yurtiçi Kargo (yalnız yurt içi gönderim).
  * Ücret sabittir: her siparişe aynı kargo ücreti eklenir; ara toplam ücretsiz kargo sınırına ulaşırsa kargo
- * ücretsizdir. Ücret admin panelinden (Ayarlar → Kargo) değiştirilir; kayıt yoksa varsayılan 400 TL. Kayıtta ücret
- * açıkça boş bırakılmışsa (eski kayıt) tutar uydurulmaz: gönderi ALICI ÖDEMELİ olur.
+ * ücretsizdir. Ücret admin panelinden (Ayarlar → Kargo) değiştirilir; kayıt yoksa, bozuksa ya da kayıttaki ücret boşsa
+ * (eski kayıt) varsayılan 400 TL kullanılır. DB'deki kayıt silinmez/değiştirilmez, yalnız okunurken tamamlanır.
+ * Yeni siparişte "alıcı ödemeli" yoktur; yalnız eski siparişlerin kaydında kalır.
  *
  * Eski sürümdeki desi tarifesi / koli / paket ölçüsü alanları DB'deki JSON'da kalabilir; okunmaz.
  */
@@ -15,15 +16,15 @@ export const CARRIER = { id: "yurtici", name: "Yurtiçi Kargo" } as const;
 export type Carrier = typeof CARRIER;
 
 export interface ShippingSettings {
-  /** Her siparişe eklenen sabit kargo ücreti (kuruş); null = henüz girilmedi */
-  feeKurus: number | null;
+  /** Her siparişe eklenen sabit kargo ücreti (kuruş) */
+  feeKurus: number;
   /** Ara toplam bu tutar ve üzerindeyse kargo ücretsiz (kuruş) */
   freeThresholdKurus: number;
 }
 
 /** Müşteri tarafına giden özet */
 export interface PublicShippingInfo {
-  feeKurus: number | null;
+  feeKurus: number;
   freeThresholdKurus: number;
   carrierName: string;
 }
@@ -64,7 +65,7 @@ export function parseShippingSettings(raw: string | null | undefined): ShippingS
   try {
     const v = JSON.parse(raw) as Record<string, unknown>;
     return {
-      feeKurus: nonNegInt(v.feeKurus),
+      feeKurus: nonNegInt(v.feeKurus) ?? DEFAULT_SHIPPING_SETTINGS.feeKurus,
       freeThresholdKurus: nonNegInt(v.freeThresholdKurus) ?? DEFAULT_SHIPPING_SETTINGS.freeThresholdKurus,
     };
   } catch (err) {

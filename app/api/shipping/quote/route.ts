@@ -3,8 +3,7 @@
  * Girdi: { items: [{ variantId, quantity }] }. Fiyatlar sunucudan okunur; istemci fiyatına güvenilmez.
  * Sipariş anında tutar /api/checkout'ta aynı fonksiyonla (quoteShipping) yeniden hesaplanır.
  *
- * Yanıt: { quote: { status: "free" | "priced" | "recipient", carrierName, feeKurus } }
- * "recipient" = kargo ücreti henüz girilmemiş, gönderi alıcı ödemeli (kargo teslimatta ödenir).
+ * Yanıt: { quote: { status: "free" | "priced", carrierName, feeKurus } }
  */
 
 import { NextRequest, NextResponse } from "next/server";
